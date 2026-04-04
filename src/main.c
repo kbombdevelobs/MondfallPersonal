@@ -126,8 +126,20 @@ int main(void) {
                     if (player.health > player.maxHealth) player.health = player.maxHealth;
                 }
 
-                // Screen shake from landers
+                // Screen shake — landers + weapon recoil
                 float shake = LanderGetScreenShake(&landers);
+                // Weapon camera shake (different per gun)
+                if (weapon.recoil > 0.1f) {
+                    float gunShake = 0;
+                    if (weapon.current == WEAPON_MOND_MP40) gunShake = weapon.recoil * 0.02f;
+                    else if (weapon.raketenFiring) gunShake = weapon.recoil * 0.08f;
+                    else if (weapon.current == WEAPON_JACKHAMMER) gunShake = weapon.recoil * 0.04f;
+                    shake += gunShake;
+                }
+                // Pickup weapon shake
+                if (pickups.hasPickup && pickups.pickupRecoil > 0.1f) {
+                    shake += pickups.pickupRecoil * 0.03f;
+                }
                 if (shake > 0.05f) {
                     player.camera.position.x += ((float)rand()/RAND_MAX - 0.5f) * shake * 0.15f;
                     player.camera.position.y += ((float)rand()/RAND_MAX - 0.5f) * shake * 0.15f;

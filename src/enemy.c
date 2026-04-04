@@ -313,10 +313,33 @@ static void DrawAstronautModel(EnemyManager *em, Enemy *e) {
         tint = (Color){255, v, v, 255};
     }
 
-    Color visorColor = (e->type == ENEMY_SOVIET) ? (Color){220, 180, 50, 230} : (Color){120, 180, 255, 230};
-    Color accentColor = (e->type == ENEMY_SOVIET) ? (Color){200, 50, 40, 255} : (Color){50, 80, 180, 255};
-    Color suitBase = (e->type == ENEMY_SOVIET) ? (Color){235, 228, 225, 255} : (Color){225, 228, 238, 255};
-    Color suitDark = (e->type == ENEMY_SOVIET) ? (Color){200, 195, 190, 255} : (Color){190, 195, 210, 255};
+    Color visorColor, accentColor, suitBase, suitDark, bootColor, beltColor, buckleColor, helmetColor, gloveColor, backpackColor;
+
+    if (e->type == ENEMY_SOVIET) {
+        // Soviet: deep red uniform (#CD0000), gold helmet (#FFD700), black boots, brown belt + gold buckle
+        suitBase     = (Color){205, 0, 0, 255};      // USSR red
+        suitDark     = (Color){160, 0, 0, 255};      // darker red panels
+        accentColor  = (Color){255, 215, 0, 255};    // gold accent (#FFD700)
+        visorColor   = (Color){255, 200, 50, 230};   // gold visor
+        helmetColor  = (Color){220, 185, 40, 255};   // gold/yellow helmet
+        bootColor    = (Color){25, 25, 22, 255};     // matte black boots
+        beltColor    = (Color){120, 75, 35, 255};    // medium brown leather
+        buckleColor  = (Color){255, 215, 0, 255};    // polished gold buckle
+        gloveColor   = (Color){30, 30, 28, 255};     // black gloves
+        backpackColor= (Color){140, 10, 10, 255};    // dark red backpack
+    } else {
+        // American: navy blue uniform, silver/chrome helmet, tan boots, olive belt + silver buckle
+        suitBase     = (Color){25, 40, 90, 255};     // navy blue
+        suitDark     = (Color){18, 28, 65, 255};     // darker navy panels
+        accentColor  = (Color){220, 220, 230, 255};  // silver/white accent
+        visorColor   = (Color){100, 170, 255, 230};  // blue visor
+        helmetColor  = (Color){195, 200, 210, 255};  // silver/chrome helmet
+        bootColor    = (Color){140, 115, 75, 255};   // tan boots
+        beltColor    = (Color){80, 85, 60, 255};     // olive drab belt
+        buckleColor  = (Color){200, 205, 215, 255};  // silver buckle
+        gloveColor   = (Color){160, 155, 140, 255};  // light tan gloves
+        backpackColor= (Color){30, 45, 80, 255};     // dark navy backpack
+    }
 
     rlPushMatrix();
     rlTranslatef(pos.x, pos.y, pos.z);
@@ -326,12 +349,15 @@ static void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     // === TORSO — layered for depth ===
     DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, suitBase);               // main body
     DrawCube((Vector3){0, 0.2f, 0.02f}, 0.7f, 0.6f, 0.5f, suitDark);         // chest plate
-    DrawCubeWires((Vector3){0, 0, 0}, 0.91f, 1.51f, 0.56f, (Color){170,168,162,120}); // seams
+    DrawCubeWires((Vector3){0, 0, 0}, 0.91f, 1.51f, 0.56f, suitDark); // seams
     // Collar ring
     DrawCube((Vector3){0, 0.72f, 0}, 0.55f, 0.1f, 0.45f, suitDark);
-    // Waist belt
-    DrawCube((Vector3){0, -0.55f, 0}, 0.92f, 0.1f, 0.57f, (Color){150,148,142,255});
-    DrawCubeWires((Vector3){0, -0.55f, 0}, 0.93f, 0.11f, 0.58f, (Color){120,118,112,180});
+    // Waist belt — leather with buckle
+    DrawCube((Vector3){0, -0.55f, 0}, 0.92f, 0.1f, 0.57f, beltColor);
+    DrawCubeWires((Vector3){0, -0.55f, 0}, 0.93f, 0.11f, 0.58f, (Color){beltColor.r/2, beltColor.g/2, beltColor.b/2, 180});
+    // Belt buckle — centered front
+    DrawCube((Vector3){0, -0.55f, 0.29f}, 0.12f, 0.09f, 0.02f, buckleColor);
+    DrawCubeWires((Vector3){0, -0.55f, 0.29f}, 0.13f, 0.1f, 0.03f, (Color){buckleColor.r/2, buckleColor.g/2, buckleColor.b/2, 200});
     // Shoulder pads
     DrawCube((Vector3){0.5f, 0.6f, 0}, 0.18f, 0.2f, 0.4f, suitDark);
     DrawCube((Vector3){-0.5f, 0.6f, 0}, 0.18f, 0.2f, 0.4f, suitDark);
@@ -341,26 +367,27 @@ static void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     // Chest badge
     DrawCube((Vector3){0.2f, 0.35f, 0.28f}, 0.12f, 0.12f, 0.02f, accentColor);
 
-    // === HELMET — sphere + ring + visor ===
-    DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, (Color){215,215,210,255});
-    DrawCube((Vector3){0, 0.8f, 0}, 0.65f, 0.08f, 0.55f, (Color){190,188,182,255}); // neck ring
+    // === HELMET — faction colored ===
+    DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, helmetColor);
+    DrawCube((Vector3){0, 0.8f, 0}, 0.65f, 0.08f, 0.55f, suitDark); // neck ring
     DrawModel(em->mdlVisor, (Vector3){0, 1.12f, 0.32f}, 1.0f, visorColor);
     // Visor frame
     DrawCubeWires((Vector3){0, 1.12f, 0.34f}, 0.42f, 0.32f, 0.04f, (Color){160,158,152,200});
     // Antenna nub on top
-    DrawCube((Vector3){0.12f, 1.55f, 0}, 0.03f, 0.12f, 0.03f, (Color){150,150,145,255});
+    DrawCube((Vector3){0.12f, 1.55f, 0}, 0.03f, 0.12f, 0.03f, accentColor);
 
-    // === BACKPACK — detailed life support ===
-    DrawCube((Vector3){0, 0.1f, -0.42f}, 0.62f, 0.9f, 0.28f, (Color){180,178,172,255});
-    DrawCubeWires((Vector3){0, 0.1f, -0.42f}, 0.63f, 0.91f, 0.29f, (Color){140,138,132,180});
+    // === BACKPACK — faction colored ===
+    DrawCube((Vector3){0, 0.1f, -0.42f}, 0.62f, 0.9f, 0.28f, backpackColor);
+    DrawCubeWires((Vector3){0, 0.1f, -0.42f}, 0.63f, 0.91f, 0.29f, suitDark);
     // Vent grilles
     for (int v = 0; v < 3; v++) {
         float vy = -0.1f + v * 0.3f;
-        DrawCube((Vector3){0, vy, -0.57f}, 0.45f, 0.05f, 0.01f, (Color){130,128,122,255});
+        DrawCube((Vector3){0, vy, -0.57f}, 0.45f, 0.05f, 0.01f, suitDark);
     }
     // Hoses to helmet
-    DrawCube((Vector3){0.18f, 0.65f, -0.25f}, 0.05f, 0.5f, 0.05f, (Color){160,160,155,255});
-    DrawCube((Vector3){-0.18f, 0.65f, -0.25f}, 0.05f, 0.5f, 0.05f, (Color){160,160,155,255});
+    Color hoseColor = (e->type == ENEMY_SOVIET) ? (Color){100,30,30,255} : (Color){60,65,90,255};
+    DrawCube((Vector3){0.18f, 0.65f, -0.25f}, 0.05f, 0.5f, 0.05f, hoseColor);
+    DrawCube((Vector3){-0.18f, 0.65f, -0.25f}, 0.05f, 0.5f, 0.05f, hoseColor);
 
     // === GUN — two-handed hold, centered in front of body ===
     float gunAim = e->shootAnim * -25.0f; // tilts up when shooting
@@ -427,7 +454,7 @@ static void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     rlRotatef(-25 - armSwing + gunAim * 0.4f, 1, 0, 0);
     rlRotatef(-12, 0, 0, 1);
     DrawModel(em->mdlArm, (Vector3){0, 0, 0}, 1.0f, tint);
-    DrawCube((Vector3){0, -0.42f, 0}, 0.24f, 0.16f, 0.24f, (Color){200,198,190,255});
+    DrawCube((Vector3){0, -0.42f, 0}, 0.24f, 0.16f, 0.24f, gloveColor);
     rlPopMatrix();
     // Left arm — swings opposite to right leg
     rlPushMatrix();
@@ -435,7 +462,7 @@ static void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     rlRotatef(-25 + armSwing + gunAim * 0.4f, 1, 0, 0);
     rlRotatef(12, 0, 0, 1);
     DrawModel(em->mdlArm, (Vector3){0, 0, 0}, 1.0f, tint);
-    DrawCube((Vector3){0, -0.42f, 0}, 0.24f, 0.16f, 0.24f, (Color){200,198,190,255});
+    DrawCube((Vector3){0, -0.42f, 0}, 0.24f, 0.16f, 0.24f, gloveColor);
     rlPopMatrix();
 
     // === LEGS — big dramatic strides ===
@@ -446,7 +473,7 @@ static void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     rlRotatef(legSwing, 1, 0, 0);
     // Upper leg
     DrawCube((Vector3){0, -0.05f, 0}, 0.3f, 0.45f, 0.3f, suitBase);
-    DrawCubeWires((Vector3){0, -0.05f, 0}, 0.31f, 0.46f, 0.31f, (Color){180,178,172,100});
+    DrawCubeWires((Vector3){0, -0.05f, 0}, 0.31f, 0.46f, 0.31f, suitDark);
     // Knee joint
     DrawCube((Vector3){0, -0.3f, 0}, 0.22f, 0.08f, 0.22f, suitDark);
     // Lower leg (slight bend opposite to upper)
@@ -454,7 +481,7 @@ static void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     rlTranslatef(0, -0.3f, 0);
     rlRotatef(-legSwing * 0.4f, 1, 0, 0); // knee bends
     DrawCube((Vector3){0, -0.2f, 0}, 0.28f, 0.4f, 0.28f, suitBase);
-    DrawModel(em->mdlBoot, (Vector3){0, -0.44f, 0.04f}, 1.0f, (Color){70,70,65,255});
+    DrawModel(em->mdlBoot, (Vector3){0, -0.44f, 0.04f}, 1.0f, bootColor);
     rlPopMatrix();
     rlPopMatrix();
     // Left leg
@@ -462,13 +489,13 @@ static void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     rlTranslatef(-0.22f, -0.85f, 0);
     rlRotatef(-legSwing, 1, 0, 0);
     DrawCube((Vector3){0, -0.05f, 0}, 0.3f, 0.45f, 0.3f, suitBase);
-    DrawCubeWires((Vector3){0, -0.05f, 0}, 0.31f, 0.46f, 0.31f, (Color){180,178,172,100});
+    DrawCubeWires((Vector3){0, -0.05f, 0}, 0.31f, 0.46f, 0.31f, suitDark);
     DrawCube((Vector3){0, -0.3f, 0}, 0.22f, 0.08f, 0.22f, suitDark);
     rlPushMatrix();
     rlTranslatef(0, -0.3f, 0);
     rlRotatef(legSwing * 0.4f, 1, 0, 0);
     DrawCube((Vector3){0, -0.2f, 0}, 0.28f, 0.4f, 0.28f, suitBase);
-    DrawModel(em->mdlBoot, (Vector3){0, -0.44f, 0.04f}, 1.0f, (Color){70,70,65,255});
+    DrawModel(em->mdlBoot, (Vector3){0, -0.44f, 0.04f}, 1.0f, bootColor);
     rlPopMatrix();
     rlPopMatrix();
 

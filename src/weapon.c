@@ -193,14 +193,15 @@ void WeaponUpdate(Weapon *w, float dt) {
 
     if (w->reloading) { w->reloadTimer += dt; if (w->reloadTimer >= w->reloadDuration) FinishReload(w); }
 
-    // Raketenfaust mega beam
+    // Raketenfaust mega beam — violent shudder
     if (w->raketenFiring) {
         w->raketenBeamTimer += dt;
-        w->muzzleFlash = 2.0f; // keep flash alive during beam
-        w->recoil = 3.0f + sinf(w->raketenBeamTimer * 20.0f) * 1.0f; // shake
+        w->muzzleFlash = 2.0f;
+        // Hard random shudder — not smooth sine, actual violent shake
+        w->recoil = 2.0f + ((float)rand() / RAND_MAX) * 3.0f;
         if (w->raketenBeamTimer >= w->raketenBeamDuration) {
             w->raketenFiring = false;
-            w->raketenTimer = w->raketenCooldown; // start cooldown
+            w->raketenTimer = w->raketenCooldown;
             w->recoil = 0;
         }
     }
@@ -568,36 +569,28 @@ void WeaponSpawnExplosion(Weapon *w, Vector3 pos, float radius) {
 }
 
 void WeaponDrawWorld(Weapon *w) {
-    // MEGA BEAM (Raketenfaust) — massive thick column of light
+    // MEGA BEAM — one thick solid beam, no modulation
     if (w->raketenFiring) {
-        float t = w->raketenBeamTimer / w->raketenBeamDuration;
-        float pulse = 0.7f + sinf(w->raketenBeamTimer * 25.0f) * 0.3f;
         Vector3 dir = Vector3Normalize(Vector3Subtract(w->raketenBeamEnd, w->raketenBeamStart));
         Vector3 right = Vector3Normalize(Vector3CrossProduct(dir, (Vector3){0,1,0}));
         Vector3 up = Vector3CrossProduct(right, dir);
 
-        // Draw 20 concentric beam rings for massive thickness
-        float maxR = 1.2f * pulse * (1.0f - t * 0.2f);
-        for (int ring = 0; ring < 20; ring++) {
-            float angle = (float)ring * 0.314f + w->raketenBeamTimer * 8.0f;
-            float r = maxR * ((float)ring / 20.0f);
-            Vector3 off = Vector3Add(Vector3Scale(right, cosf(angle) * r),
-                                     Vector3Scale(up, sinf(angle) * r));
-            float brightness = 1.0f - (float)ring / 20.0f;
-            unsigned char a = (unsigned char)(brightness * 220 * pulse);
-            Color c;
-            if (ring < 5) c = (Color){255, 255, 240, a};       // white-hot core
-            else if (ring < 10) c = (Color){255, 200, 80, a};  // bright orange
-            else if (ring < 15) c = (Color){255, 120, 20, a};  // orange
-            else c = (Color){255, 50, 0, a};                    // red outer glow
-            DrawLine3D(Vector3Add(w->raketenBeamStart, off),
-                       Vector3Add(w->raketenBeamEnd, off), c);
+        // Thick beam — grid of parallel lines filling a 0.15m radius
+        float beamR = 0.15f;
+        for (int rx = -2; rx <= 2; rx++) {
+            for (int ry = -2; ry <= 2; ry++) {
+                Vector3 off = Vector3Add(
+                    Vector3Scale(right, (float)rx * beamR * 0.4f),
+                    Vector3Scale(up, (float)ry * beamR * 0.4f));
+                Color c = (rx == 0 && ry == 0) ? (Color){255, 255, 240, 255} :  // white core
+                          (abs(rx) + abs(ry) <= 2) ? (Color){255, 200, 80, 220} : // orange mid
+                          (Color){255, 120, 20, 160};  // outer
+                DrawLine3D(Vector3Add(w->raketenBeamStart, off),
+                           Vector3Add(w->raketenBeamEnd, off), c);
+            }
         }
-        // Huge impact sphere
-        DrawSphere(w->raketenBeamEnd, maxR * 3.0f, (Color){255, 220, 120, (unsigned char)(80 * pulse)});
-        DrawSphere(w->raketenBeamEnd, maxR * 1.5f, (Color){255, 255, 200, (unsigned char)(150 * pulse)});
-        // Origin glow
-        DrawSphere(w->raketenBeamStart, maxR * 2.0f, (Color){255, 255, 220, (unsigned char)(100 * pulse)});
+        // Impact point glow
+        DrawSphereEx(w->raketenBeamEnd, 0.6f, 4, 4, (Color){255, 240, 180, 180});
     }
 
     // Beam trails
