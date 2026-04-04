@@ -77,6 +77,11 @@ void LanderSpawnWave(LanderManager *lm, Vector3 playerPos, int enemyCount, int w
     if (landerCount > MAX_LANDERS) landerCount = MAX_LANDERS;
     int perLander = enemyCount / landerCount;
 
+    // Reset wave-level rank counters
+    lm->waveOfficersSpawned = 0;
+    lm->waveNcosSpawned = 0;
+    lm->currentWave = wave;
+
     PlaySound(lm->sndKlaxon);
     lm->klaxonPlayed = true;
     for (int i = 0; i < landerCount; i++) {
@@ -108,6 +113,9 @@ void LanderSpawnWave(LanderManager *lm, Vector3 playerPos, int enemyCount, int w
         l->enemiesTotal = (i < landerCount - 1) ? perLander : enemyCount - perLander * i;
         l->factionType = (rand() % 2) ? ENEMY_SOVIET : ENEMY_AMERICAN;
         l->shakeAmount = 0;
+        l->officersSpawned = 0;
+        l->ncosSpawned = 0;
+        l->wave = wave;
     }
 }
 
@@ -157,7 +165,28 @@ void LanderManagerUpdate(LanderManager *lm, ecs_world_t *ecsWorld, float dt) {
                         hatchPos.x += ((float)rand()/RAND_MAX - 0.5f) * 1.0f;
                         hatchPos.z += ((float)rand()/RAND_MAX - 0.5f) * 1.0f;
                         hatchPos.y = WorldGetHeight(hatchPos.x, hatchPos.z) + 1.2f;
-                        EcsEnemySpawnAt(ecsWorld, l->factionType, hatchPos);
+                        // Assign rank — guarantee 1 officer + 1 NCO per lander
+                        EnemyRank spawnRank = RANK_TROOPER;
+                        int landerLeft = l->enemiesTotal - l->enemiesDeployed;
+                        int needOff = (l->officersSpawned == 0) ? 1 : 0;
+                        int needNco = (l->ncosSpawned == 0) ? 1 : 0;
+                        int guaranteed = needOff + needNco;
+
+                        if (needOff && landerLeft <= guaranteed) {
+                            spawnRank = RANK_OFFICER;
+                            l->officersSpawned++;
+                        } else if (needNco && landerLeft <= needNco) {
+                            spawnRank = RANK_NCO;
+                            l->ncosSpawned++;
+                        } else if (l->officersSpawned < RANK_MAX_OFFICERS_PER_WAVE &&
+                                   rand() % RANK_OFFICER_CHANCE == 0) {
+                            spawnRank = RANK_OFFICER;
+                            l->officersSpawned++;
+                        } else if (rand() % RANK_NCO_CHANCE == 0) {
+                            spawnRank = RANK_NCO;
+                            l->ncosSpawned++;
+                        }
+                        EcsEnemySpawnRanked(ecsWorld, l->factionType, spawnRank, hatchPos);
                         l->enemiesDeployed++;
                     }
                 }

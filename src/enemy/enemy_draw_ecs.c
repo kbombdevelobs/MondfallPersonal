@@ -153,6 +153,10 @@ static void FillTempEnemy(ecs_world_t *world, ecs_entity_t entity,
         }
     }
 
+    // Fill rank if present
+    const EcRank *rk = ecs_get(world, entity, EcRank);
+    out->rank = rk ? rk->rank : RANK_TROOPER;
+
     // Fill combat stats if present
     const EcCombatStats *cs = ecs_get(world, entity, EcCombatStats);
     if (cs) {

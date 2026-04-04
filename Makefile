@@ -2,7 +2,7 @@ CC = clang
 CFLAGS = -Wall -Wextra -std=c99 -I/opt/homebrew/include -Ivendor/flecs -O2
 LDFLAGS = -L/opt/homebrew/lib -lraylib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo
 
-SRC = src/main.c src/game.c src/game_intro.c src/player.c src/world.c src/world/world_noise.c src/world/world_draw.c src/weapon.c src/weapon/weapon_sound.c src/weapon/weapon_draw.c src/enemy/enemy_draw.c src/enemy/enemy_draw_death.c src/enemy/enemy_components.c src/enemy/enemy_spawn.c src/enemy/enemy_systems.c src/enemy/enemy_ai.c src/enemy/enemy_physics.c src/enemy/enemy_death_systems.c src/enemy/enemy_draw_ecs.c src/hud.c src/audio.c src/lander.c src/pickup.c src/combat_ecs.c src/sound_gen.c src/structure/structure.c src/structure/structure_draw_exterior.c src/structure/structure_draw_interior.c src/structure/structure_draw_furniture.c src/ecs_world.c
+SRC = src/main.c src/game.c src/game_intro.c src/player.c src/world.c src/world/world_noise.c src/world/world_draw.c src/weapon.c src/weapon/weapon_sound.c src/weapon/weapon_draw.c src/enemy/enemy_draw.c src/enemy/enemy_draw_death.c src/enemy/enemy_components.c src/enemy/enemy_spawn.c src/enemy/enemy_systems.c src/enemy/enemy_ai.c src/enemy/enemy_physics.c src/enemy/enemy_death_systems.c src/enemy/enemy_morale.c src/enemy/enemy_draw_ecs.c src/hud.c src/audio.c src/lander.c src/pickup.c src/combat_ecs.c src/sound_gen.c src/structure/structure.c src/structure/structure_draw_exterior.c src/structure/structure_draw_interior.c src/structure/structure_draw_furniture.c src/ecs_world.c
 OBJ = $(SRC:.c=.o) vendor/flecs/flecs.o
 TARGET = mondfall
 

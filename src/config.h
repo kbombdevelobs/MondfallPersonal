@@ -215,5 +215,40 @@
 #define MOONBASE_GEODESIC_SEGS   12
 #define STRUCTURE_SPAWN_CHANCE   15   // 1-in-N chunks gets a base (lower = more common)
 #define MOONBASE_RESUPPLIES      3   // number of resupply uses per base
+#define MOONBASE_COLLISION_HEIGHT 6.0f  // dome top height above terrain for collision
+
+// --- Rank System ---
+#define RANK_NCO_WAVE_START       1     // NCOs appear from wave 1
+#define RANK_OFFICER_WAVE_START   1     // Officers appear from wave 1
+#define RANK_NCO_CHANCE           20    // 1-in-N chance per spawn (~5%)
+#define RANK_OFFICER_CHANCE       50    // 1-in-N chance per spawn (~2%)
+#define RANK_MAX_OFFICERS_PER_WAVE 2    // cap officers per wave
+
+// --- Rank Stat Multipliers ---
+#define NCO_HEALTH_MULT          1.8f    // NCOs are tough frontline leaders
+#define NCO_DAMAGE_MULT          1.3f
+#define NCO_SPEED_MULT           1.1f
+#define OFFICER_HEALTH_MULT      0.7f    // Officers are frailer — command from rear
+#define OFFICER_DAMAGE_MULT      1.5f    // Deadly accurate
+#define OFFICER_SPEED_MULT       0.85f   // Measured, not rushing
+#define OFFICER_RANGE_MULT       1.5f    // Engages from further back
+#define OFFICER_RATE_MULT        0.6f    // Fires deliberately
+#define OFFICER_DIST_MULT        1.6f    // Holds back further than troops
+
+// --- Leadership / Morale ---
+#define LEADERSHIP_RADIUS        15.0f
+#define MORALE_LEADER_BONUS      0.3f
+#define MORALE_NCO_RALLY_RATE    0.15f
+#define MORALE_DECAY_RATE        0.05f
+#define MORALE_OFFICER_DEATH_HIT 0.6f
+#define MORALE_NCO_DEATH_HIT     0.3f
+#define MORALE_FLEE_THRESHOLD    0.25f
+#define MORALE_FLEE_CHANCE       40
+#define MORALE_ACCURACY_BONUS    0.15f
+#define MORALE_SPEED_PENALTY     0.7f
+#define MORALE_NATURAL_RECOVERY  0.08f
+#define MORALE_RALLY_THRESHOLD   0.5f
+#define MORALE_FLEE_DURATION_MIN 3.0f
+#define MORALE_FLEE_DURATION_MAX 6.0f
 
 #endif

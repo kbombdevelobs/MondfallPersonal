@@ -14,6 +14,8 @@ ECS_COMPONENT_DECLARE(EcEviscerating);
 ECS_COMPONENT_DECLARE(EcRagdollDeath);
 ECS_COMPONENT_DECLARE(EcVaporizeDeath);
 ECS_COMPONENT_DECLARE(EcEviscerateDeath);
+ECS_COMPONENT_DECLARE(EcRank);
+ECS_COMPONENT_DECLARE(EcMorale);
 ECS_COMPONENT_DECLARE(EcEnemyResources);
 ECS_COMPONENT_DECLARE(EcGameContext);
 
@@ -35,6 +37,8 @@ void EcsEnemyComponentsRegister(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, EcRagdollDeath);
     ECS_COMPONENT_DEFINE(world, EcVaporizeDeath);
     ECS_COMPONENT_DEFINE(world, EcEviscerateDeath);
+    ECS_COMPONENT_DEFINE(world, EcRank);
+    ECS_COMPONENT_DEFINE(world, EcMorale);
     ECS_COMPONENT_DEFINE(world, EcEnemyResources);
     ECS_COMPONENT_DEFINE(world, EcGameContext);
 

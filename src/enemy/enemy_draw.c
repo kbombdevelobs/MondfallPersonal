@@ -188,6 +188,95 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     rlPopMatrix();
     rlPopMatrix();
 
+    // === RANK VISUAL MARKERS ===
+    if (e->rank == RANK_NCO) {
+        if (e->type == ENEMY_SOVIET) {
+            // Soviet NCO: brown ushanka (fur hat) on top of helmet
+            Color fur = {110, 75, 45, 255};
+            Color furDark = {80, 55, 30, 255};
+            Color crown = {90, 60, 35, 255};
+            // Crown sits on helmet top (helmet top ~1.58)
+            DrawSphere((Vector3){0, 1.7f, 0}, 0.38f, crown);
+            // Fur brim ring at helmet top
+            DrawCube((Vector3){0, 1.55f, 0}, 0.68f, 0.16f, 0.68f, fur);
+            DrawCube((Vector3){0, 1.55f, 0}, 0.7f, 0.1f, 0.7f, furDark);
+            // Ear flaps — tied up on top
+            DrawCube((Vector3){0.28f, 1.8f, 0}, 0.14f, 0.28f, 0.2f, fur);
+            DrawCube((Vector3){-0.28f, 1.8f, 0}, 0.14f, 0.28f, 0.2f, fur);
+            // Tie string across top
+            DrawCube((Vector3){0, 1.92f, 0}, 0.45f, 0.03f, 0.04f, furDark);
+            // Red star on front of brim
+            DrawSphere((Vector3){0, 1.6f, 0.36f}, 0.08f, (Color){255, 30, 20, 255});
+            // Gold star center
+            DrawSphere((Vector3){0, 1.6f, 0.38f}, 0.04f, (Color){255, 215, 0, 255});
+        } else {
+            // American NCO: olive green baseball cap on top of helmet
+            Color capGreen = {65, 90, 45, 255};
+            Color capDark = {45, 65, 30, 255};
+            Color brim = {50, 72, 35, 255};
+            // Cap crown sits on helmet top (~1.58)
+            DrawSphere((Vector3){0, 1.72f, 0.03f}, 0.32f, capGreen);
+            // Flat top panel
+            DrawCube((Vector3){0, 1.88f, 0.03f}, 0.32f, 0.05f, 0.32f, capDark);
+            // Forward brim — long flat visor extending from helmet top
+            DrawCube((Vector3){0, 1.6f, 0.45f}, 0.4f, 0.03f, 0.3f, brim);
+            DrawCube((Vector3){0, 1.59f, 0.55f}, 0.34f, 0.04f, 0.1f, brim);
+            // Button on top
+            DrawSphere((Vector3){0, 1.9f, 0.03f}, 0.04f, capDark);
+            // Adjustment strap at back
+            DrawCube((Vector3){0, 1.65f, -0.22f}, 0.28f, 0.05f, 0.04f, capDark);
+        }
+        // Arm bands on both upper arms
+        Color bandColor = (e->type == ENEMY_SOVIET) ? (Color){255,215,0,255} : (Color){240,240,245,255};
+        DrawCube((Vector3){-0.56f, 0.45f, 0}, 0.28f, 0.12f, 0.28f, bandColor);
+        DrawCube((Vector3){0.56f, 0.45f, 0}, 0.28f, 0.12f, 0.28f, bandColor);
+        // Bulky shoulder pads
+        DrawCube((Vector3){0.54f, 0.65f, 0}, 0.28f, 0.25f, 0.48f, suitDark);
+        DrawCube((Vector3){-0.54f, 0.65f, 0}, 0.28f, 0.25f, 0.48f, suitDark);
+    }
+    if (e->rank == RANK_OFFICER) {
+        // Officer: large peaked cap brim — unmistakable silhouette
+        Color capColor = (e->type == ENEMY_SOVIET) ? (Color){140,0,0,255} : (Color){15,25,60,255};
+        Color capBright = (e->type == ENEMY_SOVIET) ? (Color){255,215,0,255} : (Color){220,220,230,255};
+        // Cap sits ON TOP of helmet (helmet sphere top ~ Y=1.58)
+        // Flat brim extending forward from top of helmet
+        DrawCube((Vector3){0, 1.6f, 0.3f}, 0.65f, 0.04f, 0.4f, capColor);
+        // Cap crown — tall block sitting above helmet
+        DrawCube((Vector3){0, 1.72f, 0}, 0.52f, 0.2f, 0.52f, capColor);
+        // Bright cap band at base of crown
+        DrawCube((Vector3){0, 1.62f, 0}, 0.56f, 0.06f, 0.56f, capBright);
+        // Sam Browne belt — wide diagonal chest strap
+        Color strapColor = (e->type == ENEMY_SOVIET) ? (Color){100,60,25,255} : (Color){160,155,140,255};
+        rlPushMatrix();
+        rlRotatef(35.0f, 0, 0, 1);
+        DrawCube((Vector3){0.15f, 0.2f, 0.28f}, 0.08f, 1.0f, 0.04f, strapColor);
+        rlPopMatrix();
+        // Cross strap
+        rlPushMatrix();
+        rlRotatef(-35.0f, 0, 0, 1);
+        DrawCube((Vector3){-0.15f, 0.2f, 0.28f}, 0.08f, 1.0f, 0.04f, strapColor);
+        rlPopMatrix();
+        // Coat tail / cape behind torso — long and visible
+        float sway = sinf(e->walkCycle * 0.5f) * 5.0f;
+        rlPushMatrix();
+        rlTranslatef(0, -0.3f, -0.35f);
+        rlRotatef(sway, 1, 0, 0);
+        DrawCube((Vector3){0, -0.35f, 0}, 0.55f, 0.8f, 0.1f, capColor);
+        DrawCube((Vector3){0, -0.35f, 0.01f}, 0.45f, 0.7f, 0.01f, capBright); // trim edge
+        rlPopMatrix();
+        // Soviet: gold star on cap crown front
+        if (e->type == ENEMY_SOVIET) {
+            DrawSphere((Vector3){0, 1.72f, 0.27f}, 0.07f, (Color){255,215,0,255});
+        } else {
+            // American: eagle emblem on cap crown front
+            DrawCube((Vector3){0, 1.72f, 0.27f}, 0.14f, 0.04f, 0.04f, capBright);
+            DrawCube((Vector3){0, 1.72f, 0.27f}, 0.04f, 0.1f, 0.04f, capBright);
+        }
+        // Epaulettes — bright rectangles on shoulders
+        DrawCube((Vector3){0.52f, 0.72f, 0.1f}, 0.2f, 0.06f, 0.2f, capBright);
+        DrawCube((Vector3){-0.52f, 0.72f, 0.1f}, 0.2f, 0.06f, 0.2f, capBright);
+    }
+
     rlPopMatrix(); // root
 
     // Death particles — delegate to enemy_draw_death.c

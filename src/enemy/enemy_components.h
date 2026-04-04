@@ -12,7 +12,8 @@
 
 typedef enum { ENEMY_SOVIET, ENEMY_AMERICAN } EnemyType;
 typedef enum { ANIM_IDLE, ANIM_WALK, ANIM_SHOOT, ANIM_HIT, ANIM_DEATH } EnemyAnimState;
-typedef enum { AI_ADVANCE, AI_STRAFE, AI_SHOOT, AI_DODGE, AI_RETREAT } AIBehavior;
+typedef enum { AI_ADVANCE, AI_STRAFE, AI_SHOOT, AI_DODGE, AI_RETREAT, AI_FLEE } AIBehavior;
+typedef enum { RANK_TROOPER, RANK_NCO, RANK_OFFICER } EnemyRank;
 
 // ============================================================================
 // Core Components — present on every enemy entity
@@ -67,6 +68,20 @@ typedef struct {
     float muzzleFlash;
     float deathAngle;
 } EcAnimation;
+
+// Rank component — determines enhanced stats and visual distinction
+typedef struct {
+    EnemyRank rank;
+} EcRank;
+
+// Morale component — tracks cohesion state
+typedef struct {
+    float morale;            // 0.0 (broken) to 1.0 (full)
+    ecs_entity_t leader;     // nearest officer/NCO entity (0 if none)
+    float leaderDist;        // distance to leader
+    float fleeTimer;         // time spent fleeing (for recovery)
+    AIBehavior prevBehavior; // behavior before fleeing (to restore on rally)
+} EcMorale;
 
 // ============================================================================
 // Sparse Components — only added when an enemy enters a death state
@@ -131,6 +146,7 @@ typedef struct {
     int aiFrameCounter;
     float playerDamageAccum;  // accumulated damage to player this frame
     int killCount;            // kills this frame (added to game.killCount)
+    int rankKillType;         // 0=none, 1=NCO killed, 2=officer killed (for HUD flash)
 } EcGameContext;
 
 // ============================================================================
@@ -154,6 +170,8 @@ extern ecs_entity_t ecs_id(EcEviscerating);
 extern ecs_entity_t ecs_id(EcRagdollDeath);
 extern ecs_entity_t ecs_id(EcVaporizeDeath);
 extern ecs_entity_t ecs_id(EcEviscerateDeath);
+extern ecs_entity_t ecs_id(EcRank);
+extern ecs_entity_t ecs_id(EcMorale);
 extern ecs_entity_t ecs_id(EcEnemyResources);
 extern ecs_entity_t ecs_id(EcGameContext);
 

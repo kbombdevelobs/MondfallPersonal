@@ -371,6 +371,10 @@ bool WorldCheckCollision(World *world, Vector3 pos, float radius) {
         if (!ch->generated) continue;
         for (int j = 0; j < ch->rockCount; j++) {
             Rock *r = &ch->rocks[j];
+            // Y-axis: skip if player feet are above rock top
+            float rockTop = r->position.y + r->size.y * 0.5f;
+            float playerFeet = pos.y - PLAYER_HEIGHT;
+            if (playerFeet >= rockTop) continue;
             float dx = fmaxf(fabsf(pos.x - r->position.x) - r->size.x * 0.5f, 0.0f);
             float dz = fmaxf(fabsf(pos.z - r->position.z) - r->size.z * 0.5f, 0.0f);
             if (dx * dx + dz * dz < radius * radius) return true;
