@@ -169,27 +169,36 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
                 e->position.x += e->ragdollVelX * dt;
                 e->position.z += e->ragdollVelZ * dt;
                 e->position.y += e->ragdollVelY * dt;
-                e->ragdollVelY -= 1.62f * dt;
+                e->ragdollVelY -= MOON_GRAVITY * dt;
                 e->spinX *= (1.0f - 0.3f * dt);
                 e->spinY *= (1.0f - 0.3f * dt);
-                e->ragdollVelX *= (1.0f - 0.2f * dt);
-                e->ragdollVelZ *= (1.0f - 0.2f * dt);
-                float gH = WorldGetHeight(e->position.x, e->position.z) + 0.3f;
+                e->ragdollVelX *= (1.0f - 0.5f * dt);
+                e->ragdollVelZ *= (1.0f - 0.5f * dt);
+                // Keep body ON terrain surface, not sinking through
+                float gH = WorldGetHeight(e->position.x, e->position.z) + 0.6f;
                 if (e->position.y < gH) {
                     e->position.y = gH;
-                    e->ragdollVelY = fabsf(e->ragdollVelY) * 0.4f;
-                    e->spinX *= 0.7f;
+                    if (fabsf(e->ragdollVelY) < 0.5f) {
+                        // Settled — stop bouncing, lock to terrain
+                        e->ragdollVelY = 0;
+                        e->ragdollVelX *= 0.7f;
+                        e->ragdollVelZ *= 0.7f;
+                        e->spinX *= 0.85f;
+                    } else {
+                        e->ragdollVelY = fabsf(e->ragdollVelY) * 0.3f;
+                        e->spinX *= 0.6f;
+                    }
                 }
             } else {
-                // CRUMPLE — just fall forward, sink to ground
+                // CRUMPLE — fall forward onto terrain surface
                 e->deathAngle += e->spinX * dt;
                 if (e->deathAngle > 90.0f) {
                     e->deathAngle = 90.0f;
                     e->spinX = 0;
                 }
-                // Sink toward ground
-                float gH = WorldGetHeight(e->position.x, e->position.z) + 0.3f;
-                if (e->position.y > gH) e->position.y -= dt * 1.0f;
+                // Track terrain height continuously — never sink through
+                float gH = WorldGetHeight(e->position.x, e->position.z) + 0.5f;
+                if (e->position.y > gH + 0.1f) e->position.y -= dt * 2.0f;
                 else e->position.y = gH;
             }
 
@@ -475,7 +484,7 @@ void EnemyDamage(EnemyManager *em, int index, float damage) {
         e->deathStyle = (rand() % 100 < 40) ? 1 : 0; // 40% crumple, 60% ragdoll
         if (e->deathStyle == 0) {
             // Pressurized suit blowout — wild spin + launch
-            e->deathTimer = 4.0f;
+            e->deathTimer = 10.0f;
             e->spinX = 120.0f + (float)(rand() % 300);
             e->spinY = (float)(rand() % 200) - 100.0f;
             float launchAngle = ((float)rand() / RAND_MAX) * 2.0f * PI;
@@ -485,7 +494,7 @@ void EnemyDamage(EnemyManager *em, int index, float damage) {
             e->ragdollVelY = 2.0f + ((float)rand() / RAND_MAX) * 4.0f;
         } else {
             // Simple crumple — fall over, bleed
-            e->deathTimer = 5.0f;
+            e->deathTimer = 12.0f;
             e->spinX = 80.0f + (float)(rand() % 60); // slower fall
             e->spinY = 0;
             e->ragdollVelX = 0; e->ragdollVelZ = 0; e->ragdollVelY = 0;
@@ -551,7 +560,7 @@ void EnemyEviscerate(EnemyManager *em, int index, Vector3 hitDir) {
     e->state = ENEMY_EVISCERATING;
     e->evisTimer = 0;
     e->health = 0;
-    e->deathTimer = 6.0f;
+    e->deathTimer = 10.0f;
     e->evisDir = Vector3Normalize(hitDir);
 
     // 0=head, 1=torso, 2=right arm, 3=left arm, 4=right leg, 5=left leg
