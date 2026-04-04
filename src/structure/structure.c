@@ -60,7 +60,7 @@ static void InitStructureAtPos(Structure *base, float wx, float wz, float interi
         float angle = (float)i * (2.0f * PI / (float)base->doorCount) - PI * 0.5f;
         base->doorAngles[i] = angle;
         float baseYOff = 1.2f;
-        float doorDist = r * 0.95f + airlockLen;
+        float doorDist = r * 1.1f + airlockLen;
         float doorX = wx + cosf(angle) * doorDist;
         float doorZ = wz + sinf(angle) * doorDist;
         base->doorWorldPos[i] = (Vector3){doorX, base->worldPos.y + baseYOff + 1.0f, doorZ};

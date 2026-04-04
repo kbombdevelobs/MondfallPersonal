@@ -152,7 +152,7 @@ static void DrawGeodesicDome(float cx, float cy, float cz, float radius, float h
 
 static void DrawExteriorDoor(float cx, float cy, float cz, float angle, bool expended) {
     // Airlock corridor — wide, bold, high-contrast
-    float doorDist = MOONBASE_EXTERIOR_RADIUS * 0.95f;
+    float doorDist = MOONBASE_EXTERIOR_RADIUS * 1.1f;
     float dx = cx + cosf(angle) * doorDist;
     float dz = cz + sinf(angle) * doorDist;
 
