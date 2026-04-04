@@ -1,0 +1,7 @@
+*.o
+mondfall
+mondfall_dbg
+*.dSYM/
+.DS_Store
+assets/march.wav
+Mondfall.app/
