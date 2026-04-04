@@ -6,4 +6,5 @@ mondfall_dbg
 assets/march.wav
 Mondfall.app/
 mp3/
-*.mp3
+# Allow mp3s inside assets (game sounds)
+!assets/**/*.mp3
