@@ -4,6 +4,7 @@
 #include "game.h"
 #include "player.h"
 #include "world.h"
+#include "world/world_draw.h"
 #include "weapon.h"
 #include "enemy/enemy.h"
 #include "hud.h"
@@ -296,7 +297,7 @@ int main(void) {
 
             BeginMode3D(player.camera);
                 WorldDrawSky(&world, player.camera);
-                WorldDraw(&world, player.position);
+                WorldDraw(&world, player.position, player.camera);
                 EnemyManagerDraw(&enemies);
                 LanderManagerDraw(&landers, player.position);
                 PickupManagerDraw(&pickups);

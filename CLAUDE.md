@@ -61,7 +61,11 @@ Mondfall/
 │   │   ├── enemy_draw.h — Draw API
 │   │   ├── enemy_draw.c — All enemy rendering (alive, dying, vaporizing, eviscerating)
 │   │   └── README.md   — System overview for agents
-│   ├── world.c/h       — Infinite chunked terrain, heightmap, craters, boulders, sky
+│   ├── world.c/h       — Core chunk management, terrain mesh gen, craters, collision
+│   ├── world/           — World rendering & noise (see src/world/README.md)
+│   │   ├── world_noise.h/c — Perlin gradient noise, ValueNoise, WorldGetHeight()
+│   │   ├── world_draw.h/c  — Sky rendering, chunk drawing, frustum culling
+│   │   └── README.md
 │   ├── lander.c/h      — Moon lander wave system with descent, deployment, self-destruct
 │   ├── pickup.c/h      — Dropped enemy weapons (KOSMOS-7 SMG, LIBERTY BLASTER)
 │   ├── hud.c/h         — Health, ammo, wave counter, reload bar, ACHTUNG alert, radio transmission
@@ -92,6 +96,7 @@ Mondfall/
 
 ### Performance Optimizations
 - **Cached particle meshes:** Unit sphere and unit cube meshes generated once in `WeaponInit()`, reused via `DrawMesh()` with transform matrices for all projectiles, explosions, and beam glows — eliminates ~200 per-frame mesh regenerations
+- **Frustum culling:** `WorldDraw()` culls chunks behind camera or outside ~80 degree cone, cutting terrain draw calls roughly in half
 
 ### Game Loop (main.c)
 - State machine: `STATE_MENU` → `STATE_PLAYING` → `STATE_PAUSED` / `STATE_GAME_OVER` / `STATE_SETTINGS`
@@ -100,10 +105,14 @@ Mondfall/
 
 ### World System (world.c)
 - Infinite terrain via chunk system (60x60 unit chunks, 5x5 render grid)
-- `WorldGetHeight(x, z)` — deterministic multi-octave value noise, used by all systems
+- `WorldGetHeight(x, z)` — deterministic multi-octave Perlin gradient noise (permutation table + quintic fade), used by all systems
+- Baked directional lighting: low-angle sun dot product multiplied into vertex colors during mesh generation (0.15 ambient floor)
+- Slope-based vertex coloring: steep terrain darkened by sampling 4 neighboring heights
+- Craters baked into mesh via `CraterHeight()` using min-depth approach (deepest crater wins at overlap, depressions override rims)
+- Frustum culling in `WorldDraw()` via camera forward dot product — skips chunks behind camera
 - Vertex-displaced meshes with world-space UVs and vertex colors for seamless chunks
-- Craters baked into mesh via `CraterHeight()` which checks all loaded chunks
 - Sphere-cluster boulders with LOD (detail reduces with distance)
+- Boulder collision checks Y-axis so players can jump over rocks
 
 ### Enemy System (enemy.c)
 - Two factions: Soviet (red uniforms, gold helmets) and American (navy blue, silver helmets)
@@ -179,7 +188,7 @@ Drop `.mp3` files in `assets/soviet_death_sounds/` or `assets/american_death_sou
 All weapon stats are in `WeaponInit()` in `weapon.c`. Viewmodels are drawn in `WeaponDrawFirst()`. Enemy weapon visuals are in `DrawAstronautModel()` in `enemy.c`.
 
 ### Modifying Terrain
-Height function is `WorldGetHeight()` in `world.c`. Adjust noise octaves/scales for different terrain. Rock sizes in `GenerateChunk()`. Crater parameters there too.
+Height function is `WorldGetHeight()` in `world.c` — uses 4-octave Perlin gradient noise via `GradientNoise()` (permutation table based). Adjust octave scales/amplitudes for different terrain character. Rock sizes in `GenerateChunk()`. Crater parameters there too. Vertex colors are computed per-vertex at mesh generation time with slope darkening and baked sun lighting — modify the sun direction vector in `GenTerrainMesh()` to change shadow angle. The legacy `ValueNoise()`/`Hash2D()` functions are still used for texture generation only.
 
 ### Shaders
 `assets/crt.fs` is the main post-processing shader — edit and reload (no recompile needed, it's loaded at runtime). `assets/hud.fs` curves the HUD overlay.
