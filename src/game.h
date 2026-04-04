@@ -6,6 +6,7 @@
 
 typedef enum {
     STATE_MENU,
+    STATE_INTRO,
     STATE_SETTINGS,
     STATE_PLAYING,
     STATE_PAUSED,
@@ -36,6 +37,16 @@ typedef struct {
     float sfxVolume;
     int screenScale;        // 1-4 (1x=640x360, 2x=1280x720, etc.)
     bool quitRequested;
+
+    // Intro lore screen
+    bool introSeen;           // true after intro shown once (skip on restart)
+    float introTimer;         // time elapsed in intro sequence
+    float introLineTimer;     // time for current line typewriter
+    int introLineIndex;       // which line we're revealing
+    int introCharIndex;       // typewriter char position in current line
+    bool introSkipHeld;       // debounce for skip
+    bool introFadingOut;      // fade to black before gameplay
+    float introFadeAlpha;     // 0..1 fade progress
 } Game;
 
 void GameInit(Game *game);
@@ -45,5 +56,21 @@ void GameDrawMenu(Game *game);
 void GameDrawSettings(Game *game);
 void GameDrawPaused(Game *game);
 void GameDrawGameOver(Game *game);
+
+// Intro lore screen
+#define INTRO_MAX_LINES 64
+#define INTRO_MAX_LINE_LEN 128
+
+typedef struct {
+    char lines[INTRO_MAX_LINES][INTRO_MAX_LINE_LEN];
+    int lineCount;
+    float pauseAfter[INTRO_MAX_LINES];   // extra pause after each line
+    bool isClear[INTRO_MAX_LINES];       // @CLEAR directive
+    int style[INTRO_MAX_LINES];          // 0=normal, 1=title, 2=dim
+} IntroScript;
+
+void IntroScriptLoad(IntroScript *script, const char *path);
+void GameDrawIntro(Game *game, IntroScript *script);
+bool GameUpdateIntro(Game *game, IntroScript *script);
 
 #endif

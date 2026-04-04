@@ -57,6 +57,9 @@ int main(void) {
 
     CombatContext combat = {&player, &weapon, &enemies, &pickups, &game};
 
+    IntroScript introScript;
+    IntroScriptLoad(&introScript, "assets/intro.txt");
+
     bool assetsLoaded = false;
     bool cursorLocked = false;
     int lastScreenScale = game.screenScale;
@@ -111,19 +114,36 @@ int main(void) {
         // ---- STATE MACHINE ----
         switch (game.state) {
             case STATE_MENU: {
+                // Toggle intro skip with I key
+                if (IsKeyPressed(KEY_I)) {
+                    game.introSeen = !game.introSeen;
+                }
                 if (IsKeyPressed(KEY_ENTER)) {
                     switch (game.menuSelection) {
                         case 0: // Play
-                            game.state = STATE_PLAYING;
-                            GameReset(&game);
-                            PlayerInit(&player);
-                            player.mouseSensitivity = game.mouseSensitivity;
-                            WeaponInit(&weapon);
-                            EnemyManagerInit(&enemies);
-                            LanderManagerInit(&landers);
-                            PickupManagerInit(&pickups);
-                            combat = (CombatContext){&player, &weapon, &enemies, &pickups, &game};
-                            if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
+                            if (!game.introSeen) {
+                                // Show intro first
+                                game.state = STATE_INTRO;
+                                game.introTimer = 0;
+                                game.introLineTimer = 0;
+                                game.introLineIndex = 0;
+                                game.introCharIndex = 0;
+                                game.introFadingOut = false;
+                                game.introFadeAlpha = 0;
+                                game.introSeen = true; // don't show again
+                            } else {
+                                // Skip intro, go straight to game
+                                game.state = STATE_PLAYING;
+                                GameReset(&game);
+                                PlayerInit(&player);
+                                player.mouseSensitivity = game.mouseSensitivity;
+                                WeaponInit(&weapon);
+                                EnemyManagerInit(&enemies);
+                                LanderManagerInit(&landers);
+                                PickupManagerInit(&pickups);
+                                combat = (CombatContext){&player, &weapon, &enemies, &pickups, &game};
+                                if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
+                            }
                             break;
                         case 1: // Settings
                             game.settingsReturnState = STATE_MENU;
@@ -134,6 +154,23 @@ int main(void) {
                             game.quitRequested = true;
                             break;
                     }
+                }
+                break;
+            }
+
+            case STATE_INTRO: {
+                bool introDone = GameUpdateIntro(&game, &introScript);
+                if (introDone) {
+                    game.state = STATE_PLAYING;
+                    GameReset(&game);
+                    PlayerInit(&player);
+                    player.mouseSensitivity = game.mouseSensitivity;
+                    WeaponInit(&weapon);
+                    EnemyManagerInit(&enemies);
+                    LanderManagerInit(&landers);
+                    PickupManagerInit(&pickups);
+                    combat = (CombatContext){&player, &weapon, &enemies, &pickups, &game};
+                    if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
                 }
                 break;
             }
@@ -361,7 +398,9 @@ int main(void) {
         }
 
         // Overlays drawn at full window resolution
-        if (game.state == STATE_MENU) {
+        if (game.state == STATE_INTRO) {
+            GameDrawIntro(&game, &introScript);
+        } else if (game.state == STATE_MENU) {
             GameDrawMenu(&game);
         } else if (game.state == STATE_SETTINGS) {
             GameDrawSettings(&game);
