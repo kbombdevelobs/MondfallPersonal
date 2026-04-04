@@ -146,8 +146,12 @@ static void DrawGeodesicDome(float cx, float cy, float cz, float radius, float h
     DrawCube((Vector3){cx, cy + height, cz}, radius * 0.35f, 0.25f, radius * 0.35f, EXT_STEEL);
 }
 
-static void DrawExteriorDoor(float cx, float cy, float cz, float angle) {
-    // Airlock corridor jutting out from dome — player-height doorway
+// Bright yellow for hazard markings — high contrast against lunar gray
+#define HAZARD_YELLOW (Color){220, 200, 40, 255}
+#define HAZARD_BLACK  (Color){25, 25, 25, 255}
+
+static void DrawExteriorDoor(float cx, float cy, float cz, float angle, bool expended) {
+    // Airlock corridor — wide, bold, high-contrast
     float doorDist = MOONBASE_EXTERIOR_RADIUS * 0.95f;
     float dx = cx + cosf(angle) * doorDist;
     float dz = cz + sinf(angle) * doorDist;
@@ -156,59 +160,75 @@ static void DrawExteriorDoor(float cx, float cy, float cz, float angle) {
     rlTranslatef(dx, cy, dz);
     rlRotatef(-angle * 180.0f / PI + 90.0f, 0, 1, 0);
 
-    // Corridor dimensions — player height (PLAYER_HEIGHT=1.8, door=2.0)
     float corrLen = 2.8f;
-    float corrW = 1.6f;
-    float corrH = 2.1f;   // just above player height
+    float corrW = 2.0f;    // wider corridor
+    float corrH = 2.2f;    // player height + clearance
     float corrMidZ = -corrLen * 0.5f;
 
-    // Corridor shell (walls, roof, floor)
-    DrawCube((Vector3){-corrW * 0.5f, corrH * 0.5f, corrMidZ}, 0.2f, corrH, corrLen, EXT_CONCRETE);
-    DrawCube((Vector3){corrW * 0.5f, corrH * 0.5f, corrMidZ}, 0.2f, corrH, corrLen, EXT_CONCRETE);
-    DrawCube((Vector3){0, corrH + 0.1f, corrMidZ}, corrW + 0.2f, 0.2f, corrLen, EXT_CONCRETE);
-    DrawCube((Vector3){0, -0.05f, corrMidZ}, corrW + 0.2f, 0.1f, corrLen, EXT_STEEL);
+    // Corridor shell — bright white/light gray to contrast with dark dome
+    Color shellCol = {180, 178, 172, 255};
+    DrawCube((Vector3){-corrW * 0.5f, corrH * 0.5f, corrMidZ}, 0.25f, corrH, corrLen, shellCol);
+    DrawCube((Vector3){corrW * 0.5f, corrH * 0.5f, corrMidZ}, 0.25f, corrH, corrLen, shellCol);
+    DrawCube((Vector3){0, corrH + 0.12f, corrMidZ}, corrW + 0.3f, 0.25f, corrLen, shellCol);
+    DrawCube((Vector3){0, -0.06f, corrMidZ}, corrW + 0.3f, 0.12f, corrLen, EXT_STEEL);
 
     // Dark interior fill
-    DrawCube((Vector3){0, corrH * 0.5f, corrMidZ + 0.05f}, corrW - 0.25f, corrH - 0.15f, corrLen - 0.2f, EXT_DOOR_DARK);
+    DrawCube((Vector3){0, corrH * 0.5f, corrMidZ + 0.05f}, corrW - 0.3f, corrH - 0.2f, corrLen - 0.2f, EXT_DOOR_DARK);
 
-    // Ribbed reinforcement bands
-    for (float rz = -0.2f; rz > -corrLen; rz -= 0.8f) {
-        DrawCube((Vector3){-corrW * 0.5f - 0.06f, corrH * 0.5f, rz}, 0.12f, corrH + 0.15f, 0.1f, EXT_STEEL);
-        DrawCube((Vector3){corrW * 0.5f + 0.06f, corrH * 0.5f, rz}, 0.12f, corrH + 0.15f, 0.1f, EXT_STEEL);
-        DrawCube((Vector3){0, corrH + 0.15f, rz}, corrW + 0.35f, 0.1f, 0.1f, EXT_STEEL);
+    // Yellow/black hazard chevrons along corridor roof
+    for (float rz = -0.1f; rz > -corrLen + 0.2f; rz -= 0.6f) {
+        int idx = (int)((-rz) / 0.6f);
+        Color chevCol = (idx % 2 == 0) ? HAZARD_YELLOW : HAZARD_BLACK;
+        DrawCube((Vector3){0, corrH + 0.2f, rz}, corrW + 0.1f, 0.08f, 0.25f, chevCol);
     }
 
-    // Outer door frame at end
+    // Ribbed steel reinforcement — thicker, more visible
+    for (float rz = -0.1f; rz > -corrLen; rz -= 0.7f) {
+        DrawCube((Vector3){-corrW * 0.5f - 0.08f, corrH * 0.5f, rz}, 0.15f, corrH + 0.2f, 0.12f, EXT_STEEL);
+        DrawCube((Vector3){corrW * 0.5f + 0.08f, corrH * 0.5f, rz}, 0.15f, corrH + 0.2f, 0.12f, EXT_STEEL);
+    }
+
+    // Outer door frame — bold, dark steel
     float endZ = -corrLen;
-    float frameW = 0.2f;
-    DrawCube((Vector3){-corrW * 0.5f - frameW, corrH * 0.5f, endZ}, frameW * 2, corrH + 0.25f, 0.3f, EXT_DOOR_FRAME);
-    DrawCube((Vector3){corrW * 0.5f + frameW, corrH * 0.5f, endZ}, frameW * 2, corrH + 0.25f, 0.3f, EXT_DOOR_FRAME);
-    DrawCube((Vector3){0, corrH + 0.15f, endZ}, corrW + frameW * 4 + 0.1f, 0.3f, 0.3f, EXT_DOOR_FRAME);
+    float fw = 0.25f;
+    DrawCube((Vector3){-corrW * 0.5f - fw, corrH * 0.5f, endZ}, fw * 2, corrH + 0.3f, 0.35f, EXT_DOOR_FRAME);
+    DrawCube((Vector3){corrW * 0.5f + fw, corrH * 0.5f, endZ}, fw * 2, corrH + 0.3f, 0.35f, EXT_DOOR_FRAME);
+    DrawCube((Vector3){0, corrH + 0.2f, endZ}, corrW + fw * 4 + 0.2f, 0.35f, 0.35f, EXT_DOOR_FRAME);
 
-    // Door opening — player-sized
-    float openW = corrW - 0.3f;
-    float openH = 2.0f; // player height door
-    DrawCube((Vector3){0, openH * 0.5f, endZ - 0.05f}, openW, openH, 0.1f, EXT_DOOR_DARK);
+    // Red/yellow hazard stripes on door frame
+    for (int stripe = 0; stripe < 4; stripe++) {
+        float sy = 0.3f + (float)stripe * 0.5f;
+        Color sc = (stripe % 2 == 0) ? EXT_ACCENT_RED : HAZARD_YELLOW;
+        DrawCube((Vector3){-corrW * 0.5f - fw - 0.02f, sy, endZ - 0.12f}, 0.1f, 0.2f, 0.1f, sc);
+        DrawCube((Vector3){corrW * 0.5f + fw + 0.02f, sy, endZ - 0.12f}, 0.1f, 0.2f, 0.1f, sc);
+    }
 
-    // Threshold
-    DrawCube((Vector3){0, 0.06f, endZ - 0.2f}, corrW, 0.12f, 0.45f, EXT_STEEL);
+    // Door opening
+    float openW = corrW - 0.4f;
+    float openH = 2.0f;
+    DrawCube((Vector3){0, openH * 0.5f, endZ - 0.06f}, openW, openH, 0.1f, EXT_DOOR_DARK);
 
-    // Red warning stripes
-    DrawCube((Vector3){-corrW * 0.5f - frameW, corrH * 0.7f, endZ - 0.1f}, 0.08f, 0.25f, 0.12f, EXT_ACCENT_RED);
-    DrawCube((Vector3){corrW * 0.5f + frameW, corrH * 0.7f, endZ - 0.1f}, 0.08f, 0.25f, 0.12f, EXT_ACCENT_RED);
-    DrawCube((Vector3){-corrW * 0.5f - frameW, corrH * 0.3f, endZ - 0.1f}, 0.08f, 0.25f, 0.12f, EXT_ACCENT_RED);
-    DrawCube((Vector3){corrW * 0.5f + frameW, corrH * 0.3f, endZ - 0.1f}, 0.08f, 0.25f, 0.12f, EXT_ACCENT_RED);
+    // Threshold step
+    DrawCube((Vector3){0, 0.06f, endZ - 0.25f}, corrW + 0.2f, 0.12f, 0.5f, EXT_STEEL);
 
-    // Green indicator light
+    // Indicator light — green stocked / red expended, large and bright
     float blink = (sinf((float)GetTime() * 3.5f + angle * 2.0f) > 0) ? 1.0f : 0.4f;
-    Color g = {(unsigned char)(30 * blink), (unsigned char)(200 * blink), (unsigned char)(80 * blink), 200};
-    DrawCube((Vector3){0, corrH + 0.35f, endZ - 0.1f}, 0.35f, 0.1f, 0.08f, g);
+    Color g;
+    if (expended)
+        g = (Color){(unsigned char)(220 * blink), (unsigned char)(30 * blink), (unsigned char)(20 * blink), 230};
+    else
+        g = (Color){(unsigned char)(30 * blink), (unsigned char)(220 * blink), (unsigned char)(80 * blink), 230};
+    DrawCube((Vector3){0, corrH + 0.45f, endZ - 0.12f}, 0.5f, 0.15f, 0.1f, g);
 
-    // Interior lights
-    DrawCube((Vector3){-corrW * 0.5f + 0.06f, corrH - 0.15f, -corrLen * 0.5f}, 0.06f, 0.12f, 0.06f,
-        (Color){200, 180, 120, 180});
-    DrawCube((Vector3){corrW * 0.5f - 0.06f, corrH - 0.15f, -corrLen * 0.5f}, 0.06f, 0.12f, 0.06f,
-        (Color){200, 180, 120, 180});
+    // Wall-mounted lights inside corridor
+    DrawCube((Vector3){-corrW * 0.5f + 0.07f, corrH - 0.2f, -corrLen * 0.35f}, 0.08f, 0.15f, 0.08f,
+        (Color){220, 200, 140, 200});
+    DrawCube((Vector3){corrW * 0.5f - 0.07f, corrH - 0.2f, -corrLen * 0.35f}, 0.08f, 0.15f, 0.08f,
+        (Color){220, 200, 140, 200});
+    DrawCube((Vector3){-corrW * 0.5f + 0.07f, corrH - 0.2f, -corrLen * 0.75f}, 0.08f, 0.15f, 0.08f,
+        (Color){220, 200, 140, 200});
+    DrawCube((Vector3){corrW * 0.5f - 0.07f, corrH - 0.2f, -corrLen * 0.75f}, 0.08f, 0.15f, 0.08f,
+        (Color){220, 200, 140, 200});
 
     rlPopMatrix();
 }
@@ -270,8 +290,9 @@ static void DrawMoonBaseExterior(Structure *s) {
     }
 
     // === AIRLOCK DOORS on top of cylinder ===
+    bool expended = (s->resuppliesLeft <= 0);
     for (int d = 0; d < s->doorCount; d++) {
-        DrawExteriorDoor(x, baseY, z, s->doorAngles[d]);
+        DrawExteriorDoor(x, baseY, z, s->doorAngles[d], expended);
     }
 
     // === ANTENNA ===
@@ -695,30 +716,37 @@ static void DrawBar(float y) {
     }
 }
 
-static void DrawResupplyCloset(float y, float flashTimer) {
+static void DrawResupplyCloset(float y, float flashTimer, bool expended) {
     float halfD = MOONBASE_INTERIOR_D * 0.5f;
     float closetZ = halfD - 1.0f;
     float closetY = y + 1.5f;
 
-    // Cabinet body — military green
-    DrawCube((Vector3){0, closetY, closetZ}, 2.4f, 2.8f, 1.2f, INT_CLOSET_BODY);
-    // Cabinet doors
-    DrawCube((Vector3){-0.55f, closetY, closetZ - 0.55f}, 1.0f, 2.6f, 0.1f, INT_CLOSET_DOOR);
-    DrawCube((Vector3){0.55f, closetY, closetZ - 0.55f}, 1.0f, 2.6f, 0.1f, INT_CLOSET_DOOR);
-    // Seam
+    // Cabinet body — military green, or dark grey if expended
+    Color bodyCol = expended ? (Color){55, 50, 48, 255} : INT_CLOSET_BODY;
+    Color doorCol = expended ? (Color){60, 55, 52, 255} : INT_CLOSET_DOOR;
+    DrawCube((Vector3){0, closetY, closetZ}, 2.4f, 2.8f, 1.2f, bodyCol);
+    DrawCube((Vector3){-0.55f, closetY, closetZ - 0.55f}, 1.0f, 2.6f, 0.1f, doorCol);
+    DrawCube((Vector3){0.55f, closetY, closetZ - 0.55f}, 1.0f, 2.6f, 0.1f, doorCol);
     DrawCube((Vector3){0, closetY, closetZ - 0.56f}, 0.04f, 2.6f, 0.02f, (Color){30, 30, 30, 255});
-    // Handles
     DrawCube((Vector3){-0.15f, closetY, closetZ - 0.62f}, 0.06f, 0.3f, 0.06f, INT_BAR_BRASS);
     DrawCube((Vector3){0.15f, closetY, closetZ - 0.62f}, 0.06f, 0.3f, 0.06f, INT_BAR_BRASS);
-    // Glowing panel
-    float pulse = 0.6f + 0.4f * sinf((float)GetTime() * 2.5f);
-    Color glowCol = flashTimer > 0 ?
-        (Color){200, 255, 200, 240} :
-        (Color){(unsigned char)(30 * pulse), (unsigned char)(200 * pulse), (unsigned char)(80 * pulse), 200};
-    DrawCube((Vector3){0, closetY + 1.6f, closetZ - 0.5f}, 1.8f, 0.3f, 0.08f, glowCol);
-    // Status lights
-    DrawCube((Vector3){-1.3f, closetY + 0.8f, closetZ - 0.5f}, 0.1f, 0.1f, 0.1f, INT_CLOSET_GLOW);
-    DrawCube((Vector3){1.3f, closetY + 0.8f, closetZ - 0.5f}, 0.1f, 0.1f, 0.1f, INT_CLOSET_GLOW);
+
+    // Glowing panel — green if stocked, dead red if expended
+    if (expended) {
+        // Dead panel — dim red, no pulse
+        DrawCube((Vector3){0, closetY + 1.6f, closetZ - 0.5f}, 1.8f, 0.3f, 0.08f, (Color){80, 20, 15, 150});
+    } else {
+        float pulse = 0.6f + 0.4f * sinf((float)GetTime() * 2.5f);
+        Color glowCol = flashTimer > 0 ?
+            (Color){200, 255, 200, 240} :
+            (Color){(unsigned char)(30 * pulse), (unsigned char)(200 * pulse), (unsigned char)(80 * pulse), 200};
+        DrawCube((Vector3){0, closetY + 1.6f, closetZ - 0.5f}, 1.8f, 0.3f, 0.08f, glowCol);
+    }
+
+    // Status lights — green or red
+    Color statusCol = expended ? (Color){180, 30, 20, 200} : INT_CLOSET_GLOW;
+    DrawCube((Vector3){-1.3f, closetY + 0.8f, closetZ - 0.5f}, 0.1f, 0.1f, 0.1f, statusCol);
+    DrawCube((Vector3){1.3f, closetY + 0.8f, closetZ - 0.5f}, 0.1f, 0.1f, 0.1f, statusCol);
     // VERSORGUNG label plaque
     DrawCube((Vector3){0, closetY + 1.95f, closetZ - 0.45f}, 1.4f, 0.2f, 0.04f, EXT_CONCRETE_DK);
 }
@@ -823,6 +851,6 @@ void StructureManagerDrawInterior(StructureManager *sm) {
     DrawInteriorCeiling(y);
     DrawInteriorDoors(y);
     DrawPortraits(y);
-    DrawResupplyCloset(y, sm->resupplyFlashTimer);
+    DrawResupplyCloset(y, sm->resupplyFlashTimer, s->resuppliesLeft <= 0);
     DrawFurnitureAndDecor(y);
 }

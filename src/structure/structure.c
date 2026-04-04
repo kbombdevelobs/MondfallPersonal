@@ -50,6 +50,7 @@ static void InitStructureAtPos(Structure *base, float wx, float wz, float interi
     base->worldPos.y = sumH / (float)samples;
 
     base->interiorY = interiorY;
+    base->resuppliesLeft = MOONBASE_RESUPPLIES;
     base->active = true;
 
     // 3 doors at 120-degree intervals
@@ -147,6 +148,15 @@ float StructureGetResupplyFlash(StructureManager *sm) {
     return sm->resupplyFlashTimer;
 }
 
+float StructureGetEmptyMessageTimer(StructureManager *sm) {
+    return sm->emptyMessageTimer;
+}
+
+bool StructureCurrentBaseExpended(StructureManager *sm) {
+    if (sm->insideIndex < 0) return false;
+    return sm->structures[sm->insideIndex].resuppliesLeft <= 0;
+}
+
 float StructureInteriorFloorY(StructureManager *sm) {
     if (sm->insideIndex < 0) return 0;
     return sm->structures[sm->insideIndex].interiorY;
@@ -242,6 +252,10 @@ void StructureManagerUpdate(StructureManager *sm, Player *player, Weapon *weapon
         sm->resupplyFlashTimer -= GetFrameTime();
         if (sm->resupplyFlashTimer < 0) sm->resupplyFlashTimer = 0;
     }
+    if (sm->emptyMessageTimer > 0) {
+        sm->emptyMessageTimer -= GetFrameTime();
+        if (sm->emptyMessageTimer < 0) sm->emptyMessageTimer = 0;
+    }
 
     if (sm->playerInside) {
         Structure *s = &sm->structures[sm->insideIndex];
@@ -288,10 +302,19 @@ void StructureManagerUpdate(StructureManager *sm, Player *player, Weapon *weapon
             float ddz = player->position.z - closetZ;
             float dist = sqrtf(ddx * ddx + ddz * ddz);
             if (dist < CLOSET_INTERACT_RANGE) {
-                sm->currentPrompt = PROMPT_RESUPPLY;
-                if (IsKeyPressed(KEY_E)) {
-                    ResupplyWeapons(weapon, pickups);
-                    sm->resupplyFlashTimer = 0.5f;
+                Structure *cs = &sm->structures[sm->insideIndex];
+                if (cs->resuppliesLeft > 0) {
+                    sm->currentPrompt = PROMPT_RESUPPLY;
+                    if (IsKeyPressed(KEY_E)) {
+                        ResupplyWeapons(weapon, pickups);
+                        cs->resuppliesLeft--;
+                        sm->resupplyFlashTimer = 0.5f;
+                    }
+                } else {
+                    sm->currentPrompt = PROMPT_EMPTY;
+                    if (IsKeyPressed(KEY_E)) {
+                        sm->emptyMessageTimer = 3.0f;
+                    }
                 }
             }
         }

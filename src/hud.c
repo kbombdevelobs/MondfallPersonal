@@ -229,7 +229,34 @@ void HudDrawRadioTransmission(float timer, int sw, int sh) {
     DrawText(ftr, boxX + boxW / 2 - fw / 2, boxY + boxH - ffs - smPad, ffs, (Color){180, 180, 170, a});
 }
 
-void HudDrawStructurePrompt(StructurePrompt prompt, int sw, int sh) {
+void HudDrawStructurePrompt(StructurePrompt prompt, int resuppliesLeft, float emptyTimer, int sw, int sh) {
+    int cx = sw / 2;
+    int cy = sh / 2;
+
+    // "MEIN GOTT!" message — drawn on top of everything when triggered
+    if (emptyTimer > 0) {
+        const char *line1 = "MEIN GOTT!";
+        const char *line2 = "THE CUPBOARD IS BARE, KAMERAD!";
+        int fs1 = sh / 12;
+        int fs2 = sh / 18;
+        int tw1 = MeasureText(line1, fs1);
+        int tw2 = MeasureText(line2, fs2);
+        int boxW = (tw1 > tw2 ? tw1 : tw2) + sh / 15;
+        int boxH = fs1 + fs2 + sh / 12;
+        int boxX = cx - boxW / 2;
+        int boxY = cy - boxH / 2 - sh / 10;
+
+        float fade = (emptyTimer > 2.5f) ? 1.0f : emptyTimer / 2.5f;
+        unsigned char a = (unsigned char)(fade * 255);
+
+        DrawRectangle(boxX, boxY, boxW, boxH, (Color){60, 10, 5, (unsigned char)(fade * 200)});
+        DrawRectangleLines(boxX, boxY, boxW, boxH, (Color){200, 50, 30, a});
+
+        float shake = sinf((float)GetTime() * 25.0f) * 2.0f * fade;
+        DrawText(line1, cx - tw1 / 2 + (int)shake, boxY + sh / 30, fs1, (Color){255, 60, 30, a});
+        DrawText(line2, cx - tw2 / 2, boxY + sh / 30 + fs1 + sh / 40, fs2, (Color){255, 200, 50, a});
+    }
+
     if (prompt == PROMPT_NONE) return;
 
     const char *text = NULL;
@@ -238,20 +265,27 @@ void HudDrawStructurePrompt(StructurePrompt prompt, int sw, int sh) {
     switch (prompt) {
         case PROMPT_ENTER:    text = "PRESS [E] TO ENTER BASE"; break;
         case PROMPT_EXIT:     text = "PRESS [E] TO EXIT BASE"; break;
-        case PROMPT_RESUPPLY: text = "PRESS [E] TO RESUPPLY"; col = (Color){80, 255, 120, 240}; break;
+        case PROMPT_RESUPPLY: {
+            // Show remaining count
+            static char resupplyBuf[64];
+            snprintf(resupplyBuf, sizeof(resupplyBuf), "PRESS [E] TO RESUPPLY [%d]", resuppliesLeft);
+            text = resupplyBuf;
+            col = (Color){80, 255, 120, 240};
+            break;
+        }
+        case PROMPT_EMPTY:
+            text = "VERSORGUNG ERSCHOEPFT";
+            col = (Color){200, 60, 40, 220};
+            break;
         default: return;
     }
 
     int fs = sh / 20;
     int tw = MeasureText(text, fs);
-    int cx = sw / 2;
-    int cy = sh / 2;
 
-    // Background box
     int pad = sh / 40;
     DrawRectangle(cx - tw / 2 - pad, cy + sh / 6 - pad / 2, tw + pad * 2, fs + pad, (Color){0, 0, 0, 160});
 
-    // Pulsing text
     float pulse = 0.7f + 0.3f * sinf((float)GetTime() * 4.0f);
     Color drawCol = {(unsigned char)(col.r * pulse), (unsigned char)(col.g * pulse), col.b, col.a};
     DrawText(text, cx - tw / 2, cy + sh / 6, fs, drawCol);
