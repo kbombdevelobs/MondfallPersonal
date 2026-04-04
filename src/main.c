@@ -565,6 +565,7 @@ int main(void) {
     }
 
     WeaponUnload(&weapon);
+    EcsEnemySystemsCleanup();
     EcsEnemyResourcesUnload(ecsWorld);
     GameEcsFini();
     WorldUnload(&world);

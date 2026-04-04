@@ -9,7 +9,10 @@ Moon base structures with geodesic dome exterior, underground cylinder shaft, an
 | `structure.h` | Types (`Structure`, `StructureManager`, `StructurePrompt`), API declarations |
 | `structure.c` | Core logic: init, procedural spawning, multi-door enter/exit teleport, wall collision, resupply, exterior collision |
 | `structure_draw.h` | Draw API declarations |
-| `structure_draw.c` | Geodesic dome + cylinder shaft exterior, high-contrast airlock corridors, Germanic interior |
+| `structure_draw_exterior.c` | Geodesic dome, cylinder shaft, airlock corridors, antenna, `StructureManagerDraw()` |
+| `structure_draw_interior.c` | Room shell: floor, walls, ceiling, doors, portraits, `StructureManagerDrawInterior()` |
+| `structure_draw_furniture.h` | `DrawFurnitureAndDecor()` declaration |
+| `structure_draw_furniture.c` | Interior furniture: couch, coffee table, bar, resupply closet, banners, portraits |
 
 ## Key Types
 
@@ -82,5 +85,5 @@ Moon base structures with geodesic dome exterior, underground cylinder shaft, an
 1. Add new `StructureType` enum value
 2. In `InitStructureAtPos()` or `StructureManagerInit()`, set unique `interiorY` (e.g., Y=600)
 3. Set door count, angles, resupply count
-4. Add exterior + interior drawing in `structure_draw.c`
+4. Add exterior drawing in `structure_draw_exterior.c`, interior in `structure_draw_interior.c`/`structure_draw_furniture.c`
 5. Teleport, collision, freeze, spawning, and AI flanking all work automatically

@@ -79,13 +79,17 @@ Mondfall/
 │   │   └── CLAUDE.md
 │   ├── ecs_world.c/h   — Flecs ECS world wrapper (GameEcsInit/Fini/GetWorld)
 │   ├── combat_ecs.c/h  — Hit processing via Flecs queries, damage with entity IDs
-│   ├── enemy/           — Enemy ECS system (see docs/FLECS.md)
+│   ├── enemy/           — Enemy ECS system (see src/enemy/CLAUDE.md)
 │   │   ├── enemy_components.h/c — All ECS component structs + registration
-│   │   ├── enemy_systems.h/c   — Flecs AI/physics/death systems + damage functions
+│   │   ├── enemy_systems.h/c   — Central API: damage, vaporize, eviscerate, count, cleanup, register
+│   │   ├── enemy_ai.h/c        — AI systems: targeting, behavior, collision avoidance
+│   │   ├── enemy_physics.h/c   — Physics + attack systems
+│   │   ├── enemy_death_systems.h/c — Death systems: ragdoll, vaporize, eviscerate, radio timer
 │   │   ├── enemy_spawn.h/c     — Entity creation (EcsEnemySpawnAt, EcsEnemySpawnAroundPlayer)
 │   │   ├── enemy_draw_ecs.h/c  — ECS-based rendering with LOD + frustum culling
+│   │   ├── enemy_draw.h/c      — Alive astronaut model + LOD1/LOD2
+│   │   ├── enemy_draw_death.h/c — Death rendering: eviscerate, vaporize, ragdoll
 │   │   ├── enemy.h     — Legacy Enemy/EnemyManager structs (used by draw code only)
-│   │   ├── enemy_draw.h/c — Astronaut model draw functions (DrawAstronautModel, LOD1, LOD2)
 │   │   └── CLAUDE.md   — System overview for agents
 │   ├── world.c/h       — Core chunk management, terrain mesh gen, craters, collision
 │   ├── world/           — World rendering & noise (see src/world/CLAUDE.md)
@@ -94,13 +98,18 @@ Mondfall/
 │   │   └── CLAUDE.md
 │   ├── structure/       — Moon base structures (see src/structure/README.md)
 │   │   ├── structure.h/c    — Structure manager, enter/exit teleport, resupply, collision
-│   │   ├── structure_draw.h/c — Exterior hab dome + interior room rendering
+│   │   ├── structure_draw.h  — Draw API (StructureManagerDraw, StructureManagerDrawInterior)
+│   │   ├── structure_draw_exterior.c — Geodesic dome, cylinder shaft, airlock corridors
+│   │   ├── structure_draw_interior.c — Interior room: floor, walls, ceiling, doors, portraits
+│   │   ├── structure_draw_furniture.h/c — Interior furniture: couch, bar, closet, banners
 │   │   └── README.md
 │   ├── lander.c/h      — Moon lander wave system with descent, deployment, self-destruct
 │   ├── pickup.c/h      — Dropped enemy weapons (KOSMOS-7 SMG, LIBERTY BLASTER)
 │   ├── hud.c/h         — Health, ammo, wave counter, reload bar, ACHTUNG alert, radio transmission
 │   ├── audio.c/h       — Erika march music (synthesized from MIDI), radio static overlay
-│   ├── game.c/h        — Game state (menu/intro/settings/playing/paused/game over), wave management, settings, intro lore screen
+│   ├── game.c/h        — Game state, menus (main/settings/pause/game over), wave management
+│   ├── game_intro.c    — Intro lore screen: script loading, tile-reveal, draw
+│   ├── legacy/          — Archived pre-ECS files (not compiled, see src/legacy/CLAUDE.md)
 │   ├── sound_gen.c/h   — Procedural audio waveform generation utilities
 ├── resources/
 │   ├── crt.fs          — Main CRT post-processing fragment shader (GLSL 330)
@@ -111,7 +120,7 @@ Mondfall/
 │   ├── soviet_death_sounds/  — Soviet faction radio death sounds (mp3)
 │   ├── american_death_sounds/ — American faction radio death sounds (mp3)
 ├── tests/
-│   └── test_game.c     — ~71 unit tests (no GPU required)
+│   └── test_game.c     — ~127 unit tests (no GPU required)
 ├── Makefile
 └── .gitignore
 ```

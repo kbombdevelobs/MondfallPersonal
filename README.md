@@ -9,7 +9,7 @@ Built with **C99** and **raylib 5.5**. Everything is procedural — terrain, wea
 ```bash
 brew install raylib   # macOS (Apple Silicon)
 make run              # build + launch
-make test             # 71 unit tests (no GPU needed)
+make test             # 127 unit tests (no GPU needed)
 ```
 
 ## Controls
@@ -23,9 +23,12 @@ make test             # 71 unit tests (no GPU needed)
 | Left Click | Fire |
 | 1 / 2 / 3 | Mond-MP40 / Raketenfaust / Jackhammer |
 | R | Reload |
-| E | Pick up dropped weapon |
+| E | Pick up dropped weapon / Interact |
 | X | Ground pound |
-| ESC | Pause |
+| ESC | Pause / Resume |
+| Up/Down or W/S | Navigate menus |
+| Left/Right or A/D | Adjust settings |
+| Enter | Select menu option |
 
 ## Weapons
 

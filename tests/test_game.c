@@ -838,6 +838,391 @@ TEST(test_structure_unique_interior_y) {
 }
 
 // ============================================================================
+// 15. ECS LIFECYCLE — restart, cleanup, reinitialization
+// ============================================================================
+
+TEST(test_ecs_init_creates_world) {
+    GameEcsInit();
+    ecs_world_t *w = GameEcsGetWorld();
+    ASSERT(w != NULL);
+    // Clean teardown without systems registered
+    GameEcsFini();
+}
+
+TEST(test_ecs_reinit_creates_fresh_world) {
+    // First init with full systems and spawn an enemy
+    GameEcsInit();
+    ecs_world_t *w1 = GameEcsGetWorld();
+    ASSERT(w1 != NULL);
+    EcsEnemyComponentsRegister(w1);
+    EcsEnemySystemsRegister(w1);
+    place_ecs_enemy(w1, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    ASSERT(EcsEnemyCountAlive(w1) == 1);
+    // Reinit should clean up and give us a fresh empty world
+    GameEcsInit();
+    ecs_world_t *w2 = GameEcsGetWorld();
+    ASSERT(w2 != NULL);
+    EcsEnemyComponentsRegister(w2);
+    EcsEnemySystemsRegister(w2);
+    ASSERT(EcsEnemyCountAlive(w2) == 0);
+    EcsEnemySystemsCleanup();
+    GameEcsFini();
+}
+
+TEST(test_ecs_systems_cleanup_nulls_query) {
+    ecs_world_t *w = make_test_ecs();
+    EcsEnemySystemsRegister(w);
+    // Count should work
+    ASSERT(EcsEnemyCountAlive(w) == 0);
+    // Cleanup should not crash
+    EcsEnemySystemsCleanup();
+    // After cleanup, count returns 0 (query is NULL)
+    ASSERT(EcsEnemyCountAlive(w) == 0);
+    ecs_fini(w);
+}
+
+TEST(test_ecs_double_cleanup_safe) {
+    ecs_world_t *w = make_test_ecs();
+    EcsEnemySystemsRegister(w);
+    EcsEnemySystemsCleanup();
+    // Second cleanup should be a no-op, not crash
+    EcsEnemySystemsCleanup();
+    ecs_fini(w);
+}
+
+TEST(test_ecs_enemies_cleared_on_reinit) {
+    ecs_world_t *w = make_test_ecs();
+    EcsEnemySystemsRegister(w);
+    place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    place_ecs_enemy(w, (Vector3){5,0,0}, 55, ENEMY_AMERICAN);
+    ASSERT(EcsEnemyCountAlive(w) == 2);
+    EcsEnemySystemsCleanup();
+    ecs_fini(w);
+    // New world should be empty
+    ecs_world_t *w2 = make_test_ecs();
+    EcsEnemySystemsRegister(w2);
+    ASSERT(EcsEnemyCountAlive(w2) == 0);
+    EcsEnemySystemsCleanup();
+    ecs_fini(w2);
+}
+
+// ============================================================================
+// 16. ECS FACTION STATS — verify prefab config matches config.h
+// ============================================================================
+
+TEST(test_soviet_prefab_stats) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, SOVIET_HEALTH, ENEMY_SOVIET);
+    const EcCombatStats *cs = ecs_get(w, e, EcCombatStats);
+    ASSERT(cs != NULL);
+    ASSERT_FLOAT_EQ(cs->health, SOVIET_HEALTH, 0.01f);
+    ASSERT_FLOAT_EQ(cs->maxHealth, SOVIET_HEALTH, 0.01f);
+    ecs_fini(w);
+}
+
+TEST(test_american_prefab_stats) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, AMERICAN_HEALTH, ENEMY_AMERICAN);
+    const EcCombatStats *cs = ecs_get(w, e, EcCombatStats);
+    ASSERT(cs != NULL);
+    ASSERT_FLOAT_EQ(cs->health, AMERICAN_HEALTH, 0.01f);
+    ASSERT_FLOAT_EQ(cs->maxHealth, AMERICAN_HEALTH, 0.01f);
+    ecs_fini(w);
+}
+
+TEST(test_americans_longer_range_than_soviets) {
+    ASSERT_GT(AMERICAN_ATTACK_RANGE, SOVIET_ATTACK_RANGE);
+}
+
+TEST(test_americans_prefer_more_distance) {
+    ASSERT_GT(AMERICAN_PREFERRED_DIST, SOVIET_PREFERRED_DIST);
+}
+
+TEST(test_soviets_faster_than_americans) {
+    ASSERT_GT(SOVIET_SPEED, AMERICAN_SPEED);
+}
+
+TEST(test_americans_hit_harder_per_shot) {
+    ASSERT_GT(AMERICAN_DAMAGE, SOVIET_DAMAGE);
+}
+
+TEST(test_soviets_fire_faster_than_americans) {
+    ASSERT_LT(SOVIET_ATTACK_RATE, AMERICAN_ATTACK_RATE);
+}
+
+TEST(test_soviets_more_health_than_americans) {
+    ASSERT_GT(SOVIET_HEALTH, AMERICAN_HEALTH);
+}
+
+// ============================================================================
+// 17. ECS COMPONENT INTEGRITY — verify components set/get correctly
+// ============================================================================
+
+TEST(test_ecs_transform_roundtrip) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){12.5f, 3.0f, -7.0f}, 80, ENEMY_SOVIET);
+    const EcTransform *tr = ecs_get(w, e, EcTransform);
+    ASSERT(tr != NULL);
+    ASSERT_FLOAT_EQ(tr->position.x, 12.5f, 0.01f);
+    ASSERT_FLOAT_EQ(tr->position.y, 3.0f, 0.01f);
+    ASSERT_FLOAT_EQ(tr->position.z, -7.0f, 0.01f);
+    ecs_fini(w);
+}
+
+TEST(test_ecs_faction_soviet) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    const EcFaction *fac = ecs_get(w, e, EcFaction);
+    ASSERT(fac != NULL);
+    ASSERT(fac->type == ENEMY_SOVIET);
+    ecs_fini(w);
+}
+
+TEST(test_ecs_faction_american) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 55, ENEMY_AMERICAN);
+    const EcFaction *fac = ecs_get(w, e, EcFaction);
+    ASSERT(fac != NULL);
+    ASSERT(fac->type == ENEMY_AMERICAN);
+    ecs_fini(w);
+}
+
+TEST(test_ecs_alive_tag_present) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    ASSERT(ecs_has(w, e, EcAlive));
+    ecs_fini(w);
+}
+
+TEST(test_ecs_velocity_initially_zero) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    const EcVelocity *vel = ecs_get(w, e, EcVelocity);
+    ASSERT(vel != NULL);
+    ASSERT_FLOAT_EQ(vel->velocity.x, 0.0f, 0.01f);
+    ASSERT_FLOAT_EQ(vel->velocity.z, 0.0f, 0.01f);
+    ASSERT_FLOAT_EQ(vel->vertVel, 0.0f, 0.01f);
+    ecs_fini(w);
+}
+
+TEST(test_ecs_ai_initial_advance) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    const EcAIState *ai = ecs_get(w, e, EcAIState);
+    ASSERT(ai != NULL);
+    ASSERT(ai->behavior == AI_ADVANCE);
+    ecs_fini(w);
+}
+
+// ============================================================================
+// 18. ECS DAMAGE — multi-hit, overkill, faction death states
+// ============================================================================
+
+TEST(test_ecs_damage_partial) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    EcsEnemyDamage(w, e, 30.0f);
+    // Should still be alive
+    ASSERT(ecs_has(w, e, EcAlive));
+    const EcCombatStats *cs = ecs_get(w, e, EcCombatStats);
+    ASSERT_FLOAT_EQ(cs->health, 50.0f, 0.01f);
+    ecs_fini(w);
+}
+
+TEST(test_ecs_damage_exact_kill) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    EcsEnemyDamage(w, e, 80.0f);
+    ASSERT(!ecs_has(w, e, EcAlive));
+    ASSERT(ecs_has(w, e, EcDying));
+    ecs_fini(w);
+}
+
+TEST(test_ecs_damage_overkill) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 55, ENEMY_AMERICAN);
+    EcsEnemyDamage(w, e, 9999.0f);
+    ASSERT(!ecs_has(w, e, EcAlive));
+    ecs_fini(w);
+}
+
+TEST(test_ecs_damage_multi_hit) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    EcsEnemyDamage(w, e, 30.0f);
+    EcsEnemyDamage(w, e, 30.0f);
+    // 80 - 60 = 20 health remaining
+    ASSERT(ecs_has(w, e, EcAlive));
+    const EcCombatStats *cs = ecs_get(w, e, EcCombatStats);
+    ASSERT_FLOAT_EQ(cs->health, 20.0f, 0.01f);
+    // One more hit kills
+    EcsEnemyDamage(w, e, 25.0f);
+    ASSERT(!ecs_has(w, e, EcAlive));
+    ecs_fini(w);
+}
+
+TEST(test_ecs_vaporize_american) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 55, ENEMY_AMERICAN);
+    EcsEnemyVaporize(w, e);
+    ASSERT(!ecs_has(w, e, EcAlive));
+    ASSERT(ecs_has(w, e, EcVaporizing));
+    ASSERT(!ecs_has(w, e, EcDying));
+    ASSERT(!ecs_has(w, e, EcEviscerating));
+    ecs_fini(w);
+}
+
+TEST(test_ecs_eviscerate_drops_weapon) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    EcsEnemyEviscerate(w, e, (Vector3){1,0,0});
+    ASSERT(!ecs_has(w, e, EcAlive));
+    ASSERT(ecs_has(w, e, EcEviscerating));
+    ASSERT(!ecs_has(w, e, EcDying));
+    ASSERT(!ecs_has(w, e, EcVaporizing));
+    ecs_fini(w);
+}
+
+// ============================================================================
+// 19. ECS HIT DETECTION — rays and spheres
+// ============================================================================
+
+TEST(test_ecs_sphere_hit_exact_range) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){5.0f, 0, 0}, 80, ENEMY_SOVIET);
+    // Sphere centered at origin with radius exactly 5 + enemy hitbox should hit
+    ecs_entity_t hit = EcsEnemyCheckSphereHit(w, (Vector3){0,0,0}, 6.5f);
+    ASSERT(hit == e);
+    ecs_fini(w);
+}
+
+TEST(test_ecs_sphere_no_dead_hits) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){3,0,0}, 80, ENEMY_SOVIET);
+    EcsEnemyDamage(w, e, 9999.0f);
+    // Dead enemy should not be hit
+    ecs_entity_t hit = EcsEnemyCheckSphereHit(w, (Vector3){3,0,0}, 2.0f);
+    ASSERT(hit == 0);
+    ecs_fini(w);
+}
+
+TEST(test_ecs_sphere_picks_closest) {
+    ecs_world_t *w = make_test_ecs();
+    place_ecs_enemy(w, (Vector3){20,0,0}, 80, ENEMY_SOVIET);
+    ecs_entity_t near = place_ecs_enemy(w, (Vector3){5,0,0}, 55, ENEMY_AMERICAN);
+    place_ecs_enemy(w, (Vector3){15,0,0}, 80, ENEMY_SOVIET);
+    ecs_entity_t hit = EcsEnemyCheckSphereHit(w, (Vector3){0,0,0}, 10.0f);
+    ASSERT(hit == near);
+    ecs_fini(w);
+}
+
+TEST(test_ecs_ray_hit_forward) {
+    ecs_world_t *w = make_test_ecs();
+    place_ecs_enemy(w, (Vector3){0, 0, 10}, 80, ENEMY_SOVIET);
+    Ray ray = { .position = {0, 0, 0}, .direction = {0, 0, 1} };
+    float hitDist = 0;
+    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 50.0f, &hitDist);
+    ASSERT(hit != 0);
+    ASSERT_GT(hitDist, 0.0f);
+    ASSERT_LT(hitDist, 12.0f);
+    ecs_fini(w);
+}
+
+TEST(test_ecs_ray_miss_perpendicular) {
+    ecs_world_t *w = make_test_ecs();
+    place_ecs_enemy(w, (Vector3){10, 0, 0}, 80, ENEMY_SOVIET);
+    // Shoot along Z axis — enemy is on X axis, should miss
+    Ray ray = { .position = {0, 0, 0}, .direction = {0, 0, 1} };
+    float hitDist = 0;
+    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 50.0f, &hitDist);
+    ASSERT(hit == 0);
+    ecs_fini(w);
+}
+
+TEST(test_ecs_ray_respects_max_dist) {
+    ecs_world_t *w = make_test_ecs();
+    place_ecs_enemy(w, (Vector3){0, 0, 50}, 80, ENEMY_SOVIET);
+    Ray ray = { .position = {0, 0, 0}, .direction = {0, 0, 1} };
+    float hitDist = 0;
+    // Max dist 10 — enemy at 50 should be out of range
+    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 10.0f, &hitDist);
+    ASSERT(hit == 0);
+    ecs_fini(w);
+}
+
+// ============================================================================
+// 20. GAME STATE TRANSITIONS
+// ============================================================================
+
+TEST(test_game_reset_clears_wave) {
+    Game g;
+    GameInit(&g);
+    g.wave = 5;
+    g.killCount = 42;
+    g.waveActive = true;
+    g.enemiesSpawned = 10;
+    g.enemiesRemaining = 3;
+    GameReset(&g);
+    ASSERT(g.wave == 0);
+    ASSERT(g.killCount == 0);
+    ASSERT(!g.waveActive);
+    ASSERT(g.enemiesSpawned == 0);
+    ASSERT(g.enemiesRemaining == 0);
+}
+
+TEST(test_game_init_menu_state) {
+    Game g;
+    GameInit(&g);
+    ASSERT(g.state == STATE_MENU);
+    ASSERT(g.menuSelection == 0);
+}
+
+TEST(test_game_wave_delay_positive) {
+    Game g;
+    GameInit(&g);
+    ASSERT_GT(g.waveDelay, 0.0f);
+}
+
+// ============================================================================
+// 21. AI CONFIG SANITY
+// ============================================================================
+
+TEST(test_ai_turn_speed_positive) {
+    ASSERT_GT(AI_TURN_SPEED, 0.0f);
+}
+
+TEST(test_ai_dodge_cooldown_positive) {
+    ASSERT_GT(AI_DODGE_COOLDOWN, 0.0f);
+}
+
+TEST(test_lod_distances_ordered) {
+    ASSERT_LT(LOD1_DISTANCE, LOD2_DISTANCE);
+    ASSERT_LT(LOD2_DISTANCE, CULL_DISTANCE);
+}
+
+TEST(test_enemy_ground_offset_positive) {
+    ASSERT_GT(ENEMY_GROUND_OFFSET, 0.0f);
+}
+
+TEST(test_ai_stagger_divisor_positive) {
+    ASSERT(AI_STAGGER_DIVISOR >= 1);
+}
+
+TEST(test_structure_collision_blocks_enemy_radius) {
+    // Structure collision radius should be bigger than enemy + base combined
+    float collR = MOONBASE_EXTERIOR_RADIUS + 0.5f + 0.8f;
+    ASSERT_GT(collR, MOONBASE_EXTERIOR_RADIUS);
+    ASSERT_GT(collR, 2.0f);
+}
+
+// ============================================================================
 // MAIN — run all tests
 // ============================================================================
 
@@ -958,6 +1343,60 @@ int main(void) {
     RUN(test_structure_collision_far_away);
     RUN(test_structure_spawn_chance_config);
     RUN(test_structure_unique_interior_y);
+
+    printf("\n[ECS Lifecycle]\n");
+    RUN(test_ecs_init_creates_world);
+    RUN(test_ecs_reinit_creates_fresh_world);
+    RUN(test_ecs_systems_cleanup_nulls_query);
+    RUN(test_ecs_double_cleanup_safe);
+    RUN(test_ecs_enemies_cleared_on_reinit);
+
+    printf("\n[ECS Faction Stats]\n");
+    RUN(test_soviet_prefab_stats);
+    RUN(test_american_prefab_stats);
+    RUN(test_americans_longer_range_than_soviets);
+    RUN(test_americans_prefer_more_distance);
+    RUN(test_soviets_faster_than_americans);
+    RUN(test_americans_hit_harder_per_shot);
+    RUN(test_soviets_fire_faster_than_americans);
+    RUN(test_soviets_more_health_than_americans);
+
+    printf("\n[ECS Components]\n");
+    RUN(test_ecs_transform_roundtrip);
+    RUN(test_ecs_faction_soviet);
+    RUN(test_ecs_faction_american);
+    RUN(test_ecs_alive_tag_present);
+    RUN(test_ecs_velocity_initially_zero);
+    RUN(test_ecs_ai_initial_advance);
+
+    printf("\n[ECS Damage]\n");
+    RUN(test_ecs_damage_partial);
+    RUN(test_ecs_damage_exact_kill);
+    RUN(test_ecs_damage_overkill);
+    RUN(test_ecs_damage_multi_hit);
+    RUN(test_ecs_vaporize_american);
+    RUN(test_ecs_eviscerate_drops_weapon);
+
+    printf("\n[ECS Hit Detection]\n");
+    RUN(test_ecs_sphere_hit_exact_range);
+    RUN(test_ecs_sphere_no_dead_hits);
+    RUN(test_ecs_sphere_picks_closest);
+    RUN(test_ecs_ray_hit_forward);
+    RUN(test_ecs_ray_miss_perpendicular);
+    RUN(test_ecs_ray_respects_max_dist);
+
+    printf("\n[Game State Transitions]\n");
+    RUN(test_game_reset_clears_wave);
+    RUN(test_game_init_menu_state);
+    RUN(test_game_wave_delay_positive);
+
+    printf("\n[AI Config Sanity]\n");
+    RUN(test_ai_turn_speed_positive);
+    RUN(test_ai_dodge_cooldown_positive);
+    RUN(test_lod_distances_ordered);
+    RUN(test_enemy_ground_offset_positive);
+    RUN(test_ai_stagger_divisor_positive);
+    RUN(test_structure_collision_blocks_enemy_radius);
 
     printf("\n=== RESULTS: %d/%d passed", tests_passed, tests_run);
     if (tests_failed > 0) printf(", %d FAILED", tests_failed);
