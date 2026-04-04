@@ -155,10 +155,13 @@ static Model GenTerrainMesh(int cx, int cz, Texture2D moonTex, World *world) {
         if (!mesh.colors) {
             mesh.colors = RL_CALLOC(vertCount * 4, sizeof(unsigned char));
         }
-        float hL = WorldGetHeight(vx - 1.0f, vz);
-        float hR = WorldGetHeight(vx + 1.0f, vz);
-        float hU = WorldGetHeight(vx, vz - 1.0f);
-        float hD = WorldGetHeight(vx, vz + 1.0f);
+        // Sample full height (terrain + craters) for accurate normals
+        // Using full height ensures normals match actual geometry at crater edges
+        float sampleD = 0.5f;
+        float hL = WorldGetHeight(vx - sampleD, vz) + CraterHeight(world, vx - sampleD, vz);
+        float hR = WorldGetHeight(vx + sampleD, vz) + CraterHeight(world, vx + sampleD, vz);
+        float hU = WorldGetHeight(vx, vz - sampleD) + CraterHeight(world, vx, vz - sampleD);
+        float hD = WorldGetHeight(vx, vz + sampleD) + CraterHeight(world, vx, vz + sampleD);
         float slope = fabsf(hR - hL) + fabsf(hD - hU);
 
         float cn = GradientNoise(vx * 0.08f, vz * 0.08f) * 0.3f
@@ -197,7 +200,7 @@ static Model GenTerrainMesh(int cx, int cz, Texture2D moonTex, World *world) {
         if (shade > 200) shade = 200;
         // Analytical normal from height differences — continuous across chunk borders
         float anx = hL - hR;
-        float any = 2.0f;
+        float any = 2.0f * sampleD;
         float anz = hU - hD;
         float anLen = sqrtf(anx*anx + any*any + anz*anz);
         anx /= anLen; any /= anLen; anz /= anLen;

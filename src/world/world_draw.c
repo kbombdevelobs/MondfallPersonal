@@ -103,15 +103,6 @@ static void DrawChunk(Chunk *chunk, Vector3 playerPos) {
 
     DrawModel(chunk->ground, (Vector3){0, 0, 0}, 1.0f, WHITE);
 
-    // Crater rims — subtle wireframe ring since the depression is in the mesh
-    for (int i = 0; i < chunk->craterCount; i++) {
-        Crater *c = &chunk->craters[i];
-        float rimH = WorldGetHeight(c->position.x, c->position.z) + 0.15f;
-        DrawCylinderWires((Vector3){c->position.x, rimH, c->position.z},
-            c->radius * 1.05f, c->radius * 0.95f, 0.08f, 16,
-            (Color){(unsigned char)(165 * fade), (unsigned char)(162 * fade), (unsigned char)(155 * fade), 180});
-    }
-
     // Boulders — organic sphere clusters (low-poly for performance)
     for (int i = 0; i < chunk->rockCount; i++) {
         Rock *r = &chunk->rocks[i];
