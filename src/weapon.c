@@ -86,6 +86,10 @@ static Sound GenSoundEmpty(void) {
 void WeaponInit(Weapon *w) {
     bool hadSound = w->soundLoaded;
     Sound s1=w->sndMp40Fire, s2=w->sndRaketenFire, s3=w->sndJackhammerHit, s4=w->sndReload, s5=w->sndEmpty, s6=w->sndExplosion;
+    bool hadMeshes = w->meshesLoaded;
+    Mesh saveSphere = w->meshSphere;
+    Mesh saveCube = w->meshCube;
+    Material saveMat = w->matDefault;
 
     memset(w, 0, sizeof(Weapon));
     w->current = WEAPON_MOND_MP40;
@@ -110,6 +114,18 @@ void WeaponInit(Weapon *w) {
         w->sndExplosion = GenSoundExplosion();
         w->soundLoaded = true;
     }
+
+    if (hadMeshes) {
+        w->meshSphere = saveSphere;
+        w->meshCube = saveCube;
+        w->matDefault = saveMat;
+        w->meshesLoaded = true;
+    } else {
+        w->meshSphere = GenMeshSphere(1.0f, 8, 8);
+        w->meshCube = GenMeshCube(1.0f, 1.0f, 1.0f);
+        w->matDefault = LoadMaterialDefault();
+        w->meshesLoaded = true;
+    }
 }
 
 void WeaponUnload(Weapon *w) {
@@ -118,6 +134,21 @@ void WeaponUnload(Weapon *w) {
         UnloadSound(w->sndJackhammerHit); UnloadSound(w->sndReload); UnloadSound(w->sndEmpty);
         UnloadSound(w->sndExplosion);
     }
+    if (w->meshesLoaded) {
+        UnloadMesh(w->meshSphere);
+        UnloadMesh(w->meshCube);
+        UnloadMaterial(w->matDefault);
+    }
+}
+
+// Draw a cached mesh at position with uniform scale and color (no per-frame mesh generation)
+static void DrawCachedMesh(Mesh mesh, Material *mat, Vector3 pos, float scale, Color color) {
+    if (scale < 0.001f) return; // skip degenerate zero-scale draws
+    mat->maps[MATERIAL_MAP_DIFFUSE].color = color;
+    Matrix transform = MatrixMultiply(
+        MatrixScale(scale, scale, scale),
+        MatrixTranslate(pos.x, pos.y, pos.z));
+    DrawMesh(mesh, *mat, transform);
 }
 
 void WeaponReload(Weapon *w) {
@@ -219,7 +250,7 @@ bool WeaponFire(Weapon *w, Vector3 origin, Vector3 direction) {
             if (w->beamCount < MAX_BEAM_TRAILS) {
                 w->beams[w->beamCount] = (BeamTrail){origin,
                     Vector3Add(origin, Vector3Scale(direction, 100.0f)),
-                    {0, 220, 255, 180}, 0.1f};
+                    {0, 220, 255, 180}, BEAM_TRAIL_LIFE, BEAM_TRAIL_LIFE, 1.0f};
                 w->beamCount++;
             }
             return true;
@@ -557,25 +588,59 @@ void WeaponDrawWorld(Weapon *w) {
             }
         }
         // Impact point glow
-        DrawSphereEx(w->raketenBeamEnd, 0.6f, 4, 4, (Color){255, 240, 180, 180});
+        DrawCachedMesh(w->meshSphere, &w->matDefault, w->raketenBeamEnd, 0.6f, (Color){255, 240, 180, 180});
     }
 
-    // Beam trails
+    // Beam trails — width-aware rendering
     for (int i = 0; i < w->beamCount; i++) {
-        float a = w->beams[i].life / 0.1f;
+        float ml = w->beams[i].maxLife > 0 ? w->beams[i].maxLife : BEAM_TRAIL_LIFE;
+        float a = w->beams[i].life / ml;
         Color c = w->beams[i].color; c.a = (unsigned char)(a * c.a);
-        DrawLine3D(w->beams[i].start, w->beams[i].end, c);
-        DrawLine3D(Vector3Add(w->beams[i].start, (Vector3){0.02f,0.02f,0}),
-                   Vector3Add(w->beams[i].end, (Vector3){0.02f,0.02f,0}), c);
+        float bw = w->beams[i].width;
+
+        if (bw >= 3.0f) {
+            // Fat Liberty Blaster rail beam: multiple offset lines + bright core + glow spheres
+            for (int ox = -2; ox <= 2; ox++) {
+                for (int oy = -2; oy <= 2; oy++) {
+                    float d = sqrtf((float)(ox*ox + oy*oy));
+                    if (d > 2.5f) continue;
+                    float s = 0.025f * bw;
+                    Vector3 off = {ox * s, oy * s, 0};
+                    Color lc = c;
+                    if (d < 1.0f) lc = (Color){255, 255, 255, (unsigned char)(a * 255)}; // white core
+                    else lc.a = (unsigned char)(a * c.a * (1.0f - d / 3.0f));
+                    DrawLine3D(Vector3Add(w->beams[i].start, off),
+                               Vector3Add(w->beams[i].end, off), lc);
+                }
+            }
+            // Impact glow at endpoint
+            DrawCachedMesh(w->meshSphere, &w->matDefault, w->beams[i].end,
+                0.4f * a * bw * 0.3f, (Color){c.r, c.g, c.b, (unsigned char)(a * 120)});
+        } else if (bw >= 1.5f) {
+            // PPSh spread tracers: thin lines with slight random offsets baked in
+            DrawLine3D(w->beams[i].start, w->beams[i].end, c);
+            Vector3 off1 = {0.015f, 0.01f, 0};
+            Vector3 off2 = {-0.01f, 0.015f, 0};
+            Color dim = c; dim.a = (unsigned char)(a * c.a * 0.6f);
+            DrawLine3D(Vector3Add(w->beams[i].start, off1),
+                       Vector3Add(w->beams[i].end, off1), dim);
+            DrawLine3D(Vector3Add(w->beams[i].start, off2),
+                       Vector3Add(w->beams[i].end, off2), dim);
+        } else {
+            // Standard thin beam (MP40 etc.)
+            DrawLine3D(w->beams[i].start, w->beams[i].end, c);
+            DrawLine3D(Vector3Add(w->beams[i].start, (Vector3){0.02f,0.02f,0}),
+                       Vector3Add(w->beams[i].end, (Vector3){0.02f,0.02f,0}), c);
+        }
     }
     // Rockets
     for (int i = 0; i < MAX_PROJECTILES; i++) {
         if (!w->projectiles[i].active) continue;
-        DrawSphere(w->projectiles[i].position, 0.25f, w->projectiles[i].color);
-        DrawSphere(w->projectiles[i].position, 0.4f, (Color){255,220,100,80});
+        DrawCachedMesh(w->meshSphere, &w->matDefault, w->projectiles[i].position, 0.25f, w->projectiles[i].color);
+        DrawCachedMesh(w->meshSphere, &w->matDefault, w->projectiles[i].position, 0.4f, (Color){255,220,100,80});
         Vector3 trail = Vector3Subtract(w->projectiles[i].position,
             Vector3Scale(Vector3Normalize(w->projectiles[i].velocity), 1.0f));
-        DrawSphere(trail, 0.3f, (Color){180,180,180,60});
+        DrawCachedMesh(w->meshSphere, &w->matDefault, trail, 0.3f, (Color){180,180,180,60});
     }
     // Explosions
     for (int i = 0; i < MAX_EXPLOSIONS; i++) {
@@ -584,9 +649,9 @@ void WeaponDrawWorld(Weapon *w) {
         float r = w->explosions[i].radius * t;
         unsigned char alpha = (unsigned char)((1.0f - t) * 200);
         // Fireball
-        DrawSphere(w->explosions[i].position, r * 0.6f, (Color){255, 200, 50, alpha});
-        DrawSphere(w->explosions[i].position, r * 0.8f, (Color){255, 120, 20, (unsigned char)(alpha * 0.6f)});
-        DrawSphere(w->explosions[i].position, r, (Color){255, 80, 0, (unsigned char)(alpha * 0.3f)});
+        DrawCachedMesh(w->meshSphere, &w->matDefault, w->explosions[i].position, r * 0.6f, (Color){255, 200, 50, alpha});
+        DrawCachedMesh(w->meshSphere, &w->matDefault, w->explosions[i].position, r * 0.8f, (Color){255, 120, 20, (unsigned char)(alpha * 0.6f)});
+        DrawCachedMesh(w->meshSphere, &w->matDefault, w->explosions[i].position, r, (Color){255, 80, 0, (unsigned char)(alpha * 0.3f)});
         // Shockwave ring
         DrawCylinderWires(w->explosions[i].position, r * 1.2f, r * 1.3f, 0.1f, 16,
             (Color){255, 200, 100, (unsigned char)(alpha * 0.5f)});
@@ -601,7 +666,7 @@ void WeaponDrawWorld(Weapon *w) {
                 w->explosions[i].position.z + sinf(angle) * debrisR
             };
             float ds = 0.08f + (1.0f - t) * 0.12f;
-            DrawCube(dp, ds, ds, ds, (Color){110, 108, 100, alpha});
+            DrawCachedMesh(w->meshCube, &w->matDefault, dp, ds, (Color){110, 108, 100, alpha});
         }
     }
 }

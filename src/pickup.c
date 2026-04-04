@@ -20,12 +20,17 @@ void PickupManagerInit(PickupManager *pm) {
         pm->sndSovietFire = LoadSoundFromWave(w); UnloadWave(w);
     }
     {
+        // Liberty Blaster: heavy rail-gun crack — bass thud + electric zap + reverb tail
         int sr = AUDIO_SAMPLE_RATE;
-        Wave w = SoundGenCreateWave(sr, 0.1f);
+        Wave w = SoundGenCreateWave(sr, 0.4f);
         short *d = (short *)w.data;
         for (int i = 0; i < (int)w.frameCount; i++) {
             float t = (float)i/sr;
-            d[i] = (short)(sinf(t*700*6.283f)*expf(-t*35)*14000);
+            float crack = sinf(t*900*6.283f)*expf(-t*40)*0.4f; // sharp electric zap
+            float thud = sinf(t*60*6.283f)*expf(-t*8)*0.35f;   // deep bass punch
+            float sizzle = ((float)rand()/RAND_MAX*2-1)*expf(-t*15)*0.2f; // energy crackle
+            float tail = sinf(t*200*6.283f)*expf(-t*5)*0.1f;   // reverb hum
+            d[i] = (short)((crack + thud + sizzle + tail) * 28000);
         }
         pm->sndAmericanFire = LoadSoundFromWave(w); UnloadWave(w);
     }
@@ -57,7 +62,9 @@ void PickupManagerUpdate(PickupManager *pm, Vector3 playerPos, float dt) {
     if (pm->hasPickup) {
         if (pm->pickupTimer > 0) pm->pickupTimer -= dt;
         if (pm->pickupMuzzleFlash > 0) pm->pickupMuzzleFlash -= dt * 8.0f;
-        if (pm->pickupRecoil > 0) pm->pickupRecoil -= dt * 10.0f;
+        // Liberty Blaster recoil recovers slower for a heavier feel
+        float recoilDecay = (pm->pickupType == ENEMY_AMERICAN) ? 4.0f : 10.0f;
+        if (pm->pickupRecoil > 0) pm->pickupRecoil -= dt * recoilDecay;
         // Auto-drop when empty
         if (pm->pickupAmmo <= 0) pm->hasPickup = false;
     }
@@ -92,7 +99,8 @@ bool PickupFire(PickupManager *pm, Vector3 origin, Vector3 dir) {
     pm->pickupAmmo--;
     pm->pickupTimer = pm->pickupFireRate;
     pm->pickupMuzzleFlash = 1.0f;
-    pm->pickupRecoil = 0.8f;
+    // Per-weapon visual recoil: Liberty Blaster kicks hard
+    pm->pickupRecoil = (pm->pickupType == ENEMY_SOVIET) ? 0.8f : 2.0f;
     if (pm->pickupType == ENEMY_SOVIET) PlaySound(pm->sndSovietFire);
     else PlaySound(pm->sndAmericanFire);
     return true;
@@ -107,12 +115,15 @@ void PickupDrawFirstPerson(PickupManager *pm, Camera3D camera, float weaponBobTi
 
     float bobX = sinf(weaponBobTimer) * 0.02f;
     float bobY = cosf(weaponBobTimer * 2.0f) * 0.01f;
-    float recoilBack = pm->pickupRecoil * 0.05f;
+    // Liberty Blaster gets a much bigger visual kickback
+    float recoilMult = (pm->pickupType == ENEMY_AMERICAN) ? 0.12f : 0.05f;
+    float recoilBack = pm->pickupRecoil * recoilMult;
+    float recoilUp = (pm->pickupType == ENEMY_AMERICAN) ? pm->pickupRecoil * 0.06f : pm->pickupRecoil * 0.02f;
 
     Vector3 anchor = Vector3Add(Vector3Add(Vector3Add(camera.position,
         Vector3Scale(forward, 0.5f - recoilBack)),
         Vector3Scale(right, 0.28f + bobX)),
-        Vector3Scale(up, -0.2f + bobY));
+        Vector3Scale(up, -0.2f + bobY + recoilUp));
 
     float yaw = atan2f(forward.x, forward.z);
     float pitch = asinf(-forward.y);
@@ -149,9 +160,13 @@ void PickupDrawFirstPerson(PickupManager *pm, Camera3D camera, float weaponBobTi
         DrawCube((Vector3){0,0.06f,-0.02f}, 0.04f, 0.04f, 0.04f, BL); // energy cube
         DrawCube((Vector3){0,0.035f,0.06f}, 0.005f, 0.012f, 0.3f, BL);
         DrawCube((Vector3){0,-0.06f,-0.06f}, 0.03f, 0.08f, 0.03f, (Color){50,50,55,255});
-        if (pm->pickupMuzzleFlash > 0)
-            DrawSphere((Vector3){0,0,0.4f}, pm->pickupMuzzleFlash*0.08f,
-                (Color){80,180,255,(unsigned char)(pm->pickupMuzzleFlash*220)});
+        if (pm->pickupMuzzleFlash > 0) {
+            DrawSphere((Vector3){0,0,0.4f}, pm->pickupMuzzleFlash*0.18f,
+                (Color){80,180,255,(unsigned char)(pm->pickupMuzzleFlash*255)});
+            // Secondary flash ring for one-shot power feel
+            DrawSphere((Vector3){0,0,0.38f}, pm->pickupMuzzleFlash*0.12f,
+                (Color){200,230,255,(unsigned char)(pm->pickupMuzzleFlash*150)});
+        }
     }
 
     rlPopMatrix();

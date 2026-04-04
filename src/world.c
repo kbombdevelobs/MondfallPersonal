@@ -311,6 +311,7 @@ void WorldInit(World *world) {
             cosf(a2) * cosf(a1) * 500.0f
         };
     }
+
 }
 
 void WorldUnload(World *world) {
@@ -355,13 +356,10 @@ void WorldDrawSky(World *world, Camera3D camera) {
         sp.z += camera.position.z;
 
         if (i % 8 == 0) {
-            // Bright star — large, slight color
             DrawCube(sp, 1.5f, 1.5f, 1.5f, (Color){255, 255, 230, 255});
         } else if (i % 3 == 0) {
-            // Medium star
             DrawCube(sp, 1.0f, 1.0f, 1.0f, WHITE);
         } else {
-            // Dim star — still a cube so it renders
             DrawCube(sp, 0.6f, 0.6f, 0.6f, (Color){200, 200, 210, 255});
         }
     }

@@ -4,6 +4,22 @@
 #include <stdlib.h>
 #include <math.h>
 
+// Liberty Blaster: wide-area ray check with generous bounding boxes
+static int LibertyCheckHit(EnemyManager *em, Ray ray, float maxDist, float *hitDist) {
+    int closest = -1; float cd = maxDist;
+    float pad = 2.0f; // much wider hitbox than normal (normal is 0.5)
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        Enemy *e = &em->enemies[i];
+        if (!e->active || e->state != ENEMY_ALIVE) continue;
+        BoundingBox box = {{e->position.x - pad, e->position.y - 1.5f, e->position.z - pad},
+                           {e->position.x + pad, e->position.y + 1.8f, e->position.z + pad}};
+        RayCollision col = GetRayCollisionBox(ray, box);
+        if (col.hit && col.distance < cd) { cd = col.distance; closest = i; }
+    }
+    if (hitDist) *hitDist = cd;
+    return closest;
+}
+
 void CombatProcessPickupFire(CombatContext *ctx) {
     if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT) || !ctx->pickups->hasPickup) return;
 
@@ -18,24 +34,57 @@ void CombatProcessPickupFire(CombatContext *ctx) {
     Vector3 barrelPos = WeaponGetBarrelWorldPos(weapon, player->camera);
 
     if (PickupFire(pickups, shootOrigin, shootDir)) {
+        float range = (pickups->pickupType == ENEMY_SOVIET) ? PICKUP_SOVIET_RANGE : PICKUP_AMERICAN_RANGE;
         Ray pickRay = {shootOrigin, shootDir};
         float hd = 0;
-        int hit = EnemyCheckHit(enemies, pickRay, PICKUP_SOVIET_RANGE, &hd);
+        int hit;
+        // Liberty Blaster uses wide hitbox, PPSh uses normal
+        if (pickups->pickupType == ENEMY_AMERICAN)
+            hit = LibertyCheckHit(enemies, pickRay, range, &hd);
+        else
+            hit = EnemyCheckHit(enemies, pickRay, range, &hd);
+
+        // Beam endpoint: shorten to hit point, or full range if miss
+        Vector3 beamEnd = (hit >= 0) ?
+            Vector3Add(shootOrigin, Vector3Scale(shootDir, hd)) :
+            Vector3Add(shootOrigin, Vector3Scale(shootDir, range));
+
         if (hit >= 0) {
-            EnemyDamage(enemies, hit, pickups->pickupDamage);
-            if (enemies->enemies[hit].state == ENEMY_DYING) {
+            if (pickups->pickupType == ENEMY_AMERICAN) {
+                // Liberty Blaster: instant kill, always vaporize
                 game->killCount++;
-                PickupDrop(pickups, enemies->enemies[hit].position, enemies->enemies[hit].type);
+                EnemyVaporize(enemies, hit);
+            } else {
+                EnemyDamage(enemies, hit, pickups->pickupDamage);
+                if (enemies->enemies[hit].state == ENEMY_DYING) {
+                    game->killCount++;
+                    PickupDrop(pickups, enemies->enemies[hit].position, enemies->enemies[hit].type);
+                }
             }
         }
-        if (weapon->beamCount < MAX_BEAM_TRAILS) {
-            Color bc = (pickups->pickupType == ENEMY_SOVIET) ?
-                (Color)COLOR_BEAM_SOVIET : (Color)COLOR_BEAM_AMERICAN;
-            weapon->beams[weapon->beamCount] = (BeamTrail){barrelPos,
-                Vector3Add(shootOrigin, Vector3Scale(shootDir, PICKUP_SOVIET_RANGE)), bc, BEAM_TRAIL_LIFE};
-            weapon->beamCount++;
+        if (pickups->pickupType == ENEMY_SOVIET) {
+            // PPSh: 3 rapid spread tracers per shot for bullet-hose feel
+            for (int t = 0; t < 3 && weapon->beamCount < MAX_BEAM_TRAILS; t++) {
+                float sx = ((float)rand()/RAND_MAX - 0.5f) * 0.03f;
+                float sy = ((float)rand()/RAND_MAX - 0.5f) * 0.03f;
+                Vector3 spreadDir = Vector3Normalize((Vector3){shootDir.x + sx, shootDir.y + sy, shootDir.z});
+                Vector3 tEnd = (hit >= 0) ?
+                    Vector3Add(shootOrigin, Vector3Scale(spreadDir, hd + 2.0f)) :
+                    Vector3Add(shootOrigin, Vector3Scale(spreadDir, range));
+                weapon->beams[weapon->beamCount] = (BeamTrail){barrelPos,
+                    tEnd, (Color)COLOR_BEAM_SOVIET, 0.08f, 0.08f, 1.5f};
+                weapon->beamCount++;
+            }
+        } else {
+            // Liberty Blaster: single thick rail beam, ends at target
+            if (weapon->beamCount < MAX_BEAM_TRAILS) {
+                weapon->beams[weapon->beamCount] = (BeamTrail){barrelPos,
+                    beamEnd, (Color)COLOR_BEAM_AMERICAN, 0.35f, 0.35f, 4.0f};
+                weapon->beamCount++;
+            }
         }
-        PlayerApplyRecoil(player, shootDir, PICKUP_RECOIL_FORCE);
+        float recoil = (pickups->pickupType == ENEMY_SOVIET) ? PICKUP_SOVIET_RECOIL : PICKUP_AMERICAN_RECOIL;
+        PlayerApplyRecoil(player, shootDir, recoil);
     }
 }
 

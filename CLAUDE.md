@@ -21,9 +21,18 @@ make run
 # Just build
 make
 
+# Run unit tests (ALWAYS run before committing)
+make test
+
 # Clean
 make clean
 ```
+
+## Testing Rules
+- **Always run `make test` before committing.** All tests must pass.
+- Tests are in `tests/test_game.c` — ~35 tests covering config sanity, player physics, weapon logic, pickup system, enemy hit detection, world height, and game state.
+- Tests run without GPU/window — they exercise pure game logic only.
+- When adding new gameplay features, add corresponding tests.
 
 ## Project Structure
 ```
@@ -58,6 +67,9 @@ Mondfall/
 4. HUD renders to separate `RenderTexture2D`, curved via `hud.fs` visor shader
 5. Menu/pause/game-over screens drawn at full window resolution
 
+### Performance Optimizations
+- **Cached particle meshes:** Unit sphere and unit cube meshes generated once in `WeaponInit()`, reused via `DrawMesh()` with transform matrices for all projectiles, explosions, and beam glows — eliminates ~200 per-frame mesh regenerations
+
 ### Game Loop (main.c)
 - State machine: `STATE_MENU` → `STATE_PLAYING` → `STATE_PAUSED` / `STATE_GAME_OVER`
 - Assets load on first frame (loading screen shown first)
@@ -84,6 +96,12 @@ Mondfall/
 - **Jackhammer:** Melee mining tool, sparks on impact
 - Reload system: R key, auto-reload on empty, visual tilt animation
 - All procedural 3D viewmodels drawn with `rlPushMatrix`/`DrawCube`/`rlPopMatrix`
+- Cached `meshSphere`/`meshCube` for all particle effects — projectile glows, explosion fireballs, debris use `DrawMesh()` with pre-uploaded GPU geometry instead of regenerating each frame
+
+### Pickup Weapons (pickup.c)
+- **KOSMOS-7 SMG (PPSh):** Fastest fire rate in game (0.05s), 35 damage, 3 spread tracers per shot, snappy recoil
+- **LIBERTY BLASTER:** One-shot vaporize kill, wide hitbox for forgiving aim, massive recoil kick, thick lingering rail beam, heavy rail-gun sound
+- Pickup buffs only apply in player's hands — enemy weapon behavior unchanged
 
 ### Sound
 - All sounds procedurally generated from waveforms (no files needed for core game)

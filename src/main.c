@@ -40,7 +40,9 @@ int main(void) {
     Player player;
     World world;
     Weapon weapon;
+    memset(&weapon, 0, sizeof(weapon));
     EnemyManager enemies;
+    memset(&enemies, 0, sizeof(enemies));
     GameAudio audio;
     memset(&audio, 0, sizeof(audio));
     LanderManager landers;

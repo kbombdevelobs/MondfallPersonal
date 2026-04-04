@@ -134,15 +134,17 @@
 
 // --- Pickup Weapon Stats: Soviet (KOSMOS-7 SMG) ---
 #define PICKUP_SOVIET_AMMO       80
-#define PICKUP_SOVIET_FIRE_RATE  0.12f
-#define PICKUP_SOVIET_DAMAGE     10.0f
+#define PICKUP_SOVIET_FIRE_RATE  0.05f   // fastest fire rate in game
+#define PICKUP_SOVIET_DAMAGE     35.0f   // hits harder than MP40
 #define PICKUP_SOVIET_RANGE      80.0f
+#define PICKUP_SOVIET_RECOIL     2.0f    // snappy kick
 
 // --- Pickup Weapon Stats: American (LIBERTY BLASTER) ---
-#define PICKUP_AMERICAN_AMMO     12
-#define PICKUP_AMERICAN_FIRE_RATE 0.35f
-#define PICKUP_AMERICAN_DAMAGE   18.0f
+#define PICKUP_AMERICAN_AMMO     8
+#define PICKUP_AMERICAN_FIRE_RATE 0.5f   // slow but devastating
+#define PICKUP_AMERICAN_DAMAGE   9999.0f // one-shot kill
 #define PICKUP_AMERICAN_RANGE    80.0f
+#define PICKUP_AMERICAN_RECOIL   2.5f    // massive kick
 
 // --- Pickup Weapon Effects ---
 #define PICKUP_RECOIL_FORCE  0.3f
