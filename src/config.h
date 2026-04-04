@@ -160,6 +160,53 @@
 #define PICKUP_AMERICAN_RANGE    80.0f
 #define PICKUP_AMERICAN_RECOIL   2.5f    // massive kick
 
+// --- Pickup Weapon Stats: KS-23 Molot (Soviet NCO Shotgun) ---
+#define PICKUP_MOLOT_AMMO        12
+#define PICKUP_MOLOT_FIRE_RATE   0.35f   // pump action
+#define PICKUP_MOLOT_DAMAGE      60.0f   // per pellet
+#define PICKUP_MOLOT_PELLETS     5       // pellets per shot
+#define PICKUP_MOLOT_SPREAD      0.08f   // radians spread cone
+#define PICKUP_MOLOT_RANGE       25.0f   // short but deadly
+#define PICKUP_MOLOT_RECOIL      1.8f
+
+// --- Pickup Weapon Stats: M8A1 Starhawk (American NCO Burst Rifle) ---
+#define PICKUP_STARHAWK_AMMO      36
+#define PICKUP_STARHAWK_FIRE_RATE 0.08f   // between burst rounds
+#define PICKUP_STARHAWK_BURST_CD  0.5f    // cooldown between bursts
+#define PICKUP_STARHAWK_BURST_SIZE 3      // rounds per burst
+#define PICKUP_STARHAWK_DAMAGE    45.0f
+#define PICKUP_STARHAWK_SPREAD    0.015f  // tight grouping
+#define PICKUP_STARHAWK_RANGE     60.0f
+#define PICKUP_STARHAWK_RECOIL    1.2f
+
+// --- Pickup Weapon Stats: Zarya TK-4 (Soviet Officer Charged Pistol) ---
+#define PICKUP_ZARYA_AMMO         6
+#define PICKUP_ZARYA_CHARGE_TIME  1.5f    // seconds to full charge
+#define PICKUP_ZARYA_DMG_MIN      150.0f  // uncharged damage
+#define PICKUP_ZARYA_DMG_MAX      500.0f  // fully charged damage
+#define PICKUP_ZARYA_RANGE        50.0f
+#define PICKUP_ZARYA_RECOIL       2.2f
+
+// --- Pickup Weapon Stats: ARC-9 Longbow (American Officer Piercing Beam) ---
+#define PICKUP_LONGBOW_AMMO       4
+#define PICKUP_LONGBOW_FIRE_RATE  1.0f
+#define PICKUP_LONGBOW_DAMAGE     200.0f  // per enemy hit
+#define PICKUP_LONGBOW_PIERCE     5       // max enemies pierced
+#define PICKUP_LONGBOW_RANGE      70.0f
+#define PICKUP_LONGBOW_RECOIL     1.5f
+
+// --- AI Movement ---
+#define AI_ACCEL_TROOPER     5.0f   // movement acceleration
+#define AI_ACCEL_NCO         4.0f
+#define AI_ACCEL_OFFICER     3.0f
+#define AI_SLOPE_THRESHOLD   0.8f   // gradient above which speed is penalized
+#define AI_SLOPE_MIN_FACTOR  0.2f   // minimum speed multiplier on steep terrain
+#define SPATIAL_CELL_SIZE    4.0f   // spatial hash grid cell size
+#define SPATIAL_GRID_DIM     32     // spatial hash grid dimension
+#define SPATIAL_CELL_CAP     6      // max entities per cell
+#define SQUAD_COHESION_BIAS  0.3f   // strength of pull toward squad centroid
+#define SQUAD_COHESION_RADIUS 20.0f // max distance for cohesion pull
+
 // --- Pickup Weapon Effects ---
 #define PICKUP_RECOIL_FORCE  0.3f
 #define PICKUP_SHAKE         0.03f

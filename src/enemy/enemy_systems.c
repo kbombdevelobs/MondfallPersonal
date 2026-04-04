@@ -215,6 +215,7 @@ void EcsEnemySystemsCleanup(void) {
         g_aliveQuery = NULL;
     }
     EcsEnemyAISystemsCleanup();
+    EcsEnemyMoraleSystemsCleanup();
 }
 
 // ============================================================================

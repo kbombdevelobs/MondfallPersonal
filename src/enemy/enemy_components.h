@@ -83,6 +83,18 @@ typedef struct {
     AIBehavior prevBehavior; // behavior before fleeing (to restore on rally)
 } EcMorale;
 
+// Steering component — momentum-based movement
+typedef struct {
+    Vector3 desiredVelocity; // what AI wants to move toward
+    float acceleration;      // how fast to reach desired (rank-dependent)
+} EcSteering;
+
+// Squad component — implicit squad from lander deployment
+typedef struct {
+    int squadId;             // lander index at spawn time
+    ecs_entity_t anchor;     // NCO of this squad (0 if none)
+} EcSquad;
+
 // ============================================================================
 // Sparse Components — only added when an enemy enters a death state
 // ============================================================================
@@ -172,6 +184,8 @@ extern ecs_entity_t ecs_id(EcVaporizeDeath);
 extern ecs_entity_t ecs_id(EcEviscerateDeath);
 extern ecs_entity_t ecs_id(EcRank);
 extern ecs_entity_t ecs_id(EcMorale);
+extern ecs_entity_t ecs_id(EcSteering);
+extern ecs_entity_t ecs_id(EcSquad);
 extern ecs_entity_t ecs_id(EcEnemyResources);
 extern ecs_entity_t ecs_id(EcGameContext);
 

@@ -49,15 +49,23 @@ void HudDrawPickup(PickupManager *pm, int sw, int sh) {
     int ph = sh / 22;
 
     DrawRectangle(px, py, pw, ph, (Color){0, 0, 0, 180});
+    // Soviet-faction weapons are red-tinted, American are blue-tinted
+    bool isSoviet = (pm->pickupType == PICKUP_KOSMOS7 || pm->pickupType == PICKUP_KS23_MOLOT || pm->pickupType == PICKUP_ZARYA_TK4);
     DrawRectangleLines(px, py, pw, ph,
-        (pm->pickupType == ENEMY_SOVIET) ? (Color){255, 80, 40, 200} : (Color){80, 160, 255, 200});
+        isSoviet ? (Color){255, 80, 40, 200} : (Color){80, 160, 255, 200});
 
-    const char *name = (pm->pickupType == ENEMY_SOVIET) ? "KOSMOS-7 SMG" : "LIBERTY BLASTER";
+    const char *name = PickupGetName(pm->pickupType);
     char txt[64];
     snprintf(txt, sizeof(txt), "%s  [%d]", name, pm->pickupAmmo);
     int fs = ph * 2 / 3;
     int tw = MeasureText(txt, fs);
-    Color tc = (pm->pickupType == ENEMY_SOVIET) ? (Color){255, 120, 60, 255} : (Color){100, 180, 255, 255};
+    Color tc = isSoviet ? (Color){255, 120, 60, 255} : (Color){100, 180, 255, 255};
+    // Show charge indicator for Zarya TK-4
+    if (pm->pickupType == PICKUP_ZARYA_TK4 && pm->charging) {
+        float ratio = pm->chargeTime / PICKUP_ZARYA_CHARGE_TIME;
+        if (ratio > 1.0f) ratio = 1.0f;
+        DrawRectangle(px + 2, py + ph - 4, (int)((pw - 4) * ratio), 3, (Color){255, 80, 30, 255});
+    }
     DrawText(txt, cx - tw / 2, py + ph / 2 - fs / 2, fs, tc);
     (void)barInset;
 }
