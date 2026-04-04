@@ -1,0 +1,52 @@
+# MONDFALL INTRO LORE
+# Lines starting with # are comments (ignored)
+# Blank lines add a pause between sections
+# Lines starting with @ are special directives:
+#   @PAUSE 2.0    — extra pause in seconds before next line
+#   @STYLE TITLE  — render next line as large title text
+#   @STYLE DIM    — render next line in dim/subdued color
+#   @CLEAR        — fade out all text before continuing
+
+@STYLE TITLE
+THE YEAR IS 67 AB 
+(After Bormann)
+
+@PAUSE 1.5
+
+They have come.
+
+@PAUSE 1.0
+
+Your grandparents fled the Great Cataclysm
+and told you of the horrors ...
+
+@PAUSE 0.8
+
+that these . . .  them . . .
+they tore Europa asunder.
+
+@PAUSE 1.5
+
+Now the old enemies circle above,
+descending in chariots of fire and steel.
+
+@PAUSE 0.8
+
+Soviets from the East. Americans from the West.
+As it was. As it always going to be.
+
+@PAUSE 1.5
+@CLEAR
+
+You are the last garrison.
+The final frontier is yours to hold.
+
+@PAUSE 1.0
+
+@STYLE DIM
+Gott mit uns, Kamerad.
+
+@PAUSE 0.5
+
+@STYLE TITLE
+Fate must smile kindly on you. 
