@@ -171,54 +171,55 @@ static Model GenTerrainMesh(int cx, int cz, Texture2D moonTex, World *world) {
         float mare = WorldGetMareFactor(vx, vz);
         float mareDarken = mare * 25.0f;
 
-        int shade = (int)(145.0f + cn * 60.0f + craterDarken * 80.0f - slopeDarken - mareDarken);
+        // Ejecta rays — bright radial streaks from large craters
+        float ejectaBright = 0.0f;
+        for (int ci = 0; ci < world->chunkCount; ci++) {
+            Chunk *ech = &world->chunks[ci];
+            if (!ech->generated) continue;
+            for (int cc = 0; cc < ech->craterCount; cc++) {
+                Crater *cr = &ech->craters[cc];
+                if (cr->radius < 4.5f) continue; // only big craters
+                float cdx = vx - cr->position.x;
+                float cdz = vz - cr->position.z;
+                float cdist = sqrtf(cdx * cdx + cdz * cdz);
+                if (cdist < cr->radius || cdist > cr->radius * 4.0f) continue;
+                float angle = atan2f(cdz, cdx);
+                float rayPattern = cosf(angle * 8.0f);
+                rayPattern = rayPattern * rayPattern * rayPattern * rayPattern; // sharp rays
+                float falloff = 1.0f - (cdist / (cr->radius * 4.0f));
+                float bright = rayPattern * falloff * 0.3f;
+                if (bright > ejectaBright) ejectaBright = bright;
+            }
+        }
+
+        int shade = (int)(145.0f + cn * 60.0f + craterDarken * 80.0f - slopeDarken - mareDarken + ejectaBright * 55.0f);
         if (shade < 60) shade = 60;
         if (shade > 200) shade = 200;
-        mesh.colors[i * 4 + 0] = (unsigned char)shade;
-        mesh.colors[i * 4 + 1] = (unsigned char)shade;
-        mesh.colors[i * 4 + 2] = (unsigned char)(shade > 5 ? shade - 5 : 0);
-        mesh.colors[i * 4 + 3] = 255;
-    }
+        // Analytical normal from height differences — continuous across chunk borders
+        float anx = hL - hR;
+        float any = 2.0f;
+        float anz = hU - hD;
+        float anLen = sqrtf(anx*anx + any*any + anz*anz);
+        anx /= anLen; any /= anLen; anz /= anLen;
 
-    // Recalculate normals
-    for (int i = 0; i < mesh.triangleCount; i++) {
-        int i0, i1, i2;
-        if (mesh.indices) {
-            i0 = mesh.indices[i * 3 + 0];
-            i1 = mesh.indices[i * 3 + 1];
-            i2 = mesh.indices[i * 3 + 2];
-        } else {
-            i0 = i * 3 + 0; i1 = i * 3 + 1; i2 = i * 3 + 2;
-        }
-        Vector3 v0 = {mesh.vertices[i0*3], mesh.vertices[i0*3+1], mesh.vertices[i0*3+2]};
-        Vector3 v1 = {mesh.vertices[i1*3], mesh.vertices[i1*3+1], mesh.vertices[i1*3+2]};
-        Vector3 v2 = {mesh.vertices[i2*3], mesh.vertices[i2*3+1], mesh.vertices[i2*3+2]};
-        Vector3 e1 = Vector3Subtract(v1, v0);
-        Vector3 e2 = Vector3Subtract(v2, v0);
-        Vector3 n = Vector3Normalize(Vector3CrossProduct(e1, e2));
-        for (int j = 0; j < 3; j++) {
-            int idx;
-            if (mesh.indices) idx = mesh.indices[i*3+j]; else idx = i*3+j;
-            mesh.normals[idx*3+0] = n.x;
-            mesh.normals[idx*3+1] = n.y;
-            mesh.normals[idx*3+2] = n.z;
-        }
-    }
+        // Store analytical normal in mesh
+        mesh.normals[i * 3 + 0] = anx;
+        mesh.normals[i * 3 + 1] = any;
+        mesh.normals[i * 3 + 2] = anz;
 
-    // Bake directional sunlight into vertex colors using normals
-    float sunX = 0.3f, sunY = 0.6f, sunZ = -0.4f;
-    float sunLen = sqrtf(sunX*sunX + sunY*sunY + sunZ*sunZ);
-    sunX /= sunLen; sunY /= sunLen; sunZ /= sunLen;
-    for (int i = 0; i < vertCount; i++) {
-        float nx = mesh.normals[i * 3 + 0];
-        float ny = mesh.normals[i * 3 + 1];
-        float nz = mesh.normals[i * 3 + 2];
-        float ndotl = nx * sunX + ny * sunY + nz * sunZ;
+        // Bake directional sunlight using analytical normal
+        // Pre-normalized sun direction {0.3, 0.6, -0.4} / len
+        float ndotl = anx * 0.3922f + any * 0.7845f + anz * -0.5222f;
         if (ndotl < 0.15f) ndotl = 0.15f;
         if (ndotl > 1.0f) ndotl = 1.0f;
-        mesh.colors[i * 4 + 0] = (unsigned char)(mesh.colors[i * 4 + 0] * ndotl);
-        mesh.colors[i * 4 + 1] = (unsigned char)(mesh.colors[i * 4 + 1] * ndotl);
-        mesh.colors[i * 4 + 2] = (unsigned char)(mesh.colors[i * 4 + 2] * ndotl);
+
+        int sr = (int)(shade * ndotl);
+        int sg = (int)(shade * ndotl);
+        int sb = (int)((shade > 5 ? shade - 5 : 0) * ndotl);
+        mesh.colors[i * 4 + 0] = (unsigned char)sr;
+        mesh.colors[i * 4 + 1] = (unsigned char)sg;
+        mesh.colors[i * 4 + 2] = (unsigned char)sb;
+        mesh.colors[i * 4 + 3] = 255;
     }
 
     UpdateMeshBuffer(mesh, 0, mesh.vertices, mesh.vertexCount * 3 * sizeof(float), 0);

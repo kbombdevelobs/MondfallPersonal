@@ -157,6 +157,20 @@ float WorldGetHeight(float x, float z) {
     if (mare > 0.05f) {
         // Pull height toward flat baseline, reduce noise in maria
         h = LerpF(h, -3.0f, mare * 0.7f);
+
+        // Wrinkle ridges — narrow raised linear features in mare regions
+        float along = x * 0.6f + z * 0.8f;
+        float across = -x * 0.8f + z * 0.6f;
+        float ridgeDist = fabsf(fmodf(across * 0.008f + 0.5f, 1.0f) - 0.5f);
+        if (ridgeDist < 0.04f) {
+            float rt = ridgeDist / 0.04f;
+            float ridgeH = (1.0f - rt * rt) * 1.2f;
+            // Modulate along length so ridges aren't infinite
+            float modulate = sinf(along * 0.006f) * 2.0f;
+            if (modulate < 0.0f) modulate = 0.0f;
+            if (modulate > 1.0f) modulate = 1.0f;
+            h += ridgeH * modulate * mare;
+        }
     }
 
     return h - 5.0f;

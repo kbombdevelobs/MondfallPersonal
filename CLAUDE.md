@@ -109,8 +109,10 @@ Mondfall/
 - **Domain warping:** large-scale octaves fed through secondary noise to break repetition; fine detail stays crisp
 - **Rilles:** two sinuous lunar channels at different angles carved into heightmap — natural gameplay trenches
 - **Maria:** cell-noise biome regions where terrain flattens and darkens (dark basalt "seas")
+- **Wrinkle ridges:** narrow raised linear features in mare regions, modulated along length
+- **Ejecta rays:** bright radial streaks in vertex colors around large craters (radius > 4.5)
 - **Craters:** `CraterProfile()` with terraced walls and central peaks for large craters (radius > 5), simple bowls for small; min-depth overlap resolution
-- Baked directional lighting: low-angle sun dot product multiplied into vertex colors during mesh generation (0.15 ambient floor)
+- Baked directional lighting: analytical normals from WorldGetHeight (seamless across chunks) with low-angle sun dot product (0.15 ambient floor)
 - Slope-based vertex coloring: steep terrain darkened by sampling 4 neighboring heights
 - Maria darkening: vertex colors reduced in dark sea biome regions
 - Frustum culling in `WorldDraw()` — tests all 4 chunk corners, only culls chunks fully behind camera
