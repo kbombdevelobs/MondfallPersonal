@@ -44,5 +44,6 @@ void LanderManagerDraw(LanderManager *lm, Vector3 playerPos);
 float LanderGetScreenShake(LanderManager *lm);
 bool LanderWaveActive(LanderManager *lm);
 int LanderEnemiesRemaining(LanderManager *lm);
+void LanderManagerSetSFXVolume(LanderManager *lm, float vol);
 
 #endif

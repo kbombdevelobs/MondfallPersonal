@@ -77,5 +77,6 @@ int WeaponGetMaxAmmo(Weapon *w);
 int WeaponGetReserve(Weapon *w);
 bool WeaponIsReloading(Weapon *w);
 float WeaponReloadProgress(Weapon *w);
+void WeaponSetSFXVolume(Weapon *w, float vol);
 
 #endif

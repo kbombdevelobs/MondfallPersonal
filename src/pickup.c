@@ -213,3 +213,9 @@ void PickupManagerDraw(PickupManager *pm) {
         rlPopMatrix();
     }
 }
+
+void PickupManagerSetSFXVolume(PickupManager *pm, float vol) {
+    if (!pm->soundLoaded) return;
+    SetSoundVolume(pm->sndSovietFire, vol);
+    SetSoundVolume(pm->sndAmericanFire, vol);
+}

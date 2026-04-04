@@ -707,3 +707,13 @@ bool WeaponIsReloading(Weapon *w) { return w->reloading; }
 float WeaponReloadProgress(Weapon *w) {
     return (!w->reloading || w->reloadDuration <= 0) ? 0 : w->reloadTimer / w->reloadDuration;
 }
+
+void WeaponSetSFXVolume(Weapon *w, float vol) {
+    if (!w->soundLoaded) return;
+    SetSoundVolume(w->sndMp40Fire, vol);
+    SetSoundVolume(w->sndRaketenFire, vol);
+    SetSoundVolume(w->sndJackhammerHit, vol);
+    SetSoundVolume(w->sndReload, vol);
+    SetSoundVolume(w->sndEmpty, vol);
+    SetSoundVolume(w->sndExplosion, vol);
+}

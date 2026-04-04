@@ -37,5 +37,6 @@ void PickupManagerDraw(PickupManager *pm);
 bool PickupTryGrab(PickupManager *pm, Vector3 playerPos);
 bool PickupFire(PickupManager *pm, Vector3 origin, Vector3 dir);
 void PickupDrawFirstPerson(PickupManager *pm, Camera3D camera, float weaponBobTimer);
+void PickupManagerSetSFXVolume(PickupManager *pm, float vol);
 
 #endif
