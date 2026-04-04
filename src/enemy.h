@@ -44,6 +44,13 @@ typedef struct {
     float spawnTimer, spawnRate;
     Model mdlVisor, mdlArm, mdlBoot;
     Sound sndSovietFire, sndAmericanFire;
+    Sound sndSovietDeath[2];
+    int sovietDeathCount;
+    int sovietDeathPlays;
+    Sound sndAmericanDeath[2];
+    int americanDeathCount;
+    int americanDeathPlays;
+    float radioTransmissionTimer; // > 0 means show "TRANSMISSION" on HUD
     bool modelsLoaded;
 } EnemyManager;
 

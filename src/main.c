@@ -380,6 +380,7 @@ int main(void) {
                 HudDraw(&player, &weapon, &game, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawPickup(&pickups, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawLanderArrows(&landers, player.camera, hudTarget.texture.width, hudTarget.texture.height);
+                HudDrawRadioTransmission(enemies.radioTransmissionTimer, hudTarget.texture.width, hudTarget.texture.height);
                 EndTextureMode();
 
                 BeginShaderMode(hudShader);

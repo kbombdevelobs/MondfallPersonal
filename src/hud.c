@@ -169,3 +169,52 @@ void HudDraw(Player *player, Weapon *weapon, Game *game, int sw, int sh) {
         DrawRectangle(0, 0, sw, sh, (Color){220, 0, 0, a});
     }
 }
+
+void HudDrawRadioTransmission(float timer, int sw, int sh) {
+    if (timer <= 0) return;
+
+    float alpha = (timer > 0.5f) ? 1.0f : timer / 0.5f; // fade out last 0.5s
+    unsigned char a = (unsigned char)(alpha * 220);
+
+    // Box on the right side of screen
+    int boxW = sw / 5;
+    int boxH = sh / 8;
+    int boxX = sw - boxW - sw / 20;
+    int boxY = sh * 2 / 3;
+
+    // Dark background with red border
+    DrawRectangle(boxX, boxY, boxW, boxH, (Color){10, 10, 8, (unsigned char)(a * 0.8f)});
+    DrawRectangleLines(boxX, boxY, boxW, boxH, (Color){200, 50, 30, a});
+    DrawRectangleLines(boxX + 1, boxY + 1, boxW - 2, boxH - 2, (Color){200, 50, 30, (unsigned char)(a * 0.5f)});
+
+    // "TRANSMISSION" header
+    int hfs = boxH / 4;
+    const char *hdr = "TRANSMISSION";
+    int hw = MeasureText(hdr, hfs);
+    float blink = sinf(GetTime() * 8.0f);
+    Color hdrCol = (blink > 0) ? (Color){255, 60, 40, a} : (Color){200, 40, 30, a};
+    DrawText(hdr, boxX + boxW / 2 - hw / 2, boxY + 4, hfs, hdrCol);
+
+    // Sound waveform visualization — fake oscilloscope
+    int waveY = boxY + boxH / 3 + 4;
+    int waveH = boxH / 3;
+    int waveL = boxX + 8;
+    int waveR = boxX + boxW - 8;
+    DrawLine(waveL, waveY + waveH / 2, waveR, waveY + waveH / 2, (Color){80, 80, 70, (unsigned char)(a * 0.4f)});
+    // Animated waveform
+    for (int x = waveL; x < waveR; x += 2) {
+        float t = (float)(x - waveL) / (float)(waveR - waveL);
+        float wave = sinf(t * 20.0f + GetTime() * 15.0f) * 0.6f;
+        wave += sinf(t * 50.0f + GetTime() * 25.0f) * 0.3f;
+        wave *= alpha;
+        int y1 = waveY + waveH / 2;
+        int y2 = y1 + (int)(wave * waveH * 0.45f);
+        DrawLine(x, y1, x, y2, (Color){255, 80, 40, a});
+    }
+
+    // "RECEIVED" footer
+    int ffs = boxH / 5;
+    const char *ftr = "RECEIVED";
+    int fw = MeasureText(ftr, ffs);
+    DrawText(ftr, boxX + boxW / 2 - fw / 2, boxY + boxH - ffs - 4, ffs, (Color){180, 180, 170, a});
+}

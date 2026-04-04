@@ -39,6 +39,70 @@ void EnemyManagerInit(EnemyManager *em) {
         UnloadWave(w);
     }
 
+    // Load Soviet death sounds — degrade to scratchy radio quality
+    em->sovietDeathCount = 0;
+    const char *deathFiles[] = {
+        "assets/soviet_death_sounds/Echoes of the Frozen Front.mp3",
+        "assets/soviet_death_sounds/Last Echo of the Soviet Front The Final Net.mp3",
+    };
+    for (int df = 0; df < 2; df++) {
+        if (!FileExists(deathFiles[df])) continue;
+        Wave deathWav = LoadWave(deathFiles[df]);
+        if (deathWav.frameCount <= 0) { UnloadWave(deathWav); continue; }
+        // Downsample to 8000Hz mono for radio quality
+        WaveFormat(&deathWav, 8000, 16, 1);
+        // Degrade: overdrive, crackle, pops
+        short *d = (short *)deathWav.data;
+        int n = deathWav.frameCount;
+        float avg = 0;
+        for (int i = 0; i < n; i++) {
+            float s = (float)d[i] / 32767.0f;
+            avg = avg * 0.95f + s * 0.05f;
+            s -= avg; // high-pass (kill bass)
+            s *= 2.5f; // overdrive
+            if (s > 0.7f) s = 0.7f;
+            if (s < -0.7f) s = -0.7f;
+            s += ((float)rand() / RAND_MAX * 2.0f - 1.0f) * 0.08f; // crackle
+            if (rand() % 800 == 0) s += ((float)rand() / RAND_MAX - 0.5f) * 0.5f; // pop
+            d[i] = (short)(s * 20000.0f);
+        }
+        em->sndSovietDeath[em->sovietDeathCount] = LoadSoundFromWave(deathWav);
+        SetSoundVolume(em->sndSovietDeath[em->sovietDeathCount], 0.4f);
+        UnloadWave(deathWav);
+        em->sovietDeathCount++;
+    }
+
+    // Load American death sounds — same radio degradation
+    em->americanDeathCount = 0;
+    const char *amDeathFiles[] = {
+        "assets/american_death_sounds/Darn Bastard's Final Stand.mp3",
+        "assets/american_death_sounds/The Last Yeehaw of the Lone Star Son (1).mp3",
+    };
+    for (int df = 0; df < 2; df++) {
+        if (!FileExists(amDeathFiles[df])) continue;
+        Wave dw = LoadWave(amDeathFiles[df]);
+        if (dw.frameCount <= 0) { UnloadWave(dw); continue; }
+        WaveFormat(&dw, 8000, 16, 1);
+        short *d = (short *)dw.data;
+        int n = dw.frameCount;
+        float avg2 = 0;
+        for (int i = 0; i < n; i++) {
+            float s = (float)d[i] / 32767.0f;
+            avg2 = avg2 * 0.95f + s * 0.05f;
+            s -= avg2;
+            s *= 2.5f;
+            if (s > 0.7f) s = 0.7f;
+            if (s < -0.7f) s = -0.7f;
+            s += ((float)rand() / RAND_MAX * 2.0f - 1.0f) * 0.08f;
+            if (rand() % 800 == 0) s += ((float)rand() / RAND_MAX - 0.5f) * 0.5f;
+            d[i] = (short)(s * 20000.0f);
+        }
+        em->sndAmericanDeath[em->americanDeathCount] = LoadSoundFromWave(dw);
+        SetSoundVolume(em->sndAmericanDeath[em->americanDeathCount], 0.4f);
+        UnloadWave(dw);
+        em->americanDeathCount++;
+    }
+
     em->modelsLoaded = true;
 }
 
@@ -49,6 +113,8 @@ void EnemyManagerUnload(EnemyManager *em) {
     UnloadModel(em->mdlBoot);
     UnloadSound(em->sndSovietFire);
     UnloadSound(em->sndAmericanFire);
+    for (int i = 0; i < em->sovietDeathCount; i++) UnloadSound(em->sndSovietDeath[i]);
+    for (int i = 0; i < em->americanDeathCount; i++) UnloadSound(em->sndAmericanDeath[i]);
 }
 
 static void EnemyInit(Enemy *e, EnemyType type, Vector3 pos) {
@@ -107,6 +173,11 @@ static bool TooCloseToOthers(EnemyManager *em, int idx, float minDist) {
 }
 
 void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
+    // Decay radio transmission timer
+    if (em->radioTransmissionTimer > 0) em->radioTransmissionTimer -= dt;
+    // Reset death play counter when no enemies alive (wave cleared)
+    if (EnemyCountAlive(em) == 0) { em->sovietDeathPlays = 0; em->americanDeathPlays = 0; }
+
     for (int i = 0; i < MAX_ENEMIES; i++) {
         Enemy *e = &em->enemies[i];
         if (!e->active) continue;
@@ -816,6 +887,26 @@ void EnemyDamage(EnemyManager *em, int index, float damage) {
             e->spinY = 0;
             e->ragdollVelX = 0; e->ragdollVelZ = 0; e->ragdollVelY = 0;
         }
+        // 50% chance — scratchy radio death sound (max 3 per wave per faction, no overlap)
+        bool anyPlaying = false;
+        for (int si = 0; si < em->sovietDeathCount; si++)
+            if (IsSoundPlaying(em->sndSovietDeath[si])) anyPlaying = true;
+        for (int ai = 0; ai < em->americanDeathCount; ai++)
+            if (IsSoundPlaying(em->sndAmericanDeath[ai])) anyPlaying = true;
+
+        if (!anyPlaying && (rand() % 100 < 50)) {
+            if (e->type == ENEMY_SOVIET && em->sovietDeathCount > 0 && em->sovietDeathPlays < 3) {
+                int pick = GetRandomValue(0, em->sovietDeathCount - 1);
+                PlaySound(em->sndSovietDeath[pick]);
+                em->sovietDeathPlays++;
+                em->radioTransmissionTimer = 3.0f;
+            } else if (e->type == ENEMY_AMERICAN && em->americanDeathCount > 0 && em->americanDeathPlays < 3) {
+                int pick = GetRandomValue(0, em->americanDeathCount - 1);
+                PlaySound(em->sndAmericanDeath[pick]);
+                em->americanDeathPlays++;
+                em->radioTransmissionTimer = 3.0f;
+            }
+        }
     }
 }
 
@@ -826,8 +917,29 @@ void EnemyVaporize(EnemyManager *em, int index) {
     e->vaporizeTimer = 0;
     e->vaporizeScale = 1.0f;
     e->health = 0;
-    e->deathStyle = (rand() % 100 < 15) ? 1 : 0; // 15% pop, 85% normal
+    e->deathStyle = (rand() % 100 < 15) ? 1 : 0;
     e->deathTimer = (e->deathStyle == 1) ? 6.0f : 4.5f;
+
+    // Death radio sound — same logic as bullet deaths
+    bool anyPlaying = false;
+    for (int si = 0; si < em->sovietDeathCount; si++)
+        if (IsSoundPlaying(em->sndSovietDeath[si])) anyPlaying = true;
+    for (int ai = 0; ai < em->americanDeathCount; ai++)
+        if (IsSoundPlaying(em->sndAmericanDeath[ai])) anyPlaying = true;
+
+    if (!anyPlaying && (rand() % 100 < 50)) {
+        if (e->type == ENEMY_SOVIET && em->sovietDeathCount > 0 && em->sovietDeathPlays < 3) {
+            int pick = GetRandomValue(0, em->sovietDeathCount - 1);
+            PlaySound(em->sndSovietDeath[pick]);
+            em->sovietDeathPlays++;
+            em->radioTransmissionTimer = 3.0f;
+        } else if (e->type == ENEMY_AMERICAN && em->americanDeathCount > 0 && em->americanDeathPlays < 3) {
+            int pick = GetRandomValue(0, em->americanDeathCount - 1);
+            PlaySound(em->sndAmericanDeath[pick]);
+            em->americanDeathPlays++;
+            em->radioTransmissionTimer = 3.0f;
+        }
+    }
 }
 
 int EnemyCountAlive(EnemyManager *em) {
