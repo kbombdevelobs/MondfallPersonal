@@ -205,5 +205,7 @@
 #define MOONBASE_INTERIOR_D      20.0f
 #define MOONBASE_INTERIOR_H      5.0f
 #define MOONBASE_GEODESIC_SEGS   12
+#define STRUCTURE_SPAWN_CHANCE   15   // 1-in-N chunks gets a base (lower = more common)
+#define MOONBASE_RESUPPLIES      3   // number of resupply uses per base
 
 #endif

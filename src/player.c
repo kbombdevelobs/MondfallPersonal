@@ -1,5 +1,6 @@
 #include "player.h"
 #include "world.h"
+#include "structure/structure.h"
 #include <math.h>
 
 void PlayerInit(Player *player) {
@@ -105,18 +106,25 @@ void PlayerUpdate(Player *player, float dt) {
     float newZ = player->position.z + player->velocity.z * dt;
     player->position.y += player->velocity.y * dt;
 
-    // Boulder collision — push back if moving into a rock
-    if (!WorldCheckCollision(WorldGetActive(), (Vector3){newX, player->position.y, newZ}, COLLISION_RADIUS)) {
+    // Boulder + structure collision — push back if moving into a rock or base
+    StructureManager *structs = StructureGetActive();
+    bool rockHit = WorldCheckCollision(WorldGetActive(), (Vector3){newX, player->position.y, newZ}, COLLISION_RADIUS);
+    bool structHit = structs && StructureCheckCollision(structs, (Vector3){newX, player->position.y, newZ}, COLLISION_RADIUS);
+    if (!rockHit && !structHit) {
         player->position.x = newX;
         player->position.z = newZ;
     } else {
         // Try sliding along one axis
-        if (!WorldCheckCollision(WorldGetActive(), (Vector3){newX, player->position.y, player->position.z}, COLLISION_RADIUS)) {
+        bool xRock = WorldCheckCollision(WorldGetActive(), (Vector3){newX, player->position.y, player->position.z}, COLLISION_RADIUS);
+        bool xStruct = structs && StructureCheckCollision(structs, (Vector3){newX, player->position.y, player->position.z}, COLLISION_RADIUS);
+        if (!xRock && !xStruct) {
             player->position.x = newX;
         } else {
             player->velocity.x = 0;
         }
-        if (!WorldCheckCollision(WorldGetActive(), (Vector3){player->position.x, player->position.y, newZ}, COLLISION_RADIUS)) {
+        bool zRock = WorldCheckCollision(WorldGetActive(), (Vector3){player->position.x, player->position.y, newZ}, COLLISION_RADIUS);
+        bool zStruct = structs && StructureCheckCollision(structs, (Vector3){player->position.x, player->position.y, newZ}, COLLISION_RADIUS);
+        if (!zRock && !zStruct) {
             player->position.z = newZ;
         } else {
             player->velocity.z = 0;

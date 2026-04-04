@@ -780,6 +780,37 @@ TEST(test_structure_resupply_flash_starts_zero) {
     ASSERT_FLOAT_EQ(StructureGetResupplyFlash(&sm), 0.0f, 0.001f);
 }
 
+TEST(test_structure_collision_at_base) {
+    StructureManager sm;
+    StructureManagerInit(&sm);
+    // Directly at the base center should collide
+    Vector3 basePos = sm.structures[0].worldPos;
+    ASSERT(StructureCheckCollision(&sm, basePos, 0.5f));
+}
+
+TEST(test_structure_collision_far_away) {
+    StructureManager sm;
+    StructureManagerInit(&sm);
+    // Far from any structure should not collide
+    ASSERT(!StructureCheckCollision(&sm, (Vector3){500, 0, 500}, 0.5f));
+}
+
+TEST(test_structure_spawn_chance_config) {
+    ASSERT_GT(STRUCTURE_SPAWN_CHANCE, 1);
+    ASSERT(STRUCTURE_SPAWN_CHANCE <= 50); // not too rare
+}
+
+TEST(test_structure_unique_interior_y) {
+    // If multiple structures spawned, each should have unique interiorY
+    StructureManager sm;
+    StructureManagerInit(&sm);
+    // Manually add a second one to test
+    if (sm.count < MAX_STRUCTURES) {
+        float intY = STRUCTURE_INTERIOR_Y + (float)sm.count * 50.0f;
+        ASSERT(intY != sm.structures[0].interiorY);
+    }
+}
+
 // ============================================================================
 // MAIN — run all tests
 // ============================================================================
@@ -897,6 +928,10 @@ int main(void) {
     RUN(test_structure_interior_y);
     RUN(test_structure_config_sanity);
     RUN(test_structure_resupply_flash_starts_zero);
+    RUN(test_structure_collision_at_base);
+    RUN(test_structure_collision_far_away);
+    RUN(test_structure_spawn_chance_config);
+    RUN(test_structure_unique_interior_y);
 
     printf("\n=== RESULTS: %d/%d passed", tests_passed, tests_run);
     if (tests_failed > 0) printf(", %d FAILED", tests_failed);

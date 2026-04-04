@@ -215,6 +215,9 @@ int main(void) {
                 // World chunks always update (for terrain height)
                 WorldUpdate(&world, player.position);
 
+                // Discover new structures in nearby chunks
+                StructureManagerCheckSpawns(&structures, player.position);
+
                 // --- SIMULATION FREEZE when inside structure ---
                 if (!insideStructure) {
                     GameUpdate(&game);
@@ -413,7 +416,14 @@ int main(void) {
                 HudDrawPickup(&pickups, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawLanderArrows(&landers, player.camera, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawRadioTransmission(enemies.radioTransmissionTimer, hudTarget.texture.width, hudTarget.texture.height);
-                HudDrawStructurePrompt(StructureGetPrompt(&structures), hudTarget.texture.width, hudTarget.texture.height);
+                {
+                    int resLeft = 0;
+                    if (structures.insideIndex >= 0)
+                        resLeft = structures.structures[structures.insideIndex].resuppliesLeft;
+                    HudDrawStructurePrompt(StructureGetPrompt(&structures), resLeft,
+                        StructureGetEmptyMessageTimer(&structures),
+                        hudTarget.texture.width, hudTarget.texture.height);
+                }
                 EndTextureMode();
 
                 BeginShaderMode(hudShader);

@@ -154,14 +154,18 @@ Mondfall/
 
 ### Moon Base Structure System (structure/)
 - **Exterior**: Geodesic dome (5 rings x 12 segments) on a raised cylinder shaft that tunnels underground. Dome radius 4.5 units. Cylinder visible 1.0 unit above terrain, extends 8 units underground with steel rim and cap.
-- **3 Airlock Doors**: Player-height (2.0 unit) corridors at 120-degree intervals around the dome, 2.8 units long, with ribbed steel reinforcement, red warning stripes, green indicator lights.
+- **3 Airlock Doors**: Player-height (2.0 unit) corridors at 120-degree intervals around the dome, 2.8 units long, with ribbed steel reinforcement, red warning stripes, green indicator lights, yellow/black hazard chevrons.
 - **Interior**: Separate-space technique — player teleports to Y=500 hidden room (24x20 units, much bigger than exterior). Germanic officers' lounge: dark wood wainscoting, cream plaster walls, crown moulding, red carpet with gold border, leather Chesterfield couches, iron chandelier with flickering candles, full bar with bottles/glasses/stools, bookshelf, map table, 8 pixel-art general portraits, hanging banners, exposed ceiling beams.
-- **Resupply**: Military green cabinet on north wall — press E to refill all weapon ammo (MP40, Raketenfaust, pickup weapons).
+- **Resupply**: Military green cabinet on north wall — press E to refill all weapon ammo (MP40, Raketenfaust, pickup weapons). Each base has 3 uses (`MOONBASE_RESUPPLIES`). When expended: "MEIN GOTT! THE CUPBOARD IS BARE, KAMERAD!" message, cabinet goes dead red.
+- **Procedural Spawning**: Guaranteed base near spawn. Additional bases appear in ~1-in-15 chunks (deterministic via chunk hash). Up to 8 bases. Each gets unique interiorY.
+- **Collision**: Circular cylinder collision around each base blocks both enemies and player. Enemies slide around via tangent computation.
+- **Enemy AI**: Both factions detect structures blocking their path. Soviets split into two flanking rushes. Americans swing wide to flank. No bunching.
 - **Safe Zone**: When inside, ALL simulation freezes: `EnemyManagerUpdate`, `LanderManagerUpdate`, `GameUpdate`, `CombatProcess*`, `PickupManagerUpdate` all skipped. Enemies have no knowledge of player position.
 - **Wave Pause**: Wave timer does not advance while inside. Existing enemies and landers freeze in place, resume on exit.
 - **Multi-door**: Enter/exit through any of the 3 doors. Exit places player outside the door they walked through.
-- **HUD Prompts**: "PRESS [E] TO ENTER BASE", "PRESS [E] TO EXIT BASE", "PRESS [E] TO RESUPPLY" — pulsing green text at screen center.
-- **Adding structures**: New `StructureType` enum + unique `interiorY` offset. Teleport, collision, and freeze systems work automatically. See `src/structure/README.md`.
+- **HUD Prompts**: "PRESS [E] TO ENTER BASE", "PRESS [E] TO EXIT BASE", "PRESS [E] TO RESUPPLY [N]", "VERSORGUNG ERSCHOEPFT" — pulsing text at screen center.
+- **Visual Indicators**: Door lights green (stocked) / red (expended). Cabinet panel green glow / dead red. Visible from distance.
+- **Adding structures**: New `StructureType` enum + unique `interiorY` offset. Teleport, collision, freeze, spawning, and AI flanking all work automatically. See `src/structure/README.md`.
 
 ### Settings System (game.c)
 - Mouse sensitivity: stored in `Game.mouseSensitivity`, synced to `Player.mouseSensitivity` each frame
