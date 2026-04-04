@@ -194,4 +194,16 @@
 #define SHAKE_THRESHOLD      0.05f
 #define SHAKE_AMPLITUDE      0.15f
 
+// --- Structures ---
+#define MAX_STRUCTURES           8
+#define MAX_STRUCTURE_DOORS      3
+#define STRUCTURE_INTERACT_RANGE 3.5f
+#define STRUCTURE_INTERIOR_Y     500.0f
+#define MOONBASE_EXTERIOR_RADIUS 4.5f
+#define MOONBASE_DOOR_COUNT      3
+#define MOONBASE_INTERIOR_W      24.0f
+#define MOONBASE_INTERIOR_D      20.0f
+#define MOONBASE_INTERIOR_H      5.0f
+#define MOONBASE_GEODESIC_SEGS   12
+
 #endif

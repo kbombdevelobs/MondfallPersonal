@@ -66,6 +66,10 @@ Mondfall/
 │   │   ├── world_noise.h/c — Perlin gradient noise, ValueNoise, WorldGetHeight()
 │   │   ├── world_draw.h/c  — Sky rendering, chunk drawing, frustum culling
 │   │   └── README.md
+│   ├── structure/       — Moon base structures (see src/structure/README.md)
+│   │   ├── structure.h/c    — Structure manager, enter/exit teleport, resupply, collision
+│   │   ├── structure_draw.h/c — Exterior hab dome + interior room rendering
+│   │   └── README.md
 │   ├── lander.c/h      — Moon lander wave system with descent, deployment, self-destruct
 │   ├── pickup.c/h      — Dropped enemy weapons (KOSMOS-7 SMG, LIBERTY BLASTER)
 │   ├── hud.c/h         — Health, ammo, wave counter, reload bar, ACHTUNG alert, radio transmission
@@ -148,6 +152,17 @@ Mondfall/
 - **LIBERTY BLASTER:** One-shot vaporize kill, wide hitbox for forgiving aim, massive recoil kick, thick lingering rail beam, heavy rail-gun sound
 - Pickup buffs only apply in player's hands — enemy weapon behavior unchanged
 
+### Moon Base Structure System (structure/)
+- **Exterior**: Geodesic dome (5 rings x 12 segments) on a raised cylinder shaft that tunnels underground. Dome radius 4.5 units. Cylinder visible 1.0 unit above terrain, extends 8 units underground with steel rim and cap.
+- **3 Airlock Doors**: Player-height (2.0 unit) corridors at 120-degree intervals around the dome, 2.8 units long, with ribbed steel reinforcement, red warning stripes, green indicator lights.
+- **Interior**: Separate-space technique — player teleports to Y=500 hidden room (24x20 units, much bigger than exterior). Germanic officers' lounge: dark wood wainscoting, cream plaster walls, crown moulding, red carpet with gold border, leather Chesterfield couches, iron chandelier with flickering candles, full bar with bottles/glasses/stools, bookshelf, map table, 8 pixel-art general portraits, hanging banners, exposed ceiling beams.
+- **Resupply**: Military green cabinet on north wall — press E to refill all weapon ammo (MP40, Raketenfaust, pickup weapons).
+- **Safe Zone**: When inside, ALL simulation freezes: `EnemyManagerUpdate`, `LanderManagerUpdate`, `GameUpdate`, `CombatProcess*`, `PickupManagerUpdate` all skipped. Enemies have no knowledge of player position.
+- **Wave Pause**: Wave timer does not advance while inside. Existing enemies and landers freeze in place, resume on exit.
+- **Multi-door**: Enter/exit through any of the 3 doors. Exit places player outside the door they walked through.
+- **HUD Prompts**: "PRESS [E] TO ENTER BASE", "PRESS [E] TO EXIT BASE", "PRESS [E] TO RESUPPLY" — pulsing green text at screen center.
+- **Adding structures**: New `StructureType` enum + unique `interiorY` offset. Teleport, collision, and freeze systems work automatically. See `src/structure/README.md`.
+
 ### Settings System (game.c)
 - Mouse sensitivity: stored in `Game.mouseSensitivity`, synced to `Player.mouseSensitivity` each frame
 - Music volume: applied via `GameAudioSetMusicVolume()` each frame
@@ -171,7 +186,7 @@ Mondfall/
 | Left Click | Fire (or fire pickup weapon if holding one) |
 | 1/2/3 | Switch weapons |
 | R | Reload |
-| E | Pick up dropped enemy weapon |
+| E | Pick up dropped enemy weapon / Enter-exit base / Resupply |
 | V | Jackhammer (alternate) |
 | X | Ground pound (airborne: slam down / grounded: hop + slam) |
 | ESC | Pause / Resume |

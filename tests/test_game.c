@@ -13,6 +13,7 @@
 #include "../src/game.h"
 #include "../src/world.h"
 #include "../src/world/world_noise.h"
+#include "../src/structure/structure.h"
 
 // ---- Minimal test framework ----
 static int tests_run = 0;
@@ -731,6 +732,55 @@ TEST(test_max_enemies_reasonable) {
 }
 
 // ============================================================================
+// 14. STRUCTURE SYSTEM
+// ============================================================================
+
+TEST(test_structure_init_places_base) {
+    StructureManager sm;
+    StructureManagerInit(&sm);
+    ASSERT(sm.count == 1);
+    ASSERT(sm.structures[0].active);
+    ASSERT(sm.structures[0].type == STRUCTURE_MOON_BASE);
+    // Base should be near spawn (within 50 units)
+    float dist = sqrtf(sm.structures[0].worldPos.x * sm.structures[0].worldPos.x +
+                        sm.structures[0].worldPos.z * sm.structures[0].worldPos.z);
+    ASSERT(dist < 50.0f);
+}
+
+TEST(test_structure_player_not_inside_initially) {
+    StructureManager sm;
+    StructureManagerInit(&sm);
+    ASSERT(!StructureIsPlayerInside(&sm));
+}
+
+TEST(test_structure_prompt_none_initially) {
+    StructureManager sm;
+    StructureManagerInit(&sm);
+    ASSERT(StructureGetPrompt(&sm) == PROMPT_NONE);
+}
+
+TEST(test_structure_interior_y) {
+    StructureManager sm;
+    StructureManagerInit(&sm);
+    ASSERT_FLOAT_EQ(sm.structures[0].interiorY, STRUCTURE_INTERIOR_Y, 0.1f);
+}
+
+TEST(test_structure_config_sanity) {
+    ASSERT_GT(MAX_STRUCTURES, 0);
+    ASSERT_GT(STRUCTURE_INTERACT_RANGE, 0.0f);
+    ASSERT_GT(STRUCTURE_INTERIOR_Y, 100.0f); // well above terrain
+    ASSERT_GT(MOONBASE_INTERIOR_W, MOONBASE_EXTERIOR_RADIUS * 2.0f); // bigger inside
+    ASSERT_GT(MOONBASE_INTERIOR_D, MOONBASE_EXTERIOR_RADIUS * 2.0f); // bigger inside
+    ASSERT_GT(MOONBASE_INTERIOR_H, PLAYER_HEIGHT); // player can stand
+}
+
+TEST(test_structure_resupply_flash_starts_zero) {
+    StructureManager sm;
+    StructureManagerInit(&sm);
+    ASSERT_FLOAT_EQ(StructureGetResupplyFlash(&sm), 0.0f, 0.001f);
+}
+
+// ============================================================================
 // MAIN — run all tests
 // ============================================================================
 
@@ -839,6 +889,14 @@ int main(void) {
     RUN(test_render_resolution_valid);
     RUN(test_chunk_size_positive);
     RUN(test_max_enemies_reasonable);
+
+    printf("\n[Structure System]\n");
+    RUN(test_structure_init_places_base);
+    RUN(test_structure_player_not_inside_initially);
+    RUN(test_structure_prompt_none_initially);
+    RUN(test_structure_interior_y);
+    RUN(test_structure_config_sanity);
+    RUN(test_structure_resupply_flash_starts_zero);
 
     printf("\n=== RESULTS: %d/%d passed", tests_passed, tests_run);
     if (tests_failed > 0) printf(", %d FAILED", tests_failed);
