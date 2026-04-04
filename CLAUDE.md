@@ -127,9 +127,12 @@ Mondfall/
 - Soviet: aggressive rushers, wide spread, circle-strafe close
 - American: tactical, seek cover behind rocks, maintain distance, retreat when hurt
 - Four death types: ragdoll blowout (60%), crumple + blood pool (40%), vaporize (beam only), eviscerate (jackhammer only)
+- **Dead bodies persist 10-12 seconds** and are clamped to terrain surface via continuous `WorldGetHeight` sampling — never sink through ground
+- **Ragdoll deaths**: pressurized suit breach with directional gas jet (fades over 6s), pulsing arterial blood spurts with gravity, settling behavior locks body to terrain when velocity drops
+- **Crumple deaths**: blood drips from wounds to terrain, gas wisps leak from suit (5s), terrain-conforming blood pool grows to radius 3.5 with 10-segment mesh
 - Blood pools are terrain-conforming triangle fan meshes — each vertex placed at `WorldGetHeight`, draping over slopes and craters
 - Vaporize sequence: jerk → freeze → optional swell/pop (15%) → disintegrate
-- Eviscerate sequence: limbs separate with physics (head/torso/arms/legs fly apart), blood spurts from stumps, bone fragments, blood pool forms under torso, enemy drops weapon
+- Eviscerate sequence: limbs separate with physics (head/torso/arms/legs fly apart), blood spurts from stumps (6s), bone fragments (4s), blood mist cloud (5s), blood pool forms under torso, enemy drops weapon
 
 ### Weapon System (weapon.c)
 - **Mond-MP40:** Hitscan SMG, 32-round mag, fast fire, cyan energy beams

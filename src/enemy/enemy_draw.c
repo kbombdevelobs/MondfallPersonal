@@ -42,7 +42,7 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     // === EVISCERATE — limbs fly apart, blood spurts, weapon dropped ===
     if (e->state == ENEMY_EVISCERATING) {
         float t = e->evisTimer;
-        float fade = (t > 4.0f) ? 1.0f - (t - 4.0f) / 2.0f : 1.0f;
+        float fade = (t > 7.0f) ? 1.0f - (t - 7.0f) / 3.0f : 1.0f;
         if (fade < 0) fade = 0;
         unsigned char alpha = (unsigned char)(255 * fade);
 
@@ -67,7 +67,7 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             DrawCube((Vector3){-0.06f, -0.36f, -0.04f}, 0.08f, 0.08f, 0.08f, brightBlood);
             rlPopMatrix();
             // Arterial spray from neck — pressurized jets
-            if (t < 4.0f) {
+            if (t < 6.0f) {
                 float spurtPhase = sinf(t * 12.0f); // pulsing like heartbeat
                 for (int b = 0; b < 8; b++) {
                     float bt = e->evisBloodTimer[0] * 2.5f + b * 0.2f;
@@ -106,7 +106,7 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             DrawCube((Vector3){0, 0.1f, -0.38f}, 0.55f * fade, 0.8f * fade, 0.25f * fade, backpackColor);
             rlPopMatrix();
             // Massive blood gushing from torso — sprays from both ends
-            if (t < 4.0f) {
+            if (t < 6.0f) {
                 for (int s = 0; s < 10; s++) {
                     float sa = (float)s * 0.63f + t * 6.0f;
                     float sr = 0.15f + sinf(t * 8.0f + s) * 0.1f;
@@ -136,7 +136,7 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             DrawCube((Vector3){0, 0.3f, 0}, 0.04f, 0.06f, 0.04f, boneCol); // bone stub
             rlPopMatrix();
             // Arterial spray from shoulder — pulsing jets
-            if (t < 3.5f) {
+            if (t < 5.5f) {
                 float pulse = sinf(t * 10.0f + ai * 2.0f);
                 for (int b = 0; b < 6; b++) {
                     float bt = e->evisBloodTimer[ai] * 2.0f + b * 0.18f;
@@ -168,7 +168,7 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             DrawCube((Vector3){0, 0.26f, 0}, 0.05f, 0.08f, 0.05f, boneCol); // femur stub
             rlPopMatrix();
             // Massive blood fountain from hip
-            if (t < 3.0f) {
+            if (t < 5.0f) {
                 float pulse = sinf(t * 9.0f + li * 1.5f);
                 for (int b = 0; b < 7; b++) {
                     float bt = e->evisBloodTimer[li] * 2.2f + b * 0.15f;
@@ -219,8 +219,8 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
         }
 
         // === PERSISTENT BLOOD MIST CLOUD ===
-        if (t < 3.5f) {
-            float mistFade = (t < 1.0f) ? t : (t < 2.5f) ? 1.0f : 1.0f - (t - 2.5f);
+        if (t < 5.0f) {
+            float mistFade = (t < 1.0f) ? t : (t < 3.5f) ? 1.0f : 1.0f - (t - 3.5f) / 1.5f;
             for (int m = 0; m < 14; m++) {
                 float ma = (float)m * 0.449f + t * 1.5f;
                 float mr = 0.5f + t * 0.8f + sinf(ma * 3.0f) * 0.3f;
@@ -232,7 +232,7 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
         }
 
         // Bone + meat fragments
-        if (t < 3.0f) {
+        if (t < 4.0f) {
             for (int b = 0; b < 12; b++) {
                 float ba = (float)b * 0.55f + t * 4.0f;
                 float br = t * 2.5f + (float)b * 0.25f;
@@ -506,40 +506,82 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     // Death particles
     if (e->state == ENEMY_DYING) {
         if (e->deathStyle == 0) {
+            float elapsed = 10.0f - e->deathTimer;
+            // Suit breach point — deterministic per enemy
             int limbSeed = (int)((size_t)e % 4);
             Vector3 leakOff = {0, 0, 0};
+            Vector3 jetDir = {0, 1, 0}; // direction gas shoots
             switch (limbSeed) {
-                case 0: leakOff = (Vector3){0, 1.1f, 0}; break;
-                case 1: leakOff = (Vector3){0.5f, 0.3f, 0.1f}; break;
-                case 2: leakOff = (Vector3){-0.2f, -0.9f, 0}; break;
-                case 3: leakOff = (Vector3){0, 0.1f, -0.4f}; break;
+                case 0: leakOff = (Vector3){0, 1.1f, 0}; jetDir = (Vector3){0.2f, 1, 0.1f}; break;
+                case 1: leakOff = (Vector3){0.5f, 0.3f, 0.1f}; jetDir = (Vector3){1, 0.3f, 0.2f}; break;
+                case 2: leakOff = (Vector3){-0.2f, -0.5f, 0}; jetDir = (Vector3){-0.5f, -0.3f, 0.8f}; break;
+                case 3: leakOff = (Vector3){0, 0.1f, -0.4f}; jetDir = (Vector3){0.1f, 0.5f, -1}; break;
             }
-            for (int p = 0; p < 10; p++) {
-                float pt = GetTime() * 8.0f + (float)p * 1.2f + e->deathAngle * 0.1f;
-                float spread = (float)p * 0.18f + 0.1f;
-                float px = pos.x + leakOff.x + cosf(pt) * spread;
-                float py = pos.y + leakOff.y + sinf(pt * 0.7f) * 0.3f + (float)p * 0.15f;
-                float pz = pos.z + leakOff.z + sinf(pt) * spread;
-                DrawSphereEx((Vector3){px, py, pz}, 0.05f + (float)p * 0.025f, 3, 3,
-                    (Color){220, 220, 220, (unsigned char)(180 - p * 15)});
+            // Pressurized air jet — high-velocity gas stream from suit breach
+            float pressure = (elapsed < 6.0f) ? 1.0f - elapsed / 6.0f : 0.0f;
+            if (pressure > 0) {
+                for (int p = 0; p < 14; p++) {
+                    float pt = (float)p * 0.25f + elapsed * 12.0f;
+                    float life = fmodf(pt, 3.5f) / 3.5f; // 0→1 particle lifecycle
+                    float speed = 1.5f + life * 3.0f;
+                    float jitter = sinf(pt * 7.3f) * 0.15f * pressure;
+                    float px = pos.x + leakOff.x + jetDir.x * speed * life + jitter;
+                    float py = pos.y + leakOff.y + jetDir.y * speed * life + cosf(pt * 5.1f) * 0.1f;
+                    float pz = pos.z + leakOff.z + jetDir.z * speed * life + sinf(pt * 6.7f) * 0.1f;
+                    float sz = (0.04f + life * 0.12f) * pressure;
+                    unsigned char alpha = (unsigned char)((1.0f - life) * 200 * pressure);
+                    DrawSphereEx((Vector3){px, py, pz}, sz, 3, 3,
+                        (Color){230, 235, 240, alpha});
+                }
+                // Inner bright core at breach point
+                DrawSphereEx((Vector3){pos.x + leakOff.x, pos.y + leakOff.y, pos.z + leakOff.z},
+                    0.12f * pressure, 4, 4, (Color){255, 255, 255, (unsigned char)(180 * pressure)});
             }
-            for (int b = 0; b < 8; b++) {
-                float bt = GetTime() * 6.0f + (float)b * 2.0f + e->deathAngle * 0.15f;
-                float bspread = (float)b * 0.12f + 0.05f;
-                DrawSphereEx((Vector3){
-                    pos.x + leakOff.x + cosf(bt+1)*bspread,
-                    pos.y + leakOff.y - (float)b * 0.1f,
-                    pos.z + leakOff.z + sinf(bt+1)*bspread},
-                    0.04f, 3, 3, (Color){180, 20, 20, (unsigned char)(200 - b * 20)});
+            // Blood spurting from breach — pulsing arterial jets
+            float bloodFade = (elapsed < 8.0f) ? 1.0f : 1.0f - (elapsed - 8.0f) / 2.0f;
+            if (bloodFade < 0) bloodFade = 0;
+            if (bloodFade > 0) {
+                float pulse = sinf(elapsed * 10.0f) * 0.5f + 0.5f; // heartbeat pulse
+                for (int b = 0; b < 10; b++) {
+                    float bt = (float)b * 0.35f + elapsed * 5.0f;
+                    float life = fmodf(bt, 2.5f) / 2.5f;
+                    float spurt = (0.2f + pulse * 0.3f) * bloodFade;
+                    float grav = life * life * 1.2f; // blood arcs down
+                    Vector3 bp = {
+                        pos.x + leakOff.x + sinf(bt * 3.0f) * spurt + jetDir.x * life * 0.5f,
+                        pos.y + leakOff.y + life * 0.4f * spurt - grav,
+                        pos.z + leakOff.z + cosf(bt * 2.5f) * spurt + jetDir.z * life * 0.5f
+                    };
+                    // Clamp blood to terrain
+                    float bGH = WorldGetHeight(bp.x, bp.z) + 0.08f;
+                    if (bp.y < bGH) bp.y = bGH;
+                    float sz = 0.04f + (1.0f - life) * 0.04f;
+                    DrawSphereEx(bp, sz * bloodFade, 3, 3,
+                        (b % 3 == 0) ? (Color){220, 20, 8, (unsigned char)(200 * bloodFade)} :
+                                       (Color){160, 10, 5, (unsigned char)(180 * bloodFade)});
+                }
+                // Blood drips falling to ground
+                for (int d = 0; d < 6; d++) {
+                    float dt2 = elapsed * 2.0f + (float)d * 1.1f;
+                    float dlife = fmodf(dt2, 2.0f) / 2.0f;
+                    float dx = pos.x + leakOff.x + sinf(dt2 * 1.5f) * 0.2f;
+                    float dz = pos.z + leakOff.z + cosf(dt2 * 1.3f) * 0.2f;
+                    float dy = pos.y + leakOff.y - dlife * 2.0f;
+                    float dGH = WorldGetHeight(dx, dz) + 0.06f;
+                    if (dy < dGH) dy = dGH;
+                    DrawSphereEx((Vector3){dx, dy, dz}, 0.03f * bloodFade, 3, 3,
+                        (Color){140, 8, 4, (unsigned char)(160 * bloodFade)});
+                }
             }
         } else {
-            float poolTime = 4.0f - e->deathTimer;
-            float poolR = 0.3f + poolTime * 0.4f;
-            if (poolR > 2.5f) poolR = 2.5f;
+            float elapsed = 12.0f - e->deathTimer;
+            float poolTime = elapsed - 0.5f; // pool starts after 0.5s
+            if (poolTime < 0) poolTime = 0;
+            float poolR = 0.3f + poolTime * 0.25f;
+            if (poolR > 3.5f) poolR = 3.5f;
 
             // Blood pool as terrain-conforming disc mesh
-            // 8 rim vertices + center = 8 triangles, each vertex at terrain height
-            int segs = 8;
+            int segs = 10;
             float cx = pos.x, cz = pos.z;
             float cH = WorldGetHeight(cx, cz) + 0.06f;
 
@@ -555,7 +597,7 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
                 float z1 = cz + sinf(a1) * poolR;
                 float h1 = WorldGetHeight(x1, z1) + 0.06f;
 
-                // Outer dark triangle
+                // Outer dark blood
                 DrawTriangle3D(
                     (Vector3){cx, cH, cz},
                     (Vector3){x1, h1, z1},
@@ -577,14 +619,46 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
                     (Color){160, 15, 10, 220});
             }
 
+            // Blood dripping from body wounds onto terrain
+            if (elapsed < 8.0f) {
+                float dripFade = (elapsed < 6.0f) ? 1.0f : 1.0f - (elapsed - 6.0f) / 2.0f;
+                for (int d = 0; d < 5; d++) {
+                    float dt2 = elapsed * 3.0f + (float)d * 1.3f;
+                    float dlife = fmodf(dt2, 1.5f) / 1.5f;
+                    float dx = cx + sinf(dt2 * 0.7f) * 0.3f;
+                    float dz = cz + cosf(dt2 * 0.9f) * 0.3f;
+                    float dy = pos.y + 0.3f - dlife * (pos.y - cH + 0.5f);
+                    float dGH = WorldGetHeight(dx, dz) + 0.08f;
+                    if (dy < dGH) dy = dGH;
+                    DrawSphereEx((Vector3){dx, dy, dz}, 0.03f * dripFade, 3, 3,
+                        (Color){180, 12, 6, (unsigned char)(200 * dripFade)});
+                }
+            }
+
             // Blood bubbles on terrain surface
-            for (int b = 0; b < 3; b++) {
-                float bt = GetTime() * 3.0f + (float)b * 2.1f;
-                float bx = cx + cosf(bt) * poolR * 0.3f;
-                float bz = cz + sinf(bt) * poolR * 0.3f;
-                float bH = WorldGetHeight(bx, bz) + 0.15f;
-                DrawSphereEx((Vector3){bx, bH + sinf(bt*2)*0.05f, bz},
-                    0.03f, 3, 3, (Color){160, 15, 10, 160});
+            for (int b = 0; b < 4; b++) {
+                float bt = GetTime() * 3.0f + (float)b * 1.6f;
+                float bx = cx + cosf(bt) * poolR * 0.35f;
+                float bz = cz + sinf(bt) * poolR * 0.35f;
+                float bH = WorldGetHeight(bx, bz) + 0.12f;
+                float bubble = sinf(bt * 2.0f) * 0.03f;
+                DrawSphereEx((Vector3){bx, bH + bubble, bz},
+                    0.035f, 3, 3, (Color){160, 15, 10, 160});
+            }
+
+            // Air leaking from suit — hissing gas wisps near body
+            if (elapsed < 5.0f) {
+                float gasFade = 1.0f - elapsed / 5.0f;
+                for (int g = 0; g < 6; g++) {
+                    float gt = elapsed * 6.0f + (float)g * 1.05f;
+                    float glife = fmodf(gt, 2.0f) / 2.0f;
+                    float gx = cx + sinf(gt * 2.0f) * 0.2f;
+                    float gz = cz + cosf(gt * 1.7f) * 0.2f;
+                    float gy = pos.y + 0.2f + glife * 1.5f;
+                    float gsz = (0.05f + glife * 0.15f) * gasFade;
+                    DrawSphereEx((Vector3){gx, gy, gz}, gsz, 3, 3,
+                        (Color){220, 225, 230, (unsigned char)((1.0f - glife) * 120 * gasFade)});
+                }
             }
         }
     }
