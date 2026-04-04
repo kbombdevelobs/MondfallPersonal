@@ -533,19 +533,57 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
                     0.04f, 3, 3, (Color){180, 20, 20, (unsigned char)(200 - b * 20)});
             }
         } else {
-            float gH = WorldGetHeight(pos.x, pos.z) + 0.05f;
             float poolTime = 4.0f - e->deathTimer;
             float poolR = 0.3f + poolTime * 0.4f;
             if (poolR > 2.5f) poolR = 2.5f;
-            DrawCylinder((Vector3){pos.x, gH, pos.z}, poolR, poolR * 1.1f, 0.02f, 8,
-                (Color){120, 8, 5, 200});
-            DrawCylinder((Vector3){pos.x, gH + 0.01f, pos.z}, poolR * 0.6f, poolR * 0.7f, 0.02f, 6,
-                (Color){160, 15, 10, 220});
+
+            // Blood pool as terrain-conforming disc mesh
+            // 8 rim vertices + center = 8 triangles, each vertex at terrain height
+            int segs = 8;
+            float cx = pos.x, cz = pos.z;
+            float cH = WorldGetHeight(cx, cz) + 0.06f;
+
+            for (int s = 0; s < segs; s++) {
+                float a0 = (float)s / segs * 2.0f * PI;
+                float a1 = (float)(s + 1) / segs * 2.0f * PI;
+
+                float x0 = cx + cosf(a0) * poolR;
+                float z0 = cz + sinf(a0) * poolR;
+                float h0 = WorldGetHeight(x0, z0) + 0.06f;
+
+                float x1 = cx + cosf(a1) * poolR;
+                float z1 = cz + sinf(a1) * poolR;
+                float h1 = WorldGetHeight(x1, z1) + 0.06f;
+
+                // Outer dark triangle
+                DrawTriangle3D(
+                    (Vector3){cx, cH, cz},
+                    (Vector3){x1, h1, z1},
+                    (Vector3){x0, h0, z0},
+                    (Color){120, 8, 5, 200});
+
+                // Inner brighter layer (60% radius)
+                float ix0 = cx + cosf(a0) * poolR * 0.6f;
+                float iz0 = cz + sinf(a0) * poolR * 0.6f;
+                float ih0 = WorldGetHeight(ix0, iz0) + 0.07f;
+                float ix1 = cx + cosf(a1) * poolR * 0.6f;
+                float iz1 = cz + sinf(a1) * poolR * 0.6f;
+                float ih1 = WorldGetHeight(ix1, iz1) + 0.07f;
+
+                DrawTriangle3D(
+                    (Vector3){cx, cH + 0.01f, cz},
+                    (Vector3){ix1, ih1, iz1},
+                    (Vector3){ix0, ih0, iz0},
+                    (Color){160, 15, 10, 220});
+            }
+
+            // Blood bubbles on terrain surface
             for (int b = 0; b < 3; b++) {
                 float bt = GetTime() * 3.0f + (float)b * 2.1f;
-                float bx = pos.x + cosf(bt) * poolR * 0.3f;
-                float bz = pos.z + sinf(bt) * poolR * 0.3f;
-                DrawSphereEx((Vector3){bx, gH + 0.1f + sinf(bt*2)*0.05f, bz},
+                float bx = cx + cosf(bt) * poolR * 0.3f;
+                float bz = cz + sinf(bt) * poolR * 0.3f;
+                float bH = WorldGetHeight(bx, bz) + 0.15f;
+                DrawSphereEx((Vector3){bx, bH + sinf(bt*2)*0.05f, bz},
                     0.03f, 3, 3, (Color){160, 15, 10, 160});
             }
         }

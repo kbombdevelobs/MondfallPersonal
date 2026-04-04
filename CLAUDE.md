@@ -127,6 +127,7 @@ Mondfall/
 - Soviet: aggressive rushers, wide spread, circle-strafe close
 - American: tactical, seek cover behind rocks, maintain distance, retreat when hurt
 - Four death types: ragdoll blowout (60%), crumple + blood pool (40%), vaporize (beam only), eviscerate (jackhammer only)
+- Blood pools are terrain-conforming triangle fan meshes — each vertex placed at `WorldGetHeight`, draping over slopes and craters
 - Vaporize sequence: jerk → freeze → optional swell/pop (15%) → disintegrate
 - Eviscerate sequence: limbs separate with physics (head/torso/arms/legs fly apart), blood spurts from stumps, bone fragments, blood pool forms under torso, enemy drops weapon
 
