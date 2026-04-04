@@ -4,12 +4,14 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "config.h"
+#include "enemy_components.h"
 
-typedef enum { ENEMY_SOVIET, ENEMY_AMERICAN } EnemyType;
+// Legacy EnemyState — used by Enemy struct for draw code compatibility
 typedef enum { ENEMY_ALIVE, ENEMY_DYING, ENEMY_VAPORIZING, ENEMY_EVISCERATING, ENEMY_DEAD } EnemyState;
-typedef enum { ANIM_IDLE, ANIM_WALK, ANIM_SHOOT, ANIM_HIT, ANIM_DEATH } EnemyAnimState;
-typedef enum { AI_ADVANCE, AI_STRAFE, AI_SHOOT, AI_DODGE, AI_RETREAT } AIBehavior;
 
+// Legacy Enemy struct — kept for DrawAstronautModel compatibility
+// The ECS components are the canonical data source; this struct is used
+// only as a temporary fill target for rendering.
 typedef struct {
     Vector3 position;
     Vector3 velocity;
@@ -26,27 +28,28 @@ typedef struct {
     float behaviorTimer, burstShots, burstCooldown, preferredDist;
     float vertVel;
     float jumpTimer;
-    // Ragdoll death
-    float spinX, spinY, spinZ;   // angular velocity (degrees/sec)
-    float ragdollVelX, ragdollVelZ; // lateral launch velocity
-    float ragdollVelY;           // vertical launch
-    // Vaporize
+    float spinX, spinY, spinZ;
+    float ragdollVelX, ragdollVelZ;
+    float ragdollVelY;
     float vaporizeTimer;
     float vaporizeScale;
-    // Eviscerate (jackhammer)
     float evisTimer;
-    Vector3 evisDir;           // direction of jackhammer lunge
-    float evisLimbSpread;      // how far limbs have flown
-    Vector3 evisLimbVel[6];    // velocity for head, torso, 2 arms, 2 legs
-    Vector3 evisLimbPos[6];    // offset positions for each piece
-    float evisBloodTimer[6];   // per-limb blood spurt timer
-    // Death style: 0 = ragdoll blowout, 1 = crumple + blood pool
+    Vector3 evisDir;
+    float evisLimbSpread;
+    Vector3 evisLimbVel[6];
+    Vector3 evisLimbPos[6];
+    float evisBloodTimer[6];
     int deathStyle;
 } Enemy;
 
+// Legacy EnemyManager struct — kept for DrawAstronautModel compatibility
+// Only the model fields are used (mdlVisor, mdlArm, mdlBoot).
 typedef struct {
-    Enemy enemies[MAX_ENEMIES];
+    Enemy *enemies;
+    int capacity;
     int count;
+    bool testMode;
+    int aiFrameCounter;
     float spawnTimer, spawnRate;
     Model mdlVisor, mdlArm, mdlBoot;
     Sound sndSovietFire, sndAmericanFire;
@@ -56,23 +59,11 @@ typedef struct {
     Sound sndAmericanDeath[2];
     int americanDeathCount;
     int americanDeathPlays;
-    float radioTransmissionTimer; // > 0 means show "TRANSMISSION" on HUD
+    float radioTransmissionTimer;
     bool modelsLoaded;
 } EnemyManager;
 
-void EnemyManagerInit(EnemyManager *em);
-void EnemyManagerUnload(EnemyManager *em);
-void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt);
-void EnemyManagerDraw(EnemyManager *em);
-void EnemySpawnAroundPlayer(EnemyManager *em, EnemyType type, Vector3 playerPos, float spawnRadius);
-void EnemySpawnAt(EnemyManager *em, EnemyType type, Vector3 pos);
-int EnemyCheckHit(EnemyManager *em, Ray ray, float maxDist, float *hitDist);
-int EnemyCheckSphereHit(EnemyManager *em, Vector3 center, float radius);
-void EnemyDamage(EnemyManager *em, int index, float damage);
-void EnemyVaporize(EnemyManager *em, int index);
-void EnemyEviscerate(EnemyManager *em, int index, Vector3 hitDir);
-int EnemyCountAlive(EnemyManager *em);
-float EnemyCheckPlayerDamage(EnemyManager *em, Vector3 playerPos, float dt);
-void EnemyManagerSetSFXVolume(EnemyManager *em, float vol);
+// Draw functions (still take legacy struct pointers)
+#include "enemy_draw.h"
 
 #endif

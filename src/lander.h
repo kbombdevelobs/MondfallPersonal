@@ -4,7 +4,8 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "config.h"
-#include "enemy/enemy.h"
+#include "enemy/enemy_components.h"
+#include "flecs.h"
 
 typedef enum {
     LANDER_INACTIVE,
@@ -39,7 +40,7 @@ typedef struct {
 void LanderManagerInit(LanderManager *lm);
 void LanderManagerUnload(LanderManager *lm);
 void LanderSpawnWave(LanderManager *lm, Vector3 playerPos, int enemyCount, int wave);
-void LanderManagerUpdate(LanderManager *lm, EnemyManager *em, float dt);
+void LanderManagerUpdate(LanderManager *lm, ecs_world_t *ecsWorld, float dt);
 void LanderManagerDraw(LanderManager *lm, Vector3 playerPos);
 float LanderGetScreenShake(LanderManager *lm);
 bool LanderWaveActive(LanderManager *lm);

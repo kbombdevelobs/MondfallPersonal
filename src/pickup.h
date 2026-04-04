@@ -4,7 +4,7 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "config.h"
-#include "enemy/enemy.h"
+#include "enemy/enemy_components.h"
 
 typedef struct {
     Vector3 position;

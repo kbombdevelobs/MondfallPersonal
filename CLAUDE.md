@@ -1,3 +1,18 @@
+---
+title: "Mondfall — Nazis on the Moon FPS"
+status: Active
+owner_area: Core
+created: 2026-03-15
+last_updated: 2026-04-04
+last_reviewed: 2026-04-04
+parent_doc: null
+related_docs:
+  - Index.md
+  - docs_manifest.yaml
+  - docs/ARCHITECTURE.md
+  - docs/documentation-standards.md
+---
+
 # Mondfall — Nazis on the Moon FPS
 
 ## What This Is
@@ -6,9 +21,17 @@ A raylib-based first-person shooter set on the Moon. You play as a Nazi moon def
 ## Tech Stack
 - **Language:** C (C99)
 - **Framework:** raylib 5.5
+- **ECS:** Flecs 4.1.5 (vendored at `vendor/flecs/`)
 - **Platform:** macOS ARM64 (Apple Silicon)
 - **Build:** `make` (clang)
 - **Audio:** Procedurally generated (no audio files required except optional death sounds)
+
+## MANDATORY: All AI Work Goes Through Flecs
+**All enemy AI, NPC behavior, and entity management MUST use the Flecs ECS framework.** Do NOT create new manager structs with flat arrays for game entities. Instead:
+- Define components in `src/enemy/enemy_components.h`
+- Create systems in `src/enemy/enemy_systems.c`
+- Spawn entities via `src/enemy/enemy_spawn.c`
+- See `docs/FLECS.md` for the full architecture guide and how-to
 
 ## Quick Start
 ```bash
@@ -38,9 +61,9 @@ make clean
 **Any source file exceeding 500 lines MUST be split into smaller files in a subfolder.**
 - Create `src/<system>/` subfolder (e.g. `src/enemy/`, `src/weapon/`)
 - Split by concern: logic vs rendering vs AI vs sound
-- Add a `README.md` in each subfolder listing files, their purpose, key types, and key functions
+- Add a `CLAUDE.md` in each subfolder listing files, their purpose, key types, and key functions
 - Update all `#include` paths and the `Makefile`
-- Subfolder READMEs are the primary navigation aid for agents — keep them accurate
+- Subfolder CLAUDE.md files are the primary navigation aid for agents — keep them accurate
 
 ## Project Structure
 ```
@@ -50,22 +73,25 @@ Mondfall/
 │   ├── main.c          — Game loop, state machine, input, rendering pipeline
 │   ├── player.c/h      — FPS camera, WASD + mouse, moon gravity, jump, ground pound
 │   ├── weapon.c/h      — Weapon logic: init, update, fire, reload, switch, getters
-│   ├── weapon/          — Weapon rendering & sound (see src/weapon/README.md)
+│   ├── weapon/          — Weapon rendering & sound (see src/weapon/CLAUDE.md)
 │   │   ├── weapon_sound.h/c — Procedural sound generation (6 weapon sounds)
 │   │   ├── weapon_draw.h/c  — Viewmodels, beams, explosions, barrel positions
-│   │   └── README.md
-│   ├── combat.c/h      — Hit processing, damage application, weapon fire dispatch
-│   ├── enemy/           — Enemy system (see src/enemy/README.md)
-│   │   ├── enemy.h     — Types, state machine, API
-│   │   ├── enemy.c     — AI, spawning, hit detection, damage, death logic
-│   │   ├── enemy_draw.h — Draw API
-│   │   ├── enemy_draw.c — All enemy rendering (alive, dying, vaporizing, eviscerating)
-│   │   └── README.md   — System overview for agents
+│   │   └── CLAUDE.md
+│   ├── ecs_world.c/h   — Flecs ECS world wrapper (GameEcsInit/Fini/GetWorld)
+│   ├── combat_ecs.c/h  — Hit processing via Flecs queries, damage with entity IDs
+│   ├── enemy/           — Enemy ECS system (see docs/FLECS.md)
+│   │   ├── enemy_components.h/c — All ECS component structs + registration
+│   │   ├── enemy_systems.h/c   — Flecs AI/physics/death systems + damage functions
+│   │   ├── enemy_spawn.h/c     — Entity creation (EcsEnemySpawnAt, EcsEnemySpawnAroundPlayer)
+│   │   ├── enemy_draw_ecs.h/c  — ECS-based rendering with LOD + frustum culling
+│   │   ├── enemy.h     — Legacy Enemy/EnemyManager structs (used by draw code only)
+│   │   ├── enemy_draw.h/c — Astronaut model draw functions (DrawAstronautModel, LOD1, LOD2)
+│   │   └── CLAUDE.md   — System overview for agents
 │   ├── world.c/h       — Core chunk management, terrain mesh gen, craters, collision
-│   ├── world/           — World rendering & noise (see src/world/README.md)
+│   ├── world/           — World rendering & noise (see src/world/CLAUDE.md)
 │   │   ├── world_noise.h/c — Perlin gradient noise, ValueNoise, WorldGetHeight()
 │   │   ├── world_draw.h/c  — Sky rendering, chunk drawing, frustum culling
-│   │   └── README.md
+│   │   └── CLAUDE.md
 │   ├── structure/       — Moon base structures (see src/structure/README.md)
 │   │   ├── structure.h/c    — Structure manager, enter/exit teleport, resupply, collision
 │   │   ├── structure_draw.h/c — Exterior hab dome + interior room rendering
@@ -76,13 +102,14 @@ Mondfall/
 │   ├── audio.c/h       — Erika march music (synthesized from MIDI), radio static overlay
 │   ├── game.c/h        — Game state (menu/intro/settings/playing/paused/game over), wave management, settings, intro lore screen
 │   ├── sound_gen.c/h   — Procedural audio waveform generation utilities
-├── assets/
+├── resources/
 │   ├── crt.fs          — Main CRT post-processing fragment shader (GLSL 330)
 │   ├── hud.fs          — HUD visor curve fragment shader
+│   ├── intro.txt       — Intro lore text (directives: @STYLE, @PAUSE, @CLEAR)
+├── sounds/
 │   ├── march.wav       — Generated at runtime (Erika march)
 │   ├── soviet_death_sounds/  — Soviet faction radio death sounds (mp3)
 │   ├── american_death_sounds/ — American faction radio death sounds (mp3)
-│   ├── intro.txt       — Intro lore text (directives: @STYLE, @PAUSE, @CLEAR)
 ├── tests/
 │   └── test_game.c     — ~71 unit tests (no GPU required)
 ├── Makefile
@@ -93,9 +120,9 @@ Mondfall/
 
 ### Rendering Pipeline
 1. 3D scene renders to a 640x360 `RenderTexture2D` (low-res target)
-2. CRT shader (`crt.fs`) post-processes with: Gaussian scanlines, Trinitron phosphor mask, bloom, chromatic aberration, fishbowl distortion, film grain, breath fog, ghost reflection
+2. CRT shader (`resources/crt.fs`) post-processes with: Gaussian scanlines, Trinitron phosphor mask, bloom, chromatic aberration, fishbowl distortion, film grain, breath fog, ghost reflection
 3. Scaled up to window with nearest-neighbor filtering
-4. HUD renders to separate `RenderTexture2D`, curved via `hud.fs` visor shader
+4. HUD renders to separate `RenderTexture2D`, curved via `resources/hud.fs` visor shader
 5. HUD render texture recreated on window resize to keep elements positioned correctly
 6. Menu/pause/settings/game-over screens drawn at full window resolution with DPI-aware scaling
 
@@ -126,7 +153,10 @@ Mondfall/
 - Boulder collision checks Y-axis so players can jump over rocks
 - Horizon fog in CRT shader: subtle radial fade to black at screen edges
 
-### Enemy System (enemy.c)
+### Enemy System (Flecs ECS — see docs/FLECS.md)
+- **Architecture:** Flecs 4.1 Entity Component System — all enemies are entities with components
+- **Components:** EcTransform, EcVelocity, EcFaction, EcAlive, EcCombatStats, EcAIState, EcAnimation + sparse death components
+- **Systems:** SysAITargeting, SysAIBehavior, SysCollisionAvoidance, SysPhysics, SysAttack, SysRagdollDeath, SysVaporizeDeath, SysEviscerateDeath
 - Two factions: Soviet (red uniforms, gold helmets) and American (navy blue, silver helmets)
 - AI behaviors: `AI_ADVANCE`, `AI_STRAFE`, `AI_DODGE`, `AI_RETREAT`
 - Soviet: aggressive rushers, wide spread, circle-strafe close
@@ -214,16 +244,16 @@ Mondfall/
 ## Adding Content
 
 ### New Enemy Death Sounds
-Drop `.mp3` files in `assets/soviet_death_sounds/` or `assets/american_death_sounds/`. Update the file path arrays in `EnemyManagerInit()` in `enemy.c`. They auto-degrade to scratchy radio quality at load time.
+Drop `.mp3` files in `sounds/soviet_death_sounds/` or `sounds/american_death_sounds/`. Update the file path arrays in `EcsEnemyResourcesInit()` in `enemy_draw_ecs.c`. They auto-degrade to scratchy radio quality at load time.
 
 ### Modifying Weapons
 All weapon stats are in `WeaponInit()` in `weapon.c`. Viewmodels are drawn in `WeaponDrawFirst()`. Enemy weapon visuals are in `DrawAstronautModel()` in `enemy.c`.
 
 ### Modifying Terrain
-Height function is `WorldGetHeight()` in `src/world/world_noise.c` — uses domain-warped 4-octave Perlin gradient noise + rille channels + maria flattening. Adjust warp strength (0.15 multiplier), octave scales/amplitudes, or rille angles/widths for different terrain character. `WorldGetMareFactor()` controls biome regions — tune the cell noise scale (0.002) for larger/smaller maria. Crater profiles are in `CraterProfile()` in `src/world.c` — terracing and central peaks only activate for radius > 5. Sun direction vector is in `GenTerrainMesh()` — modify for different shadow angles. Rock sizes in `GenerateChunk()`. The CRT shader horizon fog is in `assets/crt.fs` (search for "HORIZON FOG").
+Height function is `WorldGetHeight()` in `src/world/world_noise.c` — uses domain-warped 4-octave Perlin gradient noise + rille channels + maria flattening. Adjust warp strength (0.15 multiplier), octave scales/amplitudes, or rille angles/widths for different terrain character. `WorldGetMareFactor()` controls biome regions — tune the cell noise scale (0.002) for larger/smaller maria. Crater profiles are in `CraterProfile()` in `src/world.c` — terracing and central peaks only activate for radius > 5. Sun direction vector is in `GenTerrainMesh()` — modify for different shadow angles. Rock sizes in `GenerateChunk()`. The CRT shader horizon fog is in `resources/crt.fs` (search for "HORIZON FOG").
 
 ### Modifying Intro Lore
-Edit `assets/intro.txt` — no recompile needed, it's loaded at startup. One display line per text line. Directives:
+Edit `resources/intro.txt` — no recompile needed, it's loaded at startup. One display line per text line. Directives:
 - `@STYLE TITLE` — next line renders large and red
 - `@STYLE DIM` — next line renders subdued gray
 - `@PAUSE 1.5` — extra delay (seconds) after the previous line finishes
@@ -232,4 +262,59 @@ Edit `assets/intro.txt` — no recompile needed, it's loaded at startup. One dis
 The intro plays once on first PLAY from main menu (tile-by-tile cipher reveal). SPACE/ENTER skips. I key on menu toggles show/skip. Restarts from game over bypass it.
 
 ### Shaders
-`assets/crt.fs` is the main post-processing shader — edit and reload (no recompile needed, it's loaded at runtime). `assets/hud.fs` curves the HUD overlay.
+`resources/crt.fs` is the main post-processing shader — edit and reload (no recompile needed, it's loaded at runtime). `resources/hud.fs` curves the HUD overlay.
+
+## Documentation System
+
+### Hierarchy
+
+```
+CLAUDE.md (this file)        ← whole-app architecture, doc rules, canonical root
+├── src/enemy/CLAUDE.md      ← enemy domain architecture
+├── src/weapon/CLAUDE.md     ← weapon domain architecture
+├── src/world/CLAUDE.md      ← world/terrain domain architecture
+├── docs/
+│   ├── ARCHITECTURE.md      ← system overview, dependency graph, design patterns
+│   ├── rendering-pipeline.md
+│   ├── combat-system.md
+│   ├── wave-system.md
+│   ├── ecs-integration.md
+│   ├── procedural-audio.md
+│   ├── testing.md
+│   ├── decisions/           ← ADRs for major architecture choices
+│   └── documentation-standards.md
+├── Index.md                 ← compact navigation map for all docs
+└── docs_manifest.yaml       ← machine-readable doc registry
+```
+
+### Canonical Source-of-Truth
+
+| Question | Canonical Source |
+|----------|-----------------|
+| Whole-app architecture | This file (`CLAUDE.md`) |
+| Domain architecture | Folder `CLAUDE.md` (`src/enemy/`, `src/weapon/`, `src/world/`) |
+| Feature behavior | Feature doc (`docs/*.md`) |
+| Why a decision was made | ADR (`docs/decisions/ADR-*.md`) |
+| Where to find docs | `Index.md` |
+| Machine-readable doc map | `docs_manifest.yaml` |
+
+### Documentation Rules
+
+1. Every major domain folder must have a `CLAUDE.md`
+2. Cross-cutting features get docs in `docs/`
+3. All docs must have YAML frontmatter with metadata (see `docs/documentation-standards.md`)
+4. As new folders or features are added, extend the documentation system accordingly
+
+### Maintenance Protocol
+
+On every pass that changes code, structure, or documentation, check whether updates are needed for:
+
+- **This file** — if app-level architecture, major folders, or doc rules change
+- **Folder CLAUDE.md** — if features are added/removed/moved within a domain
+- **Feature docs** — if feature scope, behavior, or interfaces change
+- **Index.md** — if any doc is added, deleted, renamed, or moved
+- **docs_manifest.yaml** — if any doc metadata, status, or relationships change
+- **Metadata** — `last_updated` on content changes, `last_reviewed` on review passes
+- **Cross-links** — if file paths, doc names, or ownership changes
+
+If a doc becomes obsolete: mark it `Deprecated` or delete it, remove all references, and update `Index.md` and `docs_manifest.yaml`.

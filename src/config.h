@@ -81,6 +81,14 @@
 
 // --- Enemy: Limits ---
 #define MAX_ENEMIES 50
+#define TEST_MAX_ENEMIES    200
+
+// --- Test Mode / LOD ---
+#define LOD1_DISTANCE       30.0f
+#define LOD2_DISTANCE       60.0f
+#define CULL_DISTANCE       120.0f
+#define AI_STAGGER_DIVISOR  4
+#define COLLISION_CAP       8
 
 // --- Enemy: Soviet ---
 #define SOVIET_HEALTH        80.0f

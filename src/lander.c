@@ -1,4 +1,5 @@
 #include "lander.h"
+#include "enemy/enemy_spawn.h"
 #include "world.h"
 #include "sound_gen.h"
 #include "rlgl.h"
@@ -110,7 +111,7 @@ void LanderSpawnWave(LanderManager *lm, Vector3 playerPos, int enemyCount, int w
     }
 }
 
-void LanderManagerUpdate(LanderManager *lm, EnemyManager *em, float dt) {
+void LanderManagerUpdate(LanderManager *lm, ecs_world_t *ecsWorld, float dt) {
     for (int i = 0; i < MAX_LANDERS; i++) {
         Lander *l = &lm->landers[i];
         if (l->state == LANDER_INACTIVE || l->state == LANDER_DONE) continue;
@@ -156,7 +157,7 @@ void LanderManagerUpdate(LanderManager *lm, EnemyManager *em, float dt) {
                         hatchPos.x += ((float)rand()/RAND_MAX - 0.5f) * 1.0f;
                         hatchPos.z += ((float)rand()/RAND_MAX - 0.5f) * 1.0f;
                         hatchPos.y = WorldGetHeight(hatchPos.x, hatchPos.z) + 1.2f;
-                        EnemySpawnAt(em, l->factionType, hatchPos);
+                        EcsEnemySpawnAt(ecsWorld, l->factionType, hatchPos);
                         l->enemiesDeployed++;
                     }
                 }

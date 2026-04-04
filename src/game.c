@@ -111,8 +111,8 @@ void GameDrawMenu(Game *game) {
     DrawText(subtitle, (sw - subW) / 2, sh / 5 + S(90), subSize, MENU_DIM);
 
     // Menu options
-    const char *options[] = { "PLAY", "SETTINGS", "QUIT" };
-    int optCount = 3;
+    const char *options[] = { "PLAY", "TEST MODE", "SETTINGS", "QUIT" };
+    int optCount = 4;
     int optSize = S(32);
     int startY = sh / 2;
     int spacing = S(50);
