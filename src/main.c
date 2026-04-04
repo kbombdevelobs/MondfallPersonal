@@ -57,6 +57,8 @@ int main(void) {
     PickupManagerInit(&pickups);
     StructureManager structures;
     memset(&structures, 0, sizeof(structures));
+    float rankKillTimer = 0;
+    int rankKillType = 0;
 
     GameInit(&game);
     PlayerInit(&player);
@@ -105,7 +107,8 @@ int main(void) {
                 .testMode = game.testMode,
                 .aiFrameCounter = 0,
                 .playerDamageAccum = 0,
-                .killCount = 0
+                .killCount = 0,
+                .rankKillType = 0
             });
 
             GameAudioInit(&audio);
@@ -281,6 +284,7 @@ int main(void) {
                     ctx->testMode = game.testMode;
                     ctx->playerDamageAccum = 0;
                     ctx->killCount = 0;
+                    ctx->rankKillType = 0;
                     ecs_singleton_modified(ecsWorld, EcGameContext);
                 }
 
@@ -355,11 +359,20 @@ int main(void) {
                         }
                     }
 
-                    // Collect kill count from ECS
+                    // Collect kill count and rank kill flash from ECS
                     {
                         const EcGameContext *ctx = ecs_singleton_get(ecsWorld, EcGameContext);
-                        if (ctx) game.killCount += ctx->killCount;
+                        if (ctx) {
+                            game.killCount += ctx->killCount;
+                            if (ctx->rankKillType > 0) {
+                                rankKillType = ctx->rankKillType;
+                                rankKillTimer = 2.0f;
+                            }
+                        }
                     }
+
+                    // Decay rank kill timer
+                    if (rankKillTimer > 0) rankKillTimer -= dt;
 
                     // Death check
                     if (!game.testMode && PlayerIsDead(&player)) {
@@ -528,6 +541,7 @@ int main(void) {
                 HudDrawPickup(&pickups, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawLanderArrows(&landers, player.camera, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawRadioTransmission(radioTimer, hudTarget.texture.width, hudTarget.texture.height);
+                HudDrawRankKill(rankKillTimer, rankKillType, hudTarget.texture.width, hudTarget.texture.height);
                 {
                     int resLeft = 0;
                     if (structures.insideIndex >= 0)

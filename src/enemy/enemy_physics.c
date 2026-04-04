@@ -115,6 +115,8 @@ static void SysAttack(ecs_iter_t *it) {
             if (anim[i].shootAnim < 0) anim[i].shootAnim = 0;
         }
 
+        // Fleeing units don't fire
+        if (ai[i].behavior == AI_FLEE) continue;
         if (dist >= cs[i].attackRange || ai[i].burstCooldown > 0) continue;
 
         if (ai[i].attackTimer >= cs[i].attackRate) {
@@ -129,6 +131,11 @@ static void SysAttack(ecs_iter_t *it) {
 
             float hitChance = 0.5f - (dist / cs[i].attackRange) * 0.3f;
             if (ai[i].behavior == AI_STRAFE) hitChance -= 0.1f;
+            // Morale accuracy bonus when near leader
+            const EcMorale *mor = ecs_get(it->world, it->entities[i], EcMorale);
+            if (mor && mor->leaderDist <= LEADERSHIP_RADIUS && mor->morale > 0.7f) {
+                hitChance += MORALE_ACCURACY_BONUS;
+            }
             if ((float)rand() / RAND_MAX < hitChance) {
                 if (ctxMut) ctxMut->playerDamageAccum += cs[i].damage;
             }

@@ -171,13 +171,17 @@ bool StructureInteriorCollision(StructureManager *sm, Vector3 pos, float radius)
     return false;
 }
 
-// Exterior collision — circular cylinder around each structure
+// Exterior collision — circular cylinder around each structure, bounded vertically
 bool StructureCheckCollision(StructureManager *sm, Vector3 pos, float radius) {
     // Collision radius = dome radius + airlock protrusion
     float collR = MOONBASE_EXTERIOR_RADIUS + 0.5f;
     for (int i = 0; i < sm->count; i++) {
         Structure *s = &sm->structures[i];
         if (!s->active) continue;
+        // Y-axis: skip if player feet are above dome top
+        float domeTop = s->worldPos.y + MOONBASE_COLLISION_HEIGHT;
+        float playerFeet = pos.y - PLAYER_HEIGHT;
+        if (playerFeet >= domeTop) continue;
         float dx = pos.x - s->worldPos.x;
         float dz = pos.z - s->worldPos.z;
         float dist2 = dx * dx + dz * dz;

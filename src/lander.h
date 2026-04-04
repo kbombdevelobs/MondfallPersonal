@@ -26,6 +26,9 @@ typedef struct {
     int enemiesTotal;
     EnemyType factionType;
     float awayDirX, awayDirZ; // direction away from player (for hatch)
+    int officersSpawned;       // officers spawned by this lander
+    int ncosSpawned;           // NCOs spawned by this lander
+    int wave;                  // wave number (for rank eligibility)
 } Lander;
 
 typedef struct {
@@ -35,6 +38,9 @@ typedef struct {
     Sound sndKlaxon;
     bool klaxonPlayed;
     bool soundLoaded;
+    int waveOfficersSpawned;  // wave-level officer count (guaranteed 1)
+    int waveNcosSpawned;      // wave-level NCO count (guaranteed 1)
+    int currentWave;          // current wave number
 } LanderManager;
 
 void LanderManagerInit(LanderManager *lm);

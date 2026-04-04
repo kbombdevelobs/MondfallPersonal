@@ -14,5 +14,6 @@ void HudDrawPickup(PickupManager *pm, int sw, int sh);
 void HudDrawLanderArrows(LanderManager *lm, Camera3D camera, int sw, int sh);
 void HudDrawRadioTransmission(float timer, int sw, int sh);
 void HudDrawStructurePrompt(StructurePrompt prompt, int resuppliesLeft, float emptyTimer, int sw, int sh);
+void HudDrawRankKill(float timer, int rankType, int sw, int sh);
 
 #endif

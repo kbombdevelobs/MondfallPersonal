@@ -53,7 +53,7 @@ make clean
 
 ## Testing Rules
 - **Always run `make test` before committing.** All tests must pass.
-- Tests are in `tests/test_game.c` — ~35 tests covering config sanity, player physics, weapon logic, pickup system, enemy hit detection, world height, and game state.
+- Tests are in `tests/test_game.c` — ~143 tests covering config sanity, player physics, weapon logic, pickup system, enemy hit detection, world height, game state, ECS lifecycle, collision Y-axis, rank system, and morale system.
 - Tests run without GPU/window — they exercise pure game logic only.
 - When adding new gameplay features, add corresponding tests.
 
@@ -85,7 +85,8 @@ Mondfall/
 │   │   ├── enemy_ai.h/c        — AI systems: targeting, behavior, collision avoidance
 │   │   ├── enemy_physics.h/c   — Physics + attack systems
 │   │   ├── enemy_death_systems.h/c — Death systems: ragdoll, vaporize, eviscerate, radio timer
-│   │   ├── enemy_spawn.h/c     — Entity creation (EcsEnemySpawnAt, EcsEnemySpawnAroundPlayer)
+│   │   ├── enemy_spawn.h/c     — Entity creation (EcsEnemySpawnAt, EcsEnemySpawnRanked)
+│   │   ├── enemy_morale.h/c   — Morale + leadership: leader tracking, flee/rally, morale hit on death
 │   │   ├── enemy_draw_ecs.h/c  — ECS-based rendering with LOD + frustum culling
 │   │   ├── enemy_draw.h/c      — Alive astronaut model + LOD1/LOD2
 │   │   ├── enemy_draw_death.h/c — Death rendering: eviscerate, vaporize, ragdoll
@@ -159,15 +160,18 @@ Mondfall/
 - Frustum culling in `WorldDraw()` — tests all 4 chunk corners, only culls chunks fully behind camera
 - Vertex-displaced meshes with world-space UVs and vertex colors for seamless chunks
 - Sphere-cluster boulders with LOD (detail reduces with distance)
-- Boulder collision checks Y-axis so players can jump over rocks
+- Boulder collision checks Y-axis — player feet must be below rock top for XZ collision to trigger
+- Structure collision checks Y-axis — player feet must be below dome top (MOONBASE_COLLISION_HEIGHT) for cylinder collision to trigger
 - Horizon fog in CRT shader: subtle radial fade to black at screen edges
 
 ### Enemy System (Flecs ECS — see docs/FLECS.md)
 - **Architecture:** Flecs 4.1 Entity Component System — all enemies are entities with components
-- **Components:** EcTransform, EcVelocity, EcFaction, EcAlive, EcCombatStats, EcAIState, EcAnimation + sparse death components
-- **Systems:** SysAITargeting, SysAIBehavior, SysCollisionAvoidance, SysPhysics, SysAttack, SysRagdollDeath, SysVaporizeDeath, SysEviscerateDeath
+- **Components:** EcTransform, EcVelocity, EcFaction, EcAlive, EcCombatStats, EcAIState, EcAnimation, EcRank, EcMorale + sparse death components
+- **Systems:** SysAITargeting, SysAIBehavior, SysCollisionAvoidance, SysPhysics, SysAttack, SysMoraleUpdate, SysMoraleCheck, SysRagdollDeath, SysVaporizeDeath, SysEviscerateDeath
+- **Rank system:** Three tiers — Trooper (base), NCO (1.8x HP, ushanka/baseball cap), Officer (0.7x HP, peaked cap, holds back). Every lander guarantees 1 officer + 1 NCO.
+- **Morale system:** Officer/NCO death causes nearby troops to lose morale → flee (3-6s) → rally back. Natural recovery prevents permanent routs. HUD flashes "OFFIZIER ELIMINIERT!" on officer kill.
 - Two factions: Soviet (red uniforms, gold helmets) and American (navy blue, silver helmets)
-- AI behaviors: `AI_ADVANCE`, `AI_STRAFE`, `AI_DODGE`, `AI_RETREAT`
+- AI behaviors: `AI_ADVANCE`, `AI_STRAFE`, `AI_DODGE`, `AI_RETREAT`, `AI_FLEE` (morale break)
 - Soviet: aggressive rushers, wide spread, circle-strafe close
 - American: tactical, seek cover behind rocks, maintain distance, retreat when hurt
 - Four death types: ragdoll blowout (60%), crumple + blood pool (40%), vaporize (beam only), eviscerate (jackhammer only)

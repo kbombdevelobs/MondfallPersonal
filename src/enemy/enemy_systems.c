@@ -2,6 +2,7 @@
 #include "enemy_ai.h"
 #include "enemy_physics.h"
 #include "enemy_death_systems.h"
+#include "enemy_morale.h"
 #include "enemy_components.h"
 #include "ecs_world.h"
 #include "config.h"
@@ -98,6 +99,14 @@ void EcsEnemyDamage(ecs_world_t *world, ecs_entity_t entity, float damage) {
 
         EcGameContext *ctx = ecs_singleton_ensure(world, EcGameContext);
         if (ctx) ctx->killCount++;
+
+        // Morale hit and HUD flash when officer/NCO dies
+        const EcRank *rank = ecs_get(world, entity, EcRank);
+        if (rank && rank->rank >= RANK_NCO) {
+            float hit = (rank->rank == RANK_OFFICER) ? MORALE_OFFICER_DEATH_HIT : MORALE_NCO_DEATH_HIT;
+            EcsApplyMoraleHit(world, entity, hit);
+            if (ctx) ctx->rankKillType = (rank->rank == RANK_OFFICER) ? 2 : 1;
+        }
     }
 }
 
@@ -124,6 +133,14 @@ void EcsEnemyVaporize(ecs_world_t *world, ecs_entity_t entity) {
 
     EcGameContext *ctx = ecs_singleton_ensure(world, EcGameContext);
     if (ctx) ctx->killCount++;
+
+    // Morale hit and HUD flash when officer/NCO dies
+    const EcRank *rank = ecs_get(world, entity, EcRank);
+    if (rank && rank->rank >= RANK_NCO) {
+        float hit = (rank->rank == RANK_OFFICER) ? MORALE_OFFICER_DEATH_HIT : MORALE_NCO_DEATH_HIT;
+        EcsApplyMoraleHit(world, entity, hit);
+        if (ctx) ctx->rankKillType = (rank->rank == RANK_OFFICER) ? 2 : 1;
+    }
 }
 
 void EcsEnemyEviscerate(ecs_world_t *world, ecs_entity_t entity, Vector3 hitDir) {
@@ -172,6 +189,14 @@ void EcsEnemyEviscerate(ecs_world_t *world, ecs_entity_t entity, Vector3 hitDir)
 
     EcGameContext *ctx = ecs_singleton_ensure(world, EcGameContext);
     if (ctx) ctx->killCount++;
+
+    // Morale hit and HUD flash when officer/NCO dies
+    const EcRank *rank = ecs_get(world, entity, EcRank);
+    if (rank && rank->rank >= RANK_NCO) {
+        float hit = (rank->rank == RANK_OFFICER) ? MORALE_OFFICER_DEATH_HIT : MORALE_NCO_DEATH_HIT;
+        EcsApplyMoraleHit(world, entity, hit);
+        if (ctx) ctx->rankKillType = (rank->rank == RANK_OFFICER) ? 2 : 1;
+    }
 }
 
 int EcsEnemyCountAlive(ecs_world_t *world) {
@@ -208,4 +233,5 @@ void EcsEnemySystemsRegister(ecs_world_t *world) {
     EcsEnemyAISystemsRegister(world);
     EcsEnemyPhysicsSystemsRegister(world);
     EcsEnemyDeathSystemsRegister(world);
+    EcsEnemyMoraleSystemsRegister(world);
 }

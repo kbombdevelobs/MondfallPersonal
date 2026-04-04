@@ -229,6 +229,22 @@ void HudDrawRadioTransmission(float timer, int sw, int sh) {
     DrawText(ftr, boxX + boxW / 2 - fw / 2, boxY + boxH - ffs - smPad, ffs, (Color){180, 180, 170, a});
 }
 
+void HudDrawRankKill(float timer, int rankType, int sw, int sh) {
+    if (timer <= 0 || rankType <= 0) return;
+    int cx = sw / 2;
+    float alpha = (timer > 0.5f) ? 1.0f : timer / 0.5f;
+    unsigned char a = (unsigned char)(alpha * 255);
+
+    const char *text = (rankType == 2) ? "OFFIZIER ELIMINIERT!" : "UNTEROFFIZIER ELIMINIERT!";
+    int fs = sh / 14;
+    int tw = MeasureText(text, fs);
+    int ty = sh / 3;
+
+    DrawRectangle(cx - tw / 2 - sh / 30, ty - sh / 60, tw + sh / 15, fs + sh / 30, (Color){0, 0, 0, (unsigned char)(alpha * 180)});
+    Color col = (rankType == 2) ? (Color){255, 215, 0, a} : (Color){255, 200, 80, a};
+    DrawText(text, cx - tw / 2, ty, fs, col);
+}
+
 void HudDrawStructurePrompt(StructurePrompt prompt, int resuppliesLeft, float emptyTimer, int sw, int sh) {
     int cx = sw / 2;
     int cy = sh / 2;

@@ -19,6 +19,7 @@
 #include "../src/world.h"
 #include "../src/world/world_noise.h"
 #include "../src/structure/structure.h"
+#include "../src/enemy/enemy_morale.h"
 
 // ---- Minimal test framework ----
 static int tests_run = 0;
@@ -347,6 +348,14 @@ static ecs_entity_t place_ecs_enemy(ecs_world_t *w, Vector3 pos, float health, E
     ecs_set(w, e, EcCombatStats, { .health = health, .maxHealth = health, .speed = 5, .damage = 7, .attackRange = 22, .attackRate = 0.15f, .preferredDist = 8 });
     ecs_set(w, e, EcAIState, { .behavior = AI_ADVANCE, .strafeDir = 1, .strafeTimer = 2, .dodgeCooldown = 3 });
     ecs_set(w, e, EcAnimation, { .animState = ANIM_IDLE });
+    ecs_set(w, e, EcRank, { .rank = RANK_TROOPER });
+    ecs_set(w, e, EcMorale, { .morale = 1.0f, .leader = 0, .leaderDist = 999.0f, .fleeTimer = 0, .prevBehavior = AI_ADVANCE });
+    return e;
+}
+
+static ecs_entity_t place_ecs_ranked_enemy(ecs_world_t *w, Vector3 pos, float health, EnemyType type, EnemyRank rank) {
+    ecs_entity_t e = place_ecs_enemy(w, pos, health, type);
+    ecs_set(w, e, EcRank, { .rank = rank });
     return e;
 }
 
@@ -1226,6 +1235,183 @@ TEST(test_structure_collision_blocks_enemy_radius) {
 // MAIN — run all tests
 // ============================================================================
 
+// ============================================================================
+// COLLISION Y-AXIS TESTS
+// ============================================================================
+
+TEST(test_rock_collision_blocks_at_ground) {
+    // A rock at ground level should block a player at ground level
+    World w;
+    memset(&w, 0, sizeof(w));
+    w.chunkCount = 1;
+    w.chunks[0].generated = true;
+    w.chunks[0].rockCount = 1;
+    w.chunks[0].rocks[0] = (Rock){ .position = {10, 2, 10}, .size = {3, 4, 3} };
+    // Player at Y=PLAYER_HEIGHT (feet at ground), XZ overlapping rock
+    bool hit = WorldCheckCollision(&w, (Vector3){10, PLAYER_HEIGHT, 10}, 0.4f);
+    ASSERT(hit);
+}
+
+TEST(test_rock_collision_passes_above) {
+    // Player above rock top should not collide
+    World w;
+    memset(&w, 0, sizeof(w));
+    w.chunkCount = 1;
+    w.chunks[0].generated = true;
+    w.chunks[0].rockCount = 1;
+    w.chunks[0].rocks[0] = (Rock){ .position = {10, 2, 10}, .size = {3, 4, 3} };
+    // Rock top = 2 + 4*0.5 = 4.0, player feet at Y - PLAYER_HEIGHT
+    // Player at Y = 4.0 + PLAYER_HEIGHT + 1.0 = well above rock
+    float aboveRock = 4.0f + PLAYER_HEIGHT + 1.0f;
+    bool hit = WorldCheckCollision(&w, (Vector3){10, aboveRock, 10}, 0.4f);
+    ASSERT(!hit);
+}
+
+TEST(test_structure_collision_blocks_ground_y) {
+    StructureManager sm;
+    memset(&sm, 0, sizeof(sm));
+    sm.count = 1;
+    sm.structures[0].active = true;
+    sm.structures[0].worldPos = (Vector3){20, 0, 20};
+    // Player at ground level, within dome radius
+    bool hit = StructureCheckCollision(&sm, (Vector3){20, PLAYER_HEIGHT, 20}, 0.4f);
+    ASSERT(hit);
+}
+
+TEST(test_structure_collision_passes_above_dome) {
+    StructureManager sm;
+    memset(&sm, 0, sizeof(sm));
+    sm.count = 1;
+    sm.structures[0].active = true;
+    sm.structures[0].worldPos = (Vector3){20, 0, 20};
+    // Player feet above dome top: worldPos.y + MOONBASE_COLLISION_HEIGHT = 6.0
+    float aboveDome = MOONBASE_COLLISION_HEIGHT + PLAYER_HEIGHT + 1.0f;
+    bool hit = StructureCheckCollision(&sm, (Vector3){20, aboveDome, 20}, 0.4f);
+    ASSERT(!hit);
+}
+
+// ============================================================================
+// RANK SYSTEM TESTS
+// ============================================================================
+
+TEST(test_rank_config_sanity) {
+    ASSERT_GT(NCO_HEALTH_MULT, 1.0f);           // NCOs are tougher than troopers
+    ASSERT_LT(OFFICER_HEALTH_MULT, 1.0f);        // Officers are frailer (command from rear)
+    ASSERT_GT(NCO_HEALTH_MULT, OFFICER_HEALTH_MULT); // NCOs tougher than officers
+    ASSERT_GT(OFFICER_DAMAGE_MULT, 1.0f);
+    ASSERT_GT(OFFICER_DIST_MULT, 1.0f);           // Officers hold back further
+    ASSERT_GT(MORALE_OFFICER_DEATH_HIT, MORALE_NCO_DEATH_HIT);
+    ASSERT_GT(MORALE_FLEE_DURATION_MAX, MORALE_FLEE_DURATION_MIN);
+    ASSERT_GT(MORALE_RALLY_THRESHOLD, MORALE_FLEE_THRESHOLD);
+    ASSERT(RANK_NCO_WAVE_START <= RANK_OFFICER_WAVE_START);
+}
+
+TEST(test_rank_component_set_on_spawn) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_ranked_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET, RANK_OFFICER);
+    const EcRank *rk = ecs_get(w, e, EcRank);
+    ASSERT(rk != NULL);
+    ASSERT(rk->rank == RANK_OFFICER);
+    ecs_fini(w);
+}
+
+TEST(test_morale_component_set_on_spawn) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    const EcMorale *mor = ecs_get(w, e, EcMorale);
+    ASSERT(mor != NULL);
+    ASSERT_FLOAT_EQ(mor->morale, 1.0f, 0.01f);
+    ecs_fini(w);
+}
+
+TEST(test_rank_trooper_default_stats) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, SOVIET_HEALTH, ENEMY_SOVIET);
+    const EcCombatStats *cs = ecs_get(w, e, EcCombatStats);
+    ASSERT(cs != NULL);
+    ASSERT_FLOAT_EQ(cs->health, SOVIET_HEALTH, 0.01f);
+    ecs_fini(w);
+}
+
+TEST(test_rank_nco_health_multiplied) {
+    ecs_world_t *w = make_test_ecs();
+    float ncoHealth = SOVIET_HEALTH * NCO_HEALTH_MULT;
+    ecs_entity_t e = place_ecs_ranked_enemy(w, (Vector3){0,0,0}, ncoHealth, ENEMY_SOVIET, RANK_NCO);
+    const EcCombatStats *cs = ecs_get(w, e, EcCombatStats);
+    ASSERT(cs != NULL);
+    ASSERT_FLOAT_EQ(cs->health, ncoHealth, 0.01f);
+    ASSERT_GT(cs->health, SOVIET_HEALTH);
+    ecs_fini(w);
+}
+
+TEST(test_rank_officer_health_less_than_trooper) {
+    ecs_world_t *w = make_test_ecs();
+    float offHealth = SOVIET_HEALTH * OFFICER_HEALTH_MULT;
+    ecs_entity_t e = place_ecs_ranked_enemy(w, (Vector3){0,0,0}, offHealth, ENEMY_SOVIET, RANK_OFFICER);
+    const EcCombatStats *cs = ecs_get(w, e, EcCombatStats);
+    ASSERT(cs != NULL);
+    ASSERT_FLOAT_EQ(cs->health, offHealth, 0.01f);
+    ASSERT_LT(cs->health, SOVIET_HEALTH);  // officer is frailer
+    ecs_fini(w);
+}
+
+TEST(test_spawn_ranked_backward_compat) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    const EcRank *rk = ecs_get(w, e, EcRank);
+    ASSERT(rk != NULL);
+    ASSERT(rk->rank == RANK_TROOPER);
+    ecs_fini(w);
+}
+
+TEST(test_officer_death_morale_hit) {
+    ecs_world_t *w = make_test_ecs();
+    // Place officer and nearby trooper of same faction
+    ecs_entity_t officer = place_ecs_ranked_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET, RANK_OFFICER);
+    ecs_entity_t trooper = place_ecs_enemy(w, (Vector3){5,0,0}, 80, ENEMY_SOVIET);
+    // Apply morale hit as if officer died
+    EcsApplyMoraleHit(w, officer, MORALE_OFFICER_DEATH_HIT);
+    const EcMorale *mor = ecs_get(w, trooper, EcMorale);
+    ASSERT(mor != NULL);
+    ASSERT_LT(mor->morale, 1.0f);
+    ASSERT_FLOAT_EQ(mor->morale, 1.0f - MORALE_OFFICER_DEATH_HIT, 0.01f);
+    ecs_fini(w);
+}
+
+TEST(test_nco_death_morale_hit_less) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t nco = place_ecs_ranked_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET, RANK_NCO);
+    ecs_entity_t trooper = place_ecs_enemy(w, (Vector3){5,0,0}, 80, ENEMY_SOVIET);
+    EcsApplyMoraleHit(w, nco, MORALE_NCO_DEATH_HIT);
+    const EcMorale *mor = ecs_get(w, trooper, EcMorale);
+    ASSERT(mor != NULL);
+    // NCO hit is less than officer hit
+    ASSERT_GT(mor->morale, 1.0f - MORALE_OFFICER_DEATH_HIT);
+    ASSERT_FLOAT_EQ(mor->morale, 1.0f - MORALE_NCO_DEATH_HIT, 0.01f);
+    ecs_fini(w);
+}
+
+TEST(test_morale_flee_threshold) {
+    // Verify config: flee threshold is positive and below rally threshold
+    ASSERT_GT(MORALE_FLEE_THRESHOLD, 0.0f);
+    ASSERT_LT(MORALE_FLEE_THRESHOLD, MORALE_RALLY_THRESHOLD);
+    ASSERT_LT(MORALE_RALLY_THRESHOLD, 1.0f);
+}
+
+TEST(test_morale_natural_recovery) {
+    // Verify natural recovery rate is positive and slower than rally rate
+    ASSERT_GT(MORALE_NATURAL_RECOVERY, 0.0f);
+    ASSERT_LT(MORALE_NATURAL_RECOVERY, MORALE_NCO_RALLY_RATE);
+}
+
+TEST(test_flee_forced_recovery_config) {
+    // After max flee duration, troops should be forced back
+    ASSERT_GT(MORALE_FLEE_DURATION_MAX, 0.0f);
+    ASSERT_GT(MORALE_FLEE_DURATION_MIN, 0.0f);
+    // Max > Min
+    ASSERT_GT(MORALE_FLEE_DURATION_MAX, MORALE_FLEE_DURATION_MIN);
+}
+
 int main(void) {
     printf("\n=== MONDFALL UNIT TESTS ===\n\n");
 
@@ -1397,6 +1583,26 @@ int main(void) {
     RUN(test_enemy_ground_offset_positive);
     RUN(test_ai_stagger_divisor_positive);
     RUN(test_structure_collision_blocks_enemy_radius);
+
+    printf("\n[Collision Y-Axis]\n");
+    RUN(test_rock_collision_blocks_at_ground);
+    RUN(test_rock_collision_passes_above);
+    RUN(test_structure_collision_blocks_ground_y);
+    RUN(test_structure_collision_passes_above_dome);
+
+    printf("\n[Rank System]\n");
+    RUN(test_rank_config_sanity);
+    RUN(test_rank_component_set_on_spawn);
+    RUN(test_morale_component_set_on_spawn);
+    RUN(test_rank_trooper_default_stats);
+    RUN(test_rank_nco_health_multiplied);
+    RUN(test_rank_officer_health_less_than_trooper);
+    RUN(test_spawn_ranked_backward_compat);
+    RUN(test_officer_death_morale_hit);
+    RUN(test_nco_death_morale_hit_less);
+    RUN(test_morale_flee_threshold);
+    RUN(test_morale_natural_recovery);
+    RUN(test_flee_forced_recovery_config);
 
     printf("\n=== RESULTS: %d/%d passed", tests_passed, tests_run);
     if (tests_failed > 0) printf(", %d FAILED", tests_failed);

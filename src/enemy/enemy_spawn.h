@@ -6,6 +6,7 @@
 #include "raylib.h"
 
 ecs_entity_t EcsEnemySpawnAt(ecs_world_t *world, EnemyType type, Vector3 pos);
+ecs_entity_t EcsEnemySpawnRanked(ecs_world_t *world, EnemyType type, EnemyRank rank, Vector3 pos);
 ecs_entity_t EcsEnemySpawnAroundPlayer(ecs_world_t *world, EnemyType type, Vector3 playerPos, float spawnRadius);
 
 #endif

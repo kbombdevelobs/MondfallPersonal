@@ -40,6 +40,7 @@ typedef struct {
     Vector3 evisLimbPos[6];
     float evisBloodTimer[6];
     int deathStyle;
+    EnemyRank rank;
 } Enemy;
 
 // Legacy EnemyManager struct — kept for DrawAstronautModel compatibility

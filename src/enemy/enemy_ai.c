@@ -85,6 +85,17 @@ static void SysAIBehavior(ecs_iter_t *it) {
             if (dist > LOD1_DISTANCE) doFullAI = false;
         }
 
+        // AI_FLEE: run directly away from player
+        if (ai[i].behavior == AI_FLEE) {
+            moveDir = Vector3Scale(fwd, -1.0f); // away from player
+            moving = true;
+            continue; // skip normal behavior logic
+        }
+
+        // Read rank for behavior modifications
+        const EcRank *rk = ecs_get(it->world, entity, EcRank);
+        EnemyRank rank = rk ? rk->rank : RANK_TROOPER;
+
         if (!doFullAI) {
             moveDir = fwd;
             moving = true;
@@ -125,6 +136,16 @@ static void SysAIBehavior(ecs_iter_t *it) {
             if (ai[i].dodgeTimer <= 0 && dist < 12 && (rand() % 80) < 2) {
                 moveDir = Vector3Scale(strafe, ai[i].strafeDir * 3.5f);
                 ai[i].dodgeTimer = ai[i].dodgeCooldown; ai[i].behavior = AI_DODGE;
+            }
+            // Soviet NCO: lead the charge closer
+            if (rank == RANK_NCO && dist > cs[i].preferredDist * 0.6f) {
+                moveDir = Vector3Add(fwd, Vector3Scale(strafe, ai[i].strafeDir * 0.3f));
+                moving = true;
+            }
+            // Soviet Officer: hold at preferred distance, dodge more
+            if (rank == RANK_OFFICER && dist < cs[i].preferredDist * 0.8f && dist > 4.0f) {
+                moveDir = Vector3Scale(strafe, ai[i].strafeDir * 1.2f);
+                moving = true; ai[i].behavior = AI_STRAFE;
             }
         } else {
             // AMERICAN: Tactical -- cover behind rocks, flank around structures
@@ -205,12 +226,31 @@ static void SysAIBehavior(ecs_iter_t *it) {
                 moveDir = Vector3Scale(strafe, ai[i].strafeDir * 3.0f);
                 ai[i].dodgeTimer = ai[i].dodgeCooldown * 0.4f; ai[i].behavior = AI_DODGE;
             }
+            // American NCO: tighter strafe, suppressive fire position
+            if (rank == RANK_NCO) {
+                if (dist > cs[i].preferredDist * 0.7f && dist < cs[i].preferredDist * 1.2f) {
+                    moveDir = Vector3Scale(strafe, ai[i].strafeDir * 0.6f);
+                    moving = true; ai[i].behavior = AI_STRAFE;
+                }
+            }
+            // American Officer: always seek cover, extended range engagement
+            if (rank == RANK_OFFICER && !foundCover) {
+                if (dist < cs[i].preferredDist * 1.5f) {
+                    moveDir = Vector3Add(Vector3Scale(fwd, -0.5f), Vector3Scale(strafe, ai[i].strafeDir));
+                    moving = true; ai[i].behavior = AI_RETREAT;
+                }
+            }
         }
 
         // Store movement direction and speed in velocity for physics to apply
         if (moving && Vector3Length(moveDir) > 0.01f) {
             moveDir = Vector3Normalize(moveDir);
             float spd = cs[i].speed * (ai[i].behavior == AI_DODGE ? 2.0f : 1.0f);
+            // Morale speed penalty for fleeing/broken units
+            const EcMorale *mor = ecs_get(it->world, entity, EcMorale);
+            if (mor && mor->morale < MORALE_FLEE_THRESHOLD) {
+                spd *= MORALE_SPEED_PENALTY;
+            }
             vel[i].velocity = (Vector3){ moveDir.x * spd, 0, moveDir.z * spd };
         } else {
             vel[i].velocity = (Vector3){0, 0, 0};
@@ -227,27 +267,35 @@ static void SysCollisionAvoidance(ecs_iter_t *it) {
 
     const EcGameContext *ctx = ecs_singleton_get(it->world, EcGameContext);
     int collisionCap = (ctx && ctx->testMode) ? COLLISION_CAP : 0;
+    float separationRadius = 3.5f;
 
     for (int i = 0; i < it->count; i++) {
-        // Check against other alive entities using the stored query
+        Vector3 pushAccum = {0, 0, 0};
+        int neighbors = 0;
+
         ecs_iter_t qit = ecs_query_iter(it->world, g_aiAliveQuery);
         int checked = 0;
-        bool pushed = false;
         while (ecs_query_next(&qit)) {
             EcTransform *otr = ecs_field(&qit, EcTransform, 0);
-            for (int j = 0; j < qit.count && !pushed; j++) {
+            for (int j = 0; j < qit.count; j++) {
                 if (it->entities[i] == qit.entities[j]) continue;
                 Vector3 away = Vector3Subtract(tr[i].position, otr[j].position);
                 away.y = 0;
                 float len = Vector3Length(away);
-                if (len < 2.5f && len > 0.1f) {
-                    Vector3 push = Vector3Scale(Vector3Normalize(away), 0.5f);
-                    vel[i].velocity = Vector3Add(vel[i].velocity, push);
-                    pushed = true;
+                if (len < separationRadius && len > 0.05f) {
+                    // Stronger push the closer they are
+                    float strength = (separationRadius - len) / separationRadius;
+                    Vector3 push = Vector3Scale(Vector3Normalize(away), strength * 4.0f);
+                    pushAccum = Vector3Add(pushAccum, push);
+                    neighbors++;
                 }
-                if (collisionCap > 0 && ++checked >= collisionCap) { pushed = true; break; }
+                if (collisionCap > 0 && ++checked >= collisionCap) break;
             }
-            if (pushed) { ecs_iter_fini(&qit); break; }
+            if (collisionCap > 0 && checked >= collisionCap) { ecs_iter_fini(&qit); break; }
+        }
+
+        if (neighbors > 0) {
+            vel[i].velocity = Vector3Add(vel[i].velocity, pushAccum);
         }
     }
 }
