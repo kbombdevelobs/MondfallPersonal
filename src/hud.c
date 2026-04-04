@@ -52,7 +52,7 @@ void HudDrawPickup(PickupManager *pm, int sw, int sh) {
 
     const char *name = (pm->pickupType == ENEMY_SOVIET) ? "KOSMOS-7 SMG" : "LIBERTY BLASTER";
     char txt[64];
-    snprintf(txt, sizeof(txt), "%s  [%d]  RMB", name, pm->pickupAmmo);
+    snprintf(txt, sizeof(txt), "%s  [%d]", name, pm->pickupAmmo);
     int fs = ph * 2 / 3;
     int tw = MeasureText(txt, fs);
     Color tc = (pm->pickupType == ENEMY_SOVIET) ? (Color){255, 120, 60, 255} : (Color){100, 180, 255, 255};

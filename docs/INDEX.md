@@ -15,9 +15,9 @@ Quick reference for every source file in the project.
 | File | Purpose |
 |------|---------|
 | `src/player.h/c` | FPS camera, WASD + mouse look, moon gravity, jump, ground pound, head bob |
-| `src/weapon.h/c` | 3 weapons (Mond-MP40, Raketenfaust beam, Jackhammer), ammo, reload, procedural viewmodels |
-| `src/combat.h/c` | Hit detection, damage resolution, kill counting, pickup drops — extracted from main.c |
-| `src/pickup.h/c` | Dropped enemy weapons (KOSMOS-7, LIBERTY BLASTER), grab, fire, first-person draw |
+| `src/weapon.h/c` | 3 weapons (Mond-MP40, Raketenfaust beam, Jackhammer), ammo, reload, procedural viewmodels, cached particle meshes |
+| `src/combat.h/c` | Hit detection, damage resolution, kill counting, pickup drops, per-weapon beam effects |
+| `src/pickup.h/c` | Dropped enemy weapons (KOSMOS-7 SMG, LIBERTY BLASTER), player-buffed stats, grab, fire, first-person draw |
 
 ## Enemies & Waves
 

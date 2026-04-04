@@ -12,7 +12,7 @@ typedef enum {
     WEAPON_COUNT
 } WeaponType;
 
-typedef struct { Vector3 start, end; Color color; float life; } BeamTrail;
+typedef struct { Vector3 start, end; Color color; float life; float maxLife; float width; } BeamTrail;
 
 typedef struct {
     Vector3 position;
@@ -54,6 +54,11 @@ typedef struct {
     Sound sndExplosion;
     Sound sndMp40Fire, sndRaketenFire, sndJackhammerHit, sndReload, sndEmpty;
     bool soundLoaded;
+    // Cached meshes (generated once, reused every frame)
+    Mesh meshSphere;
+    Mesh meshCube;
+    Material matDefault;
+    bool meshesLoaded;
 } Weapon;
 
 void WeaponInit(Weapon *w);
