@@ -70,7 +70,7 @@ Mondfall/
 │   ├── pickup.c/h      — Dropped enemy weapons (KOSMOS-7 SMG, LIBERTY BLASTER)
 │   ├── hud.c/h         — Health, ammo, wave counter, reload bar, ACHTUNG alert, radio transmission
 │   ├── audio.c/h       — Erika march music (synthesized from MIDI), radio static overlay
-│   ├── game.c/h        — Game state (menu/settings/playing/paused/game over), wave management, settings
+│   ├── game.c/h        — Game state (menu/intro/settings/playing/paused/game over), wave management, settings, intro lore screen
 │   ├── sound_gen.c/h   — Procedural audio waveform generation utilities
 ├── assets/
 │   ├── crt.fs          — Main CRT post-processing fragment shader (GLSL 330)
@@ -78,6 +78,7 @@ Mondfall/
 │   ├── march.wav       — Generated at runtime (Erika march)
 │   ├── soviet_death_sounds/  — Soviet faction radio death sounds (mp3)
 │   ├── american_death_sounds/ — American faction radio death sounds (mp3)
+│   ├── intro.txt       — Intro lore text (directives: @STYLE, @PAUSE, @CLEAR)
 ├── tests/
 │   └── test_game.c     — ~71 unit tests (no GPU required)
 ├── Makefile
@@ -99,7 +100,7 @@ Mondfall/
 - **Frustum culling:** `WorldDraw()` culls chunks behind camera or outside ~80 degree cone, cutting terrain draw calls roughly in half
 
 ### Game Loop (main.c)
-- State machine: `STATE_MENU` → `STATE_PLAYING` → `STATE_PAUSED` / `STATE_GAME_OVER` / `STATE_SETTINGS`
+- State machine: `STATE_MENU` → `STATE_INTRO` → `STATE_PLAYING` → `STATE_PAUSED` / `STATE_GAME_OVER` / `STATE_SETTINGS`
 - Assets load on first frame (loading screen shown first)
 - Wave system: `GameUpdate` triggers waves → `LanderSpawnWave` sends landers → landers deploy enemies
 
@@ -176,6 +177,7 @@ Mondfall/
 | ESC | Pause / Resume |
 | Enter | Select menu option |
 | Up/Down or W/S | Navigate menus |
+| I | Toggle intro skip (main menu only) |
 | Left/Right or A/D | Adjust settings |
 
 ## Key Constants
@@ -200,6 +202,15 @@ All weapon stats are in `WeaponInit()` in `weapon.c`. Viewmodels are drawn in `W
 
 ### Modifying Terrain
 Height function is `WorldGetHeight()` in `src/world/world_noise.c` — uses domain-warped 4-octave Perlin gradient noise + rille channels + maria flattening. Adjust warp strength (0.15 multiplier), octave scales/amplitudes, or rille angles/widths for different terrain character. `WorldGetMareFactor()` controls biome regions — tune the cell noise scale (0.002) for larger/smaller maria. Crater profiles are in `CraterProfile()` in `src/world.c` — terracing and central peaks only activate for radius > 5. Sun direction vector is in `GenTerrainMesh()` — modify for different shadow angles. Rock sizes in `GenerateChunk()`. The CRT shader horizon fog is in `assets/crt.fs` (search for "HORIZON FOG").
+
+### Modifying Intro Lore
+Edit `assets/intro.txt` — no recompile needed, it's loaded at startup. One display line per text line. Directives:
+- `@STYLE TITLE` — next line renders large and red
+- `@STYLE DIM` — next line renders subdued gray
+- `@PAUSE 1.5` — extra delay (seconds) after the previous line finishes
+- `@CLEAR` — fade out all previous text before showing next line
+- `#` lines are comments, blank lines add a small pause
+The intro plays once on first PLAY from main menu (tile-by-tile cipher reveal). SPACE/ENTER skips. I key on menu toggles show/skip. Restarts from game over bypass it.
 
 ### Shaders
 `assets/crt.fs` is the main post-processing shader — edit and reload (no recompile needed, it's loaded at runtime). `assets/hud.fs` curves the HUD overlay.
