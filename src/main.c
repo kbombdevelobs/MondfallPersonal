@@ -12,6 +12,8 @@
 #include "lander.h"
 #include "pickup.h"
 #include "combat.h"
+#include "structure/structure.h"
+#include "structure/structure_draw.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -51,6 +53,8 @@ int main(void) {
     memset(&landers, 0, sizeof(landers));
     PickupManager pickups;
     PickupManagerInit(&pickups);
+    StructureManager structures;
+    memset(&structures, 0, sizeof(structures));
 
     GameInit(&game);
     PlayerInit(&player);
@@ -84,6 +88,7 @@ int main(void) {
             EnemyManagerInit(&enemies);
             GameAudioInit(&audio);
             LanderManagerInit(&landers);
+            StructureManagerInit(&structures);
             assetsLoaded = true;
             continue;
         }
@@ -141,6 +146,7 @@ int main(void) {
                                 EnemyManagerInit(&enemies);
                                 LanderManagerInit(&landers);
                                 PickupManagerInit(&pickups);
+                                StructureManagerInit(&structures);
                                 combat = (CombatContext){&player, &weapon, &enemies, &pickups, &game};
                                 if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
                             }
@@ -169,6 +175,7 @@ int main(void) {
                     EnemyManagerInit(&enemies);
                     LanderManagerInit(&landers);
                     PickupManagerInit(&pickups);
+                    StructureManagerInit(&structures);
                     combat = (CombatContext){&player, &weapon, &enemies, &pickups, &game};
                     if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
                 }
@@ -197,72 +204,84 @@ int main(void) {
                     break;
                 }
 
-                // Update systems
-                PlayerUpdate(&player, dt);
-                GameUpdate(&game);
-                WeaponUpdate(&weapon, dt);
-                EnemyManagerUpdate(&enemies, player.position, dt);
-                WorldUpdate(&world, player.position);
-                LanderManagerUpdate(&landers, &enemies, dt);
-                PickupManagerUpdate(&pickups, player.position, dt);
+                bool insideStructure = StructureIsPlayerInside(&structures);
 
-                // E to pick up dropped weapon
-                if (IsKeyPressed(KEY_E)) {
-                    PickupTryGrab(&pickups, player.position);
+                // Player always updates (movement works inside and outside)
+                PlayerUpdate(&player, dt);
+
+                // Structure interaction (enter/exit/resupply) — always active
+                StructureManagerUpdate(&structures, &player, &weapon, &pickups);
+
+                // World chunks always update (for terrain height)
+                WorldUpdate(&world, player.position);
+
+                // --- SIMULATION FREEZE when inside structure ---
+                if (!insideStructure) {
+                    GameUpdate(&game);
+                    WeaponUpdate(&weapon, dt);
+                    EnemyManagerUpdate(&enemies, player.position, dt);
+                    LanderManagerUpdate(&landers, &enemies, dt);
+                    PickupManagerUpdate(&pickups, player.position, dt);
+
+                    // E to pick up dropped weapon (only outside)
+                    if (IsKeyPressed(KEY_E)) {
+                        PickupTryGrab(&pickups, player.position);
+                    }
+
+                    // Screen shake — landers + weapon recoil
+                    float shake = LanderGetScreenShake(&landers);
+                    if (weapon.recoil > 0.1f) {
+                        float gunShake = 0;
+                        if (weapon.current == WEAPON_MOND_MP40) gunShake = weapon.recoil * MP40_SHAKE;
+                        else if (weapon.raketenFiring) gunShake = weapon.recoil * RAKETEN_SHAKE;
+                        else if (weapon.current == WEAPON_JACKHAMMER) gunShake = weapon.recoil * JACKHAMMER_SHAKE;
+                        shake += gunShake;
+                    }
+                    if (pickups.hasPickup && pickups.pickupRecoil > 0.1f) {
+                        shake += pickups.pickupRecoil * PICKUP_SHAKE;
+                    }
+                    if (shake > SHAKE_THRESHOLD) {
+                        player.camera.position.x += ((float)rand()/RAND_MAX - 0.5f) * shake * SHAKE_AMPLITUDE;
+                        player.camera.position.y += ((float)rand()/RAND_MAX - 0.5f) * shake * SHAKE_AMPLITUDE;
+                    }
+
+                    // Wave spawning via landers
+                    if (game.waveActive && game.enemiesSpawned == 0) {
+                        LanderSpawnWave(&landers, player.position, game.enemiesPerWave, game.wave);
+                        game.enemiesSpawned = game.enemiesPerWave;
+                    }
+
+                    // Check if wave is cleared (all landers done + all enemies dead)
+                    if (game.waveActive && !LanderWaveActive(&landers) && EnemyCountAlive(&enemies) == 0 && game.enemiesSpawned > 0) {
+                        game.waveActive = false;
+                        game.enemiesRemaining = 0;
+                    }
+
+                    // Combat resolution
+                    CombatProcessPickupFire(&combat);
+                    CombatProcessWeaponFire(&combat);
+                    CombatProcessProjectiles(&combat);
+                    CombatProcessBeam(&combat, dt);
+                    CombatProcessEnemyDamage(&combat, dt);
+
+                    // Death check
+                    if (PlayerIsDead(&player)) {
+                        game.state = STATE_GAME_OVER;
+                        game.menuSelection = 0;
+                        EnableCursor();
+                        cursorLocked = false;
+                    }
                 }
 
-                // Heal over time — slow regen
+                // Heal over time — works inside and outside
                 if (player.health < player.maxHealth) {
                     player.health += HEALTH_REGEN_RATE * dt;
                     if (player.health > player.maxHealth) player.health = player.maxHealth;
                 }
 
-                // Screen shake — landers + weapon recoil
-                float shake = LanderGetScreenShake(&landers);
-                if (weapon.recoil > 0.1f) {
-                    float gunShake = 0;
-                    if (weapon.current == WEAPON_MOND_MP40) gunShake = weapon.recoil * MP40_SHAKE;
-                    else if (weapon.raketenFiring) gunShake = weapon.recoil * RAKETEN_SHAKE;
-                    else if (weapon.current == WEAPON_JACKHAMMER) gunShake = weapon.recoil * JACKHAMMER_SHAKE;
-                    shake += gunShake;
-                }
-                if (pickups.hasPickup && pickups.pickupRecoil > 0.1f) {
-                    shake += pickups.pickupRecoil * PICKUP_SHAKE;
-                }
-                if (shake > SHAKE_THRESHOLD) {
-                    player.camera.position.x += ((float)rand()/RAND_MAX - 0.5f) * shake * SHAKE_AMPLITUDE;
-                    player.camera.position.y += ((float)rand()/RAND_MAX - 0.5f) * shake * SHAKE_AMPLITUDE;
-                }
-
                 // Weapon bob sync
                 weapon.weaponBobTimer = player.headBobTimer;
 
-                // Wave spawning via landers
-                if (game.waveActive && game.enemiesSpawned == 0) {
-                    LanderSpawnWave(&landers, player.position, game.enemiesPerWave, game.wave);
-                    game.enemiesSpawned = game.enemiesPerWave;
-                }
-
-                // Check if wave is cleared (all landers done + all enemies dead)
-                if (game.waveActive && !LanderWaveActive(&landers) && EnemyCountAlive(&enemies) == 0 && game.enemiesSpawned > 0) {
-                    game.waveActive = false;
-                    game.enemiesRemaining = 0;
-                }
-
-                // Combat resolution
-                CombatProcessPickupFire(&combat);
-                CombatProcessWeaponFire(&combat);
-                CombatProcessProjectiles(&combat);
-                CombatProcessBeam(&combat, dt);
-                CombatProcessEnemyDamage(&combat, dt);
-
-                // Death check
-                if (PlayerIsDead(&player)) {
-                    game.state = STATE_GAME_OVER;
-                    game.menuSelection = 0; // reset game over selection
-                    EnableCursor();
-                    cursorLocked = false;
-                }
                 break;
             }
 
@@ -309,6 +328,7 @@ int main(void) {
                     EnemyManagerInit(&enemies);
                     LanderManagerInit(&landers);
                     PickupManagerInit(&pickups);
+                    StructureManagerInit(&structures);
                     combat = (CombatContext){&player, &weapon, &enemies, &pickups, &game};
                     DisableCursor();
                     cursorLocked = true;
@@ -333,12 +353,19 @@ int main(void) {
             ClearBackground(BLACK);
 
             BeginMode3D(player.camera);
-                WorldDrawSky(&world, player.camera);
-                WorldDraw(&world, player.position, player.camera);
-                EnemyManagerDraw(&enemies);
-                LanderManagerDraw(&landers, player.position);
-                PickupManagerDraw(&pickups);
-                WeaponDrawWorld(&weapon);
+                if (StructureIsPlayerInside(&structures)) {
+                    // Interior rendering — only the room
+                    StructureManagerDrawInterior(&structures);
+                } else {
+                    // Normal world rendering
+                    WorldDrawSky(&world, player.camera);
+                    WorldDraw(&world, player.position, player.camera);
+                    StructureManagerDraw(&structures, player.position);
+                    EnemyManagerDraw(&enemies);
+                    LanderManagerDraw(&landers, player.position);
+                    PickupManagerDraw(&pickups);
+                    WeaponDrawWorld(&weapon);
+                }
                 if (game.state == STATE_PLAYING || game.state == STATE_PAUSED ||
                     (game.state == STATE_SETTINGS && game.settingsReturnState == STATE_PAUSED)) {
                     if (pickups.hasPickup)
@@ -386,6 +413,7 @@ int main(void) {
                 HudDrawPickup(&pickups, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawLanderArrows(&landers, player.camera, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawRadioTransmission(enemies.radioTransmissionTimer, hudTarget.texture.width, hudTarget.texture.height);
+                HudDrawStructurePrompt(StructureGetPrompt(&structures), hudTarget.texture.width, hudTarget.texture.height);
                 EndTextureMode();
 
                 BeginShaderMode(hudShader);
@@ -419,6 +447,7 @@ int main(void) {
     WorldUnload(&world);
     GameAudioUnload(&audio);
     LanderManagerUnload(&landers);
+    StructureManagerUnload(&structures);
     UnloadShader(crtShader);
     UnloadShader(hudShader);
     UnloadRenderTexture(target);

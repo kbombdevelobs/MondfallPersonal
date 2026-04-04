@@ -1,4 +1,5 @@
 #include "hud.h"
+#include "structure/structure.h"
 #include <stdio.h>
 #include <math.h>
 
@@ -226,4 +227,32 @@ void HudDrawRadioTransmission(float timer, int sw, int sh) {
     const char *ftr = "RECEIVED";
     int fw = MeasureText(ftr, ffs);
     DrawText(ftr, boxX + boxW / 2 - fw / 2, boxY + boxH - ffs - smPad, ffs, (Color){180, 180, 170, a});
+}
+
+void HudDrawStructurePrompt(StructurePrompt prompt, int sw, int sh) {
+    if (prompt == PROMPT_NONE) return;
+
+    const char *text = NULL;
+    Color col = {0, 220, 120, 220};
+
+    switch (prompt) {
+        case PROMPT_ENTER:    text = "PRESS [E] TO ENTER BASE"; break;
+        case PROMPT_EXIT:     text = "PRESS [E] TO EXIT BASE"; break;
+        case PROMPT_RESUPPLY: text = "PRESS [E] TO RESUPPLY"; col = (Color){80, 255, 120, 240}; break;
+        default: return;
+    }
+
+    int fs = sh / 20;
+    int tw = MeasureText(text, fs);
+    int cx = sw / 2;
+    int cy = sh / 2;
+
+    // Background box
+    int pad = sh / 40;
+    DrawRectangle(cx - tw / 2 - pad, cy + sh / 6 - pad / 2, tw + pad * 2, fs + pad, (Color){0, 0, 0, 160});
+
+    // Pulsing text
+    float pulse = 0.7f + 0.3f * sinf((float)GetTime() * 4.0f);
+    Color drawCol = {(unsigned char)(col.r * pulse), (unsigned char)(col.g * pulse), col.b, col.a};
+    DrawText(text, cx - tw / 2, cy + sh / 6, fs, drawCol);
 }
