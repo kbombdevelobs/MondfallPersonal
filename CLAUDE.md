@@ -49,7 +49,11 @@ Mondfall/
 │   ├── config.h        — ALL tunable game constants in one place
 │   ├── main.c          — Game loop, state machine, input, rendering pipeline
 │   ├── player.c/h      — FPS camera, WASD + mouse, moon gravity, jump, ground pound
-│   ├── weapon.c/h      — 3 weapons: Mond-MP40, Raketenfaust beam, Jackhammer
+│   ├── weapon.c/h      — Weapon logic: init, update, fire, reload, switch, getters
+│   ├── weapon/          — Weapon rendering & sound (see src/weapon/README.md)
+│   │   ├── weapon_sound.h/c — Procedural sound generation (6 weapon sounds)
+│   │   ├── weapon_draw.h/c  — Viewmodels, beams, explosions, barrel positions
+│   │   └── README.md
 │   ├── combat.c/h      — Hit processing, damage application, weapon fire dispatch
 │   ├── enemy/           — Enemy system (see src/enemy/README.md)
 │   │   ├── enemy.h     — Types, state machine, API

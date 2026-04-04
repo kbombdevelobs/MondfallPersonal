@@ -2,7 +2,7 @@ CC = clang
 CFLAGS = -Wall -Wextra -std=c99 -I/opt/homebrew/include -O2
 LDFLAGS = -L/opt/homebrew/lib -lraylib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo
 
-SRC = src/main.c src/game.c src/player.c src/world.c src/weapon.c src/enemy/enemy.c src/enemy/enemy_draw.c src/hud.c src/audio.c src/lander.c src/pickup.c src/combat.c src/sound_gen.c
+SRC = src/main.c src/game.c src/player.c src/world.c src/weapon.c src/weapon/weapon_sound.c src/weapon/weapon_draw.c src/enemy/enemy.c src/enemy/enemy_draw.c src/hud.c src/audio.c src/lander.c src/pickup.c src/combat.c src/sound_gen.c
 OBJ = $(SRC:.c=.o)
 TARGET = mondfall
 
@@ -15,6 +15,9 @@ src/%.o: src/%.c
 	$(CC) $(CFLAGS) -Isrc -c $< -o $@
 
 src/enemy/%.o: src/enemy/%.c
+	$(CC) $(CFLAGS) -Isrc -c $< -o $@
+
+src/weapon/%.o: src/weapon/%.c
 	$(CC) $(CFLAGS) -Isrc -c $< -o $@
 
 run: $(TARGET)
