@@ -9,6 +9,11 @@
 #include "../src/player.h"
 #include "../src/weapon.h"
 #include "../src/enemy/enemy.h"
+#include "../src/enemy/enemy_components.h"
+#include "../src/enemy/enemy_systems.h"
+#include "../src/enemy/enemy_spawn.h"
+#include "../src/combat_ecs.h"
+#include "../src/ecs_world.h"
 #include "../src/pickup.h"
 #include "../src/game.h"
 #include "../src/world.h"
@@ -324,83 +329,92 @@ TEST(test_pickup_fire_empty) {
 }
 
 // ============================================================================
-// 5. ENEMY HIT DETECTION & DAMAGE
+// 5. ENEMY HIT DETECTION & DAMAGE (ECS-based)
 // ============================================================================
 
-static EnemyManager make_enemies(void) {
-    EnemyManager em;
-    memset(&em, 0, sizeof(em));
-    return em;
+static ecs_world_t *make_test_ecs(void) {
+    ecs_world_t *w = ecs_init();
+    EcsEnemyComponentsRegister(w);
+    return w;
 }
 
-static void place_enemy(EnemyManager *em, int idx, Vector3 pos, float health, EnemyType type) {
-    em->enemies[idx].active = true;
-    em->enemies[idx].state = ENEMY_ALIVE;
-    em->enemies[idx].position = pos;
-    em->enemies[idx].health = health;
-    em->enemies[idx].type = type;
+static ecs_entity_t place_ecs_enemy(ecs_world_t *w, Vector3 pos, float health, EnemyType type) {
+    ecs_entity_t e = ecs_new(w);
+    ecs_set(w, e, EcTransform, { .position = pos, .facingAngle = 0 });
+    ecs_set(w, e, EcVelocity, { .velocity = {0,0,0}, .vertVel = 0, .jumpTimer = 0 });
+    ecs_set(w, e, EcFaction, { .type = type });
+    ecs_set(w, e, EcAlive, { .dummy = 0 });
+    ecs_set(w, e, EcCombatStats, { .health = health, .maxHealth = health, .speed = 5, .damage = 7, .attackRange = 22, .attackRate = 0.15f, .preferredDist = 8 });
+    ecs_set(w, e, EcAIState, { .behavior = AI_ADVANCE, .strafeDir = 1, .strafeTimer = 2, .dodgeCooldown = 3 });
+    ecs_set(w, e, EcAnimation, { .animState = ANIM_IDLE });
+    return e;
 }
 
 TEST(test_enemy_sphere_hit) {
-    EnemyManager em = make_enemies();
-    place_enemy(&em, 0, (Vector3){5, 0, 0}, 80, ENEMY_SOVIET);
-
-    int hit = EnemyCheckSphereHit(&em, (Vector3){5, 0, 0}, 1.0f);
-    ASSERT(hit == 0);
+    ecs_world_t *w = make_test_ecs();
+    place_ecs_enemy(w, (Vector3){5, 0, 0}, 80, ENEMY_SOVIET);
+    ecs_entity_t hit = EcsEnemyCheckSphereHit(w, (Vector3){5, 0, 0}, 1.0f);
+    ASSERT(hit != 0);
+    ecs_fini(w);
 }
 
 TEST(test_enemy_sphere_miss) {
-    EnemyManager em = make_enemies();
-    place_enemy(&em, 0, (Vector3){50, 0, 0}, 80, ENEMY_SOVIET);
-
-    int hit = EnemyCheckSphereHit(&em, (Vector3){0, 0, 0}, 1.0f);
-    ASSERT(hit == -1);
+    ecs_world_t *w = make_test_ecs();
+    place_ecs_enemy(w, (Vector3){50, 0, 0}, 80, ENEMY_SOVIET);
+    ecs_entity_t hit = EcsEnemyCheckSphereHit(w, (Vector3){0, 0, 0}, 1.0f);
+    ASSERT(hit == 0);
+    ecs_fini(w);
 }
 
 TEST(test_enemy_damage_reduces_health) {
-    EnemyManager em = make_enemies();
-    place_enemy(&em, 0, (Vector3){0, 0, 0}, 80, ENEMY_SOVIET);
-
-    EnemyDamage(&em, 0, 30.0f);
-    ASSERT_FLOAT_EQ(em.enemies[0].health, 50.0f, 0.01f);
-    ASSERT(em.enemies[0].state == ENEMY_ALIVE);
+    ecs_world_t *w = make_test_ecs();
+    // Also need resources singleton for death sounds
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0, 0, 0}, 80, ENEMY_SOVIET);
+    EcsEnemyDamage(w, e, 30.0f);
+    const EcCombatStats *cs = ecs_get(w, e, EcCombatStats);
+    ASSERT_FLOAT_EQ(cs->health, 50.0f, 0.01f);
+    ASSERT(ecs_has(w, e, EcAlive)); // still alive
+    ecs_fini(w);
 }
 
 TEST(test_enemy_damage_kills) {
-    EnemyManager em = make_enemies();
-    place_enemy(&em, 0, (Vector3){0, 0, 0}, 80, ENEMY_SOVIET);
-
-    EnemyDamage(&em, 0, 100.0f);
-    ASSERT(em.enemies[0].state == ENEMY_DYING);
+    ecs_world_t *w = make_test_ecs();
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0, 0, 0}, 80, ENEMY_SOVIET);
+    EcsEnemyDamage(w, e, 100.0f);
+    ASSERT(!ecs_has(w, e, EcAlive)); // dead
+    ASSERT(ecs_has(w, e, EcDying));  // in dying state
+    ecs_fini(w);
 }
 
 TEST(test_enemy_ray_hit) {
-    EnemyManager em = make_enemies();
-    place_enemy(&em, 0, (Vector3){0, 0, 10}, 80, ENEMY_SOVIET);
-
+    ecs_world_t *w = make_test_ecs();
+    place_ecs_enemy(w, (Vector3){0, 0, 10}, 80, ENEMY_SOVIET);
     Ray ray = {{0, 0, 0}, {0, 0, 1}};
     float dist = 0;
-    int hit = EnemyCheckHit(&em, ray, 100.0f, &dist);
-    ASSERT(hit == 0);
+    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 100.0f, &dist);
+    ASSERT(hit != 0);
     ASSERT_GT(dist, 0.0f);
+    ecs_fini(w);
 }
 
 TEST(test_enemy_ray_miss) {
-    EnemyManager em = make_enemies();
-    place_enemy(&em, 0, (Vector3){50, 0, 0}, 80, ENEMY_SOVIET);
-
-    // Shoot forward along Z, enemy is to the right
+    ecs_world_t *w = make_test_ecs();
+    place_ecs_enemy(w, (Vector3){50, 0, 0}, 80, ENEMY_SOVIET);
     Ray ray = {{0, 0, 0}, {0, 0, 1}};
     float dist = 0;
-    int hit = EnemyCheckHit(&em, ray, 100.0f, &dist);
-    ASSERT(hit == -1);
+    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 100.0f, &dist);
+    ASSERT(hit == 0);
+    ecs_fini(w);
 }
 
 TEST(test_enemy_damage_out_of_bounds) {
-    EnemyManager em = make_enemies();
-    // Should not crash
-    EnemyDamage(&em, -1, 50.0f);
-    EnemyDamage(&em, MAX_ENEMIES + 1, 50.0f);
+    ecs_world_t *w = make_test_ecs();
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    // Damage a non-existent entity — should not crash
+    EcsEnemyDamage(w, 99999, 50.0f);
+    ecs_fini(w);
 }
 
 // ============================================================================
@@ -626,45 +640,57 @@ TEST(test_collision_empty_world) {
 }
 
 // ============================================================================
-// 11. ENEMY ADVANCED
+// 11. ENEMY ADVANCED (ECS-based)
 // ============================================================================
 
 TEST(test_enemy_count_alive) {
-    EnemyManager em = make_enemies();
-    place_enemy(&em, 0, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
-    place_enemy(&em, 1, (Vector3){5,0,0}, 55, ENEMY_AMERICAN);
-    ASSERT(EnemyCountAlive(&em) == 2);
+    ecs_world_t *w = make_test_ecs();
+    EcsEnemySystemsRegister(w);
+    place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    place_ecs_enemy(w, (Vector3){5,0,0}, 55, ENEMY_AMERICAN);
+    ASSERT(EcsEnemyCountAlive(w) == 2);
+    ecs_fini(w);
 }
 
 TEST(test_enemy_count_alive_after_kill) {
-    EnemyManager em = make_enemies();
-    place_enemy(&em, 0, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
-    place_enemy(&em, 1, (Vector3){5,0,0}, 55, ENEMY_AMERICAN);
-    EnemyDamage(&em, 0, 9999.0f);
-    ASSERT(EnemyCountAlive(&em) == 1);
+    ecs_world_t *w = make_test_ecs();
+    EcsEnemySystemsRegister(w);
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e0 = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    place_ecs_enemy(w, (Vector3){5,0,0}, 55, ENEMY_AMERICAN);
+    EcsEnemyDamage(w, e0, 9999.0f);
+    ASSERT(EcsEnemyCountAlive(w) == 1);
+    ecs_fini(w);
 }
 
 TEST(test_enemy_vaporize) {
-    EnemyManager em = make_enemies();
-    place_enemy(&em, 0, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
-    EnemyVaporize(&em, 0);
-    ASSERT(em.enemies[0].state == ENEMY_VAPORIZING);
+    ecs_world_t *w = make_test_ecs();
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    EcsEnemyVaporize(w, e);
+    ASSERT(!ecs_has(w, e, EcAlive));
+    ASSERT(ecs_has(w, e, EcVaporizing));
+    ecs_fini(w);
 }
 
 TEST(test_enemy_eviscerate) {
-    EnemyManager em = make_enemies();
-    place_enemy(&em, 0, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
-    EnemyEviscerate(&em, 0, (Vector3){0,0,1});
-    ASSERT(em.enemies[0].state == ENEMY_EVISCERATING);
+    ecs_world_t *w = make_test_ecs();
+    ecs_singleton_set(w, EcEnemyResources, { .modelsLoaded = false });
+    ecs_entity_t e = place_ecs_enemy(w, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    EcsEnemyEviscerate(w, e, (Vector3){0,0,1});
+    ASSERT(!ecs_has(w, e, EcAlive));
+    ASSERT(ecs_has(w, e, EcEviscerating));
+    ecs_fini(w);
 }
 
 TEST(test_enemy_sphere_hit_multiple) {
-    EnemyManager em = make_enemies();
-    place_enemy(&em, 0, (Vector3){10,0,0}, 80, ENEMY_SOVIET);
-    place_enemy(&em, 1, (Vector3){3,0,0}, 55, ENEMY_AMERICAN);
-    // Sphere at origin with radius 5 should hit enemy 1 (at dist 3) not enemy 0 (at dist 10)
-    int hit = EnemyCheckSphereHit(&em, (Vector3){0,0,0}, 5.0f);
-    ASSERT(hit == 1);
+    ecs_world_t *w = make_test_ecs();
+    place_ecs_enemy(w, (Vector3){10,0,0}, 80, ENEMY_SOVIET);
+    ecs_entity_t e1 = place_ecs_enemy(w, (Vector3){3,0,0}, 55, ENEMY_AMERICAN);
+    // Sphere at origin with radius 5 should hit the closer enemy
+    ecs_entity_t hit = EcsEnemyCheckSphereHit(w, (Vector3){0,0,0}, 5.0f);
+    ASSERT(hit == e1);
+    ecs_fini(w);
 }
 
 // ============================================================================

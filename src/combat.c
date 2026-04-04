@@ -8,7 +8,7 @@
 static int LibertyCheckHit(EnemyManager *em, Ray ray, float maxDist, float *hitDist) {
     int closest = -1; float cd = maxDist;
     float pad = 2.0f; // much wider hitbox than normal (normal is 0.5)
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    for (int i = 0; i < em->capacity; i++) {
         Enemy *e = &em->enemies[i];
         if (!e->active || e->state != ENEMY_ALIVE) continue;
         BoundingBox box = {{e->position.x - pad, e->position.y - 1.5f, e->position.z - pad},
@@ -151,7 +151,7 @@ void CombatProcessProjectiles(CombatContext *ctx) {
         if (!weapon->projectiles[i].active) continue;
         int hit = EnemyCheckSphereHit(enemies, weapon->projectiles[i].position, weapon->projectiles[i].radius);
         if (hit >= 0) {
-            for (int j = 0; j < MAX_ENEMIES; j++) {
+            for (int j = 0; j < enemies->capacity; j++) {
                 if (!enemies->enemies[j].active || enemies->enemies[j].state != ENEMY_ALIVE) continue;
                 float d = Vector3Distance(weapon->projectiles[i].position, enemies->enemies[j].position);
                 if (d < weapon->projectiles[i].radius) {
@@ -196,7 +196,7 @@ void CombatProcessBeam(CombatContext *ctx, float dt) {
 
     // Kill everything in the beam path
     Ray beamRay = {player->camera.position, shootDir};
-    for (int ei = 0; ei < MAX_ENEMIES; ei++) {
+    for (int ei = 0; ei < enemies->capacity; ei++) {
         Enemy *en = &enemies->enemies[ei];
         if (!en->active || en->state != ENEMY_ALIVE) continue;
         BoundingBox box = {

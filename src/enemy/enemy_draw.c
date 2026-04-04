@@ -663,3 +663,62 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
         }
     }
 }
+
+// === LOD 1: Simplified astronaut (~8 draw calls) ===
+void DrawAstronautLOD1(Enemy *e) {
+    Color suitBase, helmetColor, bootColor;
+
+    if (e->type == ENEMY_SOVIET) {
+        suitBase    = (Color){205, 0, 0, 255};
+        helmetColor = (Color){220, 185, 40, 255};
+        bootColor   = (Color){25, 25, 22, 255};
+    } else {
+        suitBase    = (Color){25, 40, 90, 255};
+        helmetColor = (Color){195, 200, 210, 255};
+        bootColor   = (Color){140, 115, 75, 255};
+    }
+
+    if (e->hitFlash > 0) {
+        unsigned char v = (unsigned char)(150 + e->hitFlash * 105);
+        suitBase = (Color){255, v, v, 255};
+    }
+
+    rlPushMatrix();
+    rlTranslatef(e->position.x, e->position.y, e->position.z);
+    rlRotatef(e->facingAngle * RAD2DEG, 0, 1, 0);
+    if (e->state == ENEMY_DYING) {
+        rlRotatef(e->deathAngle, 1, 0, 0);
+    }
+
+    // Torso
+    DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, suitBase);
+    // Head
+    DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, helmetColor);
+    // Arms
+    DrawCube((Vector3){0.55f, 0.1f, 0}, 0.22f, 0.8f, 0.22f, suitBase);
+    DrawCube((Vector3){-0.55f, 0.1f, 0}, 0.22f, 0.8f, 0.22f, suitBase);
+    // Legs with walk animation
+    float legSwing = sinf(e->walkCycle) * 20.0f;
+    rlPushMatrix();
+    rlTranslatef(0.22f, -0.85f, 0);
+    rlRotatef(legSwing, 1, 0, 0);
+    DrawCube((Vector3){0, -0.2f, 0}, 0.3f, 0.85f, 0.3f, suitBase);
+    DrawCube((Vector3){0, -0.65f, 0.04f}, 0.28f, 0.3f, 0.35f, bootColor);
+    rlPopMatrix();
+    rlPushMatrix();
+    rlTranslatef(-0.22f, -0.85f, 0);
+    rlRotatef(-legSwing, 1, 0, 0);
+    DrawCube((Vector3){0, -0.2f, 0}, 0.3f, 0.85f, 0.3f, suitBase);
+    DrawCube((Vector3){0, -0.65f, 0.04f}, 0.28f, 0.3f, 0.35f, bootColor);
+    rlPopMatrix();
+
+    rlPopMatrix();
+}
+
+// === LOD 2: Single colored cube (1 draw call) ===
+void DrawAstronautLOD2(Enemy *e) {
+    Color col = (e->type == ENEMY_SOVIET)
+        ? (Color){205, 0, 0, 255}
+        : (Color){25, 40, 90, 255};
+    DrawCube(e->position, 0.9f, 2.5f, 0.55f, col);
+}

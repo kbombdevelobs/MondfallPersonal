@@ -99,9 +99,9 @@ void GameAudioInit(GameAudio *ga) {
         d[i] = (short)(mix * 14000.0f);
     }
 
-    ExportWave(wave, "assets/march.wav");
+    ExportWave(wave, "sounds/march.wav");
     UnloadWave(wave);
-    ga->marchMusic = LoadMusicStream("assets/march.wav");
+    ga->marchMusic = LoadMusicStream("sounds/march.wav");
     ga->marchMusic.looping = true;
     SetMusicVolume(ga->marchMusic, 0.3f);
     PlayMusicStream(ga->marchMusic);

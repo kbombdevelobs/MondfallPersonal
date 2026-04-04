@@ -1,3 +1,18 @@
+---
+title: Mondfall Architecture
+status: Active
+owner_area: Core
+created: 2026-03-15
+last_updated: 2026-04-04
+last_reviewed: 2026-04-04
+parent_doc: CLAUDE.md
+related_docs:
+  - docs/rendering-pipeline.md
+  - docs/ecs-integration.md
+  - docs/combat-system.md
+  - docs/wave-system.md
+---
+
 # Mondfall Architecture
 
 ## System Overview
@@ -91,10 +106,10 @@ world pointer through every function.
 ## Rendering Pipeline
 
 1. **3D Scene** renders to a 640x360 `RenderTexture2D` (low-res for pixel art look)
-2. **CRT Shader** (`assets/crt.fs`) post-processes with scanlines, phosphor mask, bloom, chromatic aberration, fish-eye distortion, film grain, and breath fog
+2. **CRT Shader** (`resources/crt.fs`) post-processes with scanlines, phosphor mask, bloom, chromatic aberration, fish-eye distortion, film grain, and breath fog
 3. Scaled to window with **nearest-neighbor filtering** (crispy pixels)
 4. **HUD** renders to a separate full-resolution `RenderTexture2D`
-5. **Visor Shader** (`assets/hud.fs`) curves the HUD overlay
+5. **Visor Shader** (`resources/hud.fs`) curves the HUD overlay
 6. **Menu/Pause/Game Over** screens drawn at full window resolution on top
 
 ## Wave System Flow

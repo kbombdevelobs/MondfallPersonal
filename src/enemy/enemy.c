@@ -7,8 +7,12 @@
 #include <string.h>
 #include <stdlib.h>
 
-void EnemyManagerInit(EnemyManager *em) {
+void EnemyManagerInit(EnemyManager *em, int capacity) {
+    // Free previous allocation if any
+    if (em->enemies) { free(em->enemies); em->enemies = NULL; }
     memset(em, 0, sizeof(EnemyManager));
+    em->capacity = capacity;
+    em->enemies = (Enemy *)calloc(capacity, sizeof(Enemy));
     em->spawnRate = 1.0f;
 
     em->mdlVisor = LoadModelFromMesh(GenMeshSphere(0.28f, 6, 6));
@@ -42,8 +46,8 @@ void EnemyManagerInit(EnemyManager *em) {
     // Load Soviet death sounds — degrade to scratchy radio quality
     em->sovietDeathCount = 0;
     const char *deathFiles[] = {
-        "assets/soviet_death_sounds/Echoes of the Frozen Front.mp3",
-        "assets/soviet_death_sounds/Last Echo of the Soviet Front The Final Net.mp3",
+        "sounds/soviet_death_sounds/Echoes of the Frozen Front.mp3",
+        "sounds/soviet_death_sounds/Last Echo of the Soviet Front The Final Net.mp3",
     };
     for (int df = 0; df < 2; df++) {
         if (!FileExists(deathFiles[df])) continue;
@@ -60,8 +64,8 @@ void EnemyManagerInit(EnemyManager *em) {
     // Load American death sounds — same radio degradation
     em->americanDeathCount = 0;
     const char *amDeathFiles[] = {
-        "assets/american_death_sounds/Darn Bastard's Final Stand.mp3",
-        "assets/american_death_sounds/The Last Yeehaw of the Lone Star Son (1).mp3",
+        "sounds/american_death_sounds/Darn Bastard's Final Stand.mp3",
+        "sounds/american_death_sounds/The Last Yeehaw of the Lone Star Son (1).mp3",
     };
     for (int df = 0; df < 2; df++) {
         if (!FileExists(amDeathFiles[df])) continue;
@@ -79,6 +83,7 @@ void EnemyManagerInit(EnemyManager *em) {
 }
 
 void EnemyManagerUnload(EnemyManager *em) {
+    if (em->enemies) { free(em->enemies); em->enemies = NULL; }
     if (!em->modelsLoaded) return;
     UnloadModel(em->mdlVisor);
     UnloadModel(em->mdlArm);
@@ -114,7 +119,7 @@ static void EnemyInit(Enemy *e, EnemyType type, Vector3 pos) {
 }
 
 void EnemySpawnAroundPlayer(EnemyManager *em, EnemyType type, Vector3 playerPos, float spawnRadius) {
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    for (int i = 0; i < em->capacity; i++) {
         if (em->enemies[i].active) continue;
         float angle = ((float)rand() / RAND_MAX) * 2.0f * PI;
         float dist = spawnRadius + ((float)rand() / RAND_MAX) * 20.0f;
@@ -127,7 +132,7 @@ void EnemySpawnAroundPlayer(EnemyManager *em, EnemyType type, Vector3 playerPos,
 }
 
 void EnemySpawnAt(EnemyManager *em, EnemyType type, Vector3 pos) {
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    for (int i = 0; i < em->capacity; i++) {
         if (em->enemies[i].active) continue;
         EnemyInit(&em->enemies[i], type, pos);
         em->count++;
@@ -135,11 +140,13 @@ void EnemySpawnAt(EnemyManager *em, EnemyType type, Vector3 pos) {
     }
 }
 
-static bool TooCloseToOthers(EnemyManager *em, int idx, float minDist) {
+static bool TooCloseToOthers(EnemyManager *em, int idx, float minDist, int maxChecks) {
     Enemy *me = &em->enemies[idx];
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    int checked = 0;
+    for (int i = 0; i < em->capacity; i++) {
         if (i == idx || !em->enemies[i].active || em->enemies[i].state != ENEMY_ALIVE) continue;
         if (Vector3Distance(me->position, em->enemies[i].position) < minDist) return true;
+        if (maxChecks > 0 && ++checked >= maxChecks) break;
     }
     return false;
 }
@@ -150,7 +157,10 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
     // Reset death play counter when no enemies alive (wave cleared)
     if (EnemyCountAlive(em) == 0) { em->sovietDeathPlays = 0; em->americanDeathPlays = 0; }
 
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    em->aiFrameCounter++;
+    int collisionCap = em->testMode ? COLLISION_CAP : 0;
+
+    for (int i = 0; i < em->capacity; i++) {
         Enemy *e = &em->enemies[i];
         if (!e->active) continue;
 
@@ -293,7 +303,22 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
         Vector3 moveDir = {0};
         bool moving = false;
 
-        if (e->type == ENEMY_SOVIET) {
+        // Staggered AI: in test mode, only run full AI for 1/N enemies per frame
+        bool doFullAI = true;
+        if (em->testMode) {
+            doFullAI = (i % AI_STAGGER_DIVISOR) == (em->aiFrameCounter % AI_STAGGER_DIVISOR);
+            // Distance-simplified AI: far enemies always just advance
+            if (dist > LOD1_DISTANCE) {
+                doFullAI = false;
+            }
+        }
+
+        if (!doFullAI) {
+            // Simplified: walk toward player
+            moveDir = fwd;
+            moving = true;
+            e->behavior = AI_ADVANCE;
+        } else if (e->type == ENEMY_SOVIET) {
             // SOVIET: Charge as a spread — run at player with wide strafe
             // Check if a structure blocks the direct charge path
             bool sovStructBlock = false;
@@ -412,8 +437,8 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
             }
         }
 
-        if (TooCloseToOthers(em, i, 2.5f)) {
-            for (int j = 0; j < MAX_ENEMIES; j++) {
+        if (TooCloseToOthers(em, i, 2.5f, collisionCap)) {
+            for (int j = 0; j < em->capacity; j++) {
                 if (j == i || !em->enemies[j].active) continue;
                 Vector3 away = Vector3Subtract(e->position, em->enemies[j].position);
                 away.y = 0;
@@ -496,7 +521,7 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
 float EnemyCheckPlayerDamage(EnemyManager *em, Vector3 playerPos, float dt) {
     (void)dt;
     float total = 0;
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    for (int i = 0; i < em->capacity; i++) {
         Enemy *e = &em->enemies[i];
         if (!e->active || e->state != ENEMY_ALIVE) continue;
         float dist = Vector3Length(Vector3Subtract(playerPos, e->position));
@@ -521,13 +546,55 @@ float EnemyCheckPlayerDamage(EnemyManager *em, Vector3 playerPos, float dt) {
 
 
 void EnemyManagerDraw(EnemyManager *em) {
-    for (int i = 0; i < MAX_ENEMIES; i++)
+    for (int i = 0; i < em->capacity; i++)
         if (em->enemies[i].active) DrawAstronautModel(em, &em->enemies[i]);
+}
+
+void EnemyManagerDrawWithLOD(EnemyManager *em, Camera3D camera) {
+    // Build view-projection matrix for frustum culling
+    Matrix view = GetCameraMatrix(camera);
+    Matrix proj = MatrixPerspective(camera.fovy * DEG2RAD,
+        (float)GetScreenWidth() / (float)GetScreenHeight(), 0.1f, 1000.0f);
+    Matrix vp = MatrixMultiply(view, proj);
+
+    for (int i = 0; i < em->capacity; i++) {
+        if (!em->enemies[i].active) continue;
+        Enemy *e = &em->enemies[i];
+        Vector3 pos = e->position;
+
+        // Distance culling
+        float dist = Vector3Distance(pos, camera.position);
+        if (dist > CULL_DISTANCE) continue;
+
+        // Frustum culling: transform to clip space
+        float cx = vp.m0*pos.x + vp.m4*pos.y + vp.m8*pos.z + vp.m12;
+        float cy = vp.m1*pos.x + vp.m5*pos.y + vp.m9*pos.z + vp.m13;
+        float cw = vp.m3*pos.x + vp.m7*pos.y + vp.m11*pos.z + vp.m15;
+        float cz = vp.m2*pos.x + vp.m6*pos.y + vp.m10*pos.z + vp.m14;
+
+        if (cw > 0) {
+            float margin = 3.0f; // generous world-space margin
+            if (cx < -cw - margin || cx > cw + margin ||
+                cy < -cw - margin || cy > cw + margin ||
+                cz < 0) {
+                continue;
+            }
+        }
+
+        // LOD dispatch
+        if (dist < LOD1_DISTANCE) {
+            DrawAstronautModel(em, e);
+        } else if (dist < LOD2_DISTANCE) {
+            DrawAstronautLOD1(e);
+        } else {
+            DrawAstronautLOD2(e);
+        }
+    }
 }
 
 int EnemyCheckHit(EnemyManager *em, Ray ray, float maxDist, float *hitDist) {
     int closest = -1; float cd = maxDist;
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    for (int i = 0; i < em->capacity; i++) {
         Enemy *e = &em->enemies[i];
         if (!e->active || e->state != ENEMY_ALIVE) continue;
         BoundingBox box = {{e->position.x-0.5f, e->position.y-1.2f, e->position.z-0.5f},
@@ -540,7 +607,7 @@ int EnemyCheckHit(EnemyManager *em, Ray ray, float maxDist, float *hitDist) {
 }
 
 int EnemyCheckSphereHit(EnemyManager *em, Vector3 center, float radius) {
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    for (int i = 0; i < em->capacity; i++) {
         Enemy *e = &em->enemies[i];
         if (!e->active || e->state != ENEMY_ALIVE) continue;
         if (Vector3Distance(center, e->position) < radius + 0.8f) return i;
@@ -549,7 +616,7 @@ int EnemyCheckSphereHit(EnemyManager *em, Vector3 center, float radius) {
 }
 
 void EnemyDamage(EnemyManager *em, int index, float damage) {
-    if (index < 0 || index >= MAX_ENEMIES) return;
+    if (index < 0 || index >= em->capacity) return;
     Enemy *e = &em->enemies[index];
     e->health -= damage; e->hitFlash = 1;
     if (e->dodgeTimer <= 0) { e->strafeDir *= -1; e->dodgeTimer = 1; }
@@ -598,7 +665,7 @@ void EnemyDamage(EnemyManager *em, int index, float damage) {
 }
 
 void EnemyVaporize(EnemyManager *em, int index) {
-    if (index < 0 || index >= MAX_ENEMIES) return;
+    if (index < 0 || index >= em->capacity) return;
     Enemy *e = &em->enemies[index];
     e->state = ENEMY_VAPORIZING;
     e->vaporizeTimer = 0;
@@ -630,7 +697,7 @@ void EnemyVaporize(EnemyManager *em, int index) {
 }
 
 void EnemyEviscerate(EnemyManager *em, int index, Vector3 hitDir) {
-    if (index < 0 || index >= MAX_ENEMIES) return;
+    if (index < 0 || index >= em->capacity) return;
     Enemy *e = &em->enemies[index];
     e->state = ENEMY_EVISCERATING;
     e->evisTimer = 0;
@@ -679,7 +746,7 @@ void EnemyEviscerate(EnemyManager *em, int index, Vector3 hitDir) {
 
 int EnemyCountAlive(EnemyManager *em) {
     int c = 0;
-    for (int i = 0; i < MAX_ENEMIES; i++)
+    for (int i = 0; i < em->capacity; i++)
         if (em->enemies[i].active && em->enemies[i].state == ENEMY_ALIVE) c++;
     return c;
 }
