@@ -7,6 +7,7 @@ last_updated: 2026-04-04
 last_reviewed: 2026-04-04
 parent_doc: CLAUDE.md
 related_docs:
+  - AGENTS.md
   - docs_manifest.yaml
   - docs/documentation-standards.md
 ---
@@ -18,6 +19,7 @@ related_docs:
 | Doc | Purpose | Read When |
 |-----|---------|-----------|
 | [CLAUDE.md](CLAUDE.md) | Whole-app architecture, build instructions, game systems, doc rules | Starting any work on the project |
+| [AGENTS.md](AGENTS.md) | Agent-facing mirror of `CLAUDE.md` for tooling that reads `AGENTS.md` | Working in tools that prefer `AGENTS.md` |
 | [README.md](README.md) | Quick start for players (build, controls, weapons) | First time running the game |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System overview, module dependency graph, design patterns | Understanding how systems connect |
 
@@ -62,7 +64,7 @@ related_docs:
 
 ## Navigation Notes
 
-- **Architecture-first**: Start with CLAUDE.md for the big picture, then drill into domain or feature docs
+- **Architecture-first**: Start with `CLAUDE.md` or `AGENTS.md` for the big picture, then drill into domain or feature docs
 - **Domain docs own their folder**: src/enemy/CLAUDE.md is the authority on the enemy system, not this index
 - **ADRs explain "why"**: If you wonder why something is built a certain way, check the ADRs
 - **docs_manifest.yaml**: Use this for programmatic access to the doc structure

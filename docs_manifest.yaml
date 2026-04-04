@@ -19,6 +19,23 @@ docs:
     last_updated: 2026-04-04
     last_reviewed: 2026-04-04
 
+  - title: "Mondfall — Nazis on the Moon FPS (AGENTS Mirror)"
+    path: AGENTS.md
+    type: root_agents
+    domain: repository
+    status: Active
+    owner_area: Core
+    parent_doc: CLAUDE.md
+    related_docs:
+      - CLAUDE.md
+      - Index.md
+      - docs_manifest.yaml
+      - docs/ARCHITECTURE.md
+      - docs/documentation-standards.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
   - title: Mondfall Documentation Index
     path: Index.md
     type: index
