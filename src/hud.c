@@ -29,7 +29,8 @@ void HudDrawLanderArrows(LanderManager *lm, Camera3D camera, int sw, int sh) {
         const char *sub = "FEINDLICHE LANDUNG ERKANNT";
         int subFs = sh / 18;
         int subW = MeasureText(sub, subFs);
-        DrawText(sub, cx - subW / 2, sh / 8 + sh / 30 + alertFs + 4, subFs, (Color){255, 200, 50, pa});
+        float sc = (float)sh / (float)RENDER_H;
+        DrawText(sub, cx - subW / 2, sh / 8 + sh / 30 + alertFs + (int)(4 * sc), subFs, (Color){255, 200, 50, pa});
     }
     // (compass removed)
     (void)camera;
@@ -62,28 +63,31 @@ void HudDrawPickup(PickupManager *pm, int sw, int sh) {
 
 void HudDraw(Player *player, Weapon *weapon, Game *game, int sw, int sh) {
     int cx = sw / 2, cy = sh / 2;
+    float s = (float)sh / (float)RENDER_H; // pixel scale factor
     int barInset = sw / 7;
     int topL = barInset, topR = sw - barInset;
     int topW = topR - topL;
 
     // Crosshair
     Color cross = {0, 255, 200, 230};
-    DrawLine(cx - 15, cy, cx - 5, cy, cross);
-    DrawLine(cx + 5, cy, cx + 15, cy, cross);
-    DrawLine(cx, cy - 15, cx, cy - 5, cross);
-    DrawLine(cx, cy + 5, cx, cy + 15, cross);
-    DrawCircleLines(cx, cy, 3, cross);
+    int chOuter = (int)(15 * s), chInner = (int)(5 * s), chRad = (int)(3 * s);
+    DrawLine(cx - chOuter, cy, cx - chInner, cy, cross);
+    DrawLine(cx + chInner, cy, cx + chOuter, cy, cross);
+    DrawLine(cx, cy - chOuter, cx, cy - chInner, cross);
+    DrawLine(cx, cy + chInner, cx, cy + chOuter, cross);
+    DrawCircleLines(cx, cy, (float)chRad, cross);
 
     // === TOP BAR ===
     int topY = sh / 20;
     int topH = sh / 14;
+    int pad = (int)(12 * s);
     DrawRectangle(topL, topY, topW, topH, (Color){0, 0, 0, 190});
     DrawLine(topL, topY + topH, topR, topY + topH, (Color){0, 200, 180, 100});
 
     // Health bar — left third
-    int hbX = topL + 12;
+    int hbX = topL + pad;
     int hbY = topY + topH / 2 - topH / 4;
-    int hbW = topW / 3 - 20;
+    int hbW = topW / 3 - (int)(20 * s);
     int hbH = topH / 2;
     float hpPct = player->health / player->maxHealth;
     DrawRectangle(hbX, hbY, hbW, hbH, (Color){40, 40, 40, 200});
@@ -93,7 +97,7 @@ void HudDraw(Player *player, Weapon *weapon, Game *game, int sw, int sh) {
     DrawRectangleLines(hbX, hbY, hbW, hbH, (Color){180, 180, 180, 180});
     char hpText[32];
     snprintf(hpText, sizeof(hpText), "%.0f HP", player->health);
-    DrawText(hpText, hbX + 8, hbY + 2, topH / 3, WHITE);
+    DrawText(hpText, hbX + (int)(8 * s), hbY + (int)(2 * s), topH / 3, WHITE);
 
     // Wave — center
     char waveText[32];
@@ -107,7 +111,7 @@ void HudDraw(Player *player, Weapon *weapon, Game *game, int sw, int sh) {
     snprintf(killText, sizeof(killText), "KILLS %d", game->killCount);
     int kfs = topH * 2 / 5;
     int kw = MeasureText(killText, kfs);
-    DrawText(killText, topR - kw - 12, topY + topH / 2 - kfs / 2, kfs, WHITE);
+    DrawText(killText, topR - kw - pad, topY + topH / 2 - kfs / 2, kfs, WHITE);
 
     // === BOTTOM BAR ===
     int barH = sh / 14;
@@ -118,7 +122,7 @@ void HudDraw(Player *player, Weapon *weapon, Game *game, int sw, int sh) {
     // Weapon name — left
     const char *weapName = WeaponGetName(weapon);
     int wns = barH * 2 / 3;
-    DrawText(weapName, topL + 14, barY + barH / 2 - wns / 2, wns, (Color){0, 255, 220, 255});
+    DrawText(weapName, topL + (int)(14 * s), barY + barH / 2 - wns / 2, wns, (Color){0, 255, 220, 255});
 
     // Ammo — center
     int ammo = WeaponGetAmmo(weapon);
@@ -135,18 +139,19 @@ void HudDraw(Player *player, Weapon *weapon, Game *game, int sw, int sh) {
     const char *hints = "[1][2][3] [R] [X]";
     int hfs = barH / 3;
     int hw = MeasureText(hints, hfs);
-    DrawText(hints, topR - hw - 12, barY + barH / 2 - hfs / 2, hfs, (Color){160, 160, 160, 200});
+    DrawText(hints, topR - hw - pad, barY + barH / 2 - hfs / 2, hfs, (Color){160, 160, 160, 200});
 
     // Reload bar
     if (WeaponIsReloading(weapon)) {
         float prog = WeaponReloadProgress(weapon);
         int rbW = sw / 5, rbH = sh / 50;
         int rbX = cx - rbW / 2, rbY = cy + sh / 15;
-        DrawRectangle(rbX - 2, rbY - 2, rbW + 4, rbH + 4, (Color){0, 0, 0, 200});
+        int rbPad = (int)(2 * s);
+        DrawRectangle(rbX - rbPad, rbY - rbPad, rbW + rbPad * 2, rbH + rbPad * 2, (Color){0, 0, 0, 200});
         DrawRectangle(rbX, rbY, (int)(rbW * prog), rbH, (Color){0, 220, 255, 240});
         int rfs = sh / 30;
         const char *rl = "RELOADING";
-        DrawText(rl, cx - MeasureText(rl, rfs) / 2, rbY - rfs - 4, rfs, (Color){0, 255, 255, 240});
+        DrawText(rl, cx - MeasureText(rl, rfs) / 2, rbY - rfs - (int)(4 * s), rfs, (Color){0, 255, 255, 240});
     }
 
     // Beam cooldown
@@ -172,6 +177,7 @@ void HudDraw(Player *player, Weapon *weapon, Game *game, int sw, int sh) {
 
 void HudDrawRadioTransmission(float timer, int sw, int sh) {
     if (timer <= 0) return;
+    float s = (float)sh / (float)RENDER_H;
 
     float alpha = (timer > 0.5f) ? 1.0f : timer / 0.5f; // fade out last 0.5s
     unsigned char a = (unsigned char)(alpha * 220);
@@ -181,6 +187,8 @@ void HudDrawRadioTransmission(float timer, int sw, int sh) {
     int boxH = sh / 8;
     int boxX = sw - boxW - sw / 20;
     int boxY = sh * 2 / 3;
+    int inPad = (int)(8 * s);
+    int smPad = (int)(4 * s);
 
     // Dark background with red border
     DrawRectangle(boxX, boxY, boxW, boxH, (Color){10, 10, 8, (unsigned char)(a * 0.8f)});
@@ -193,16 +201,17 @@ void HudDrawRadioTransmission(float timer, int sw, int sh) {
     int hw = MeasureText(hdr, hfs);
     float blink = sinf(GetTime() * 8.0f);
     Color hdrCol = (blink > 0) ? (Color){255, 60, 40, a} : (Color){200, 40, 30, a};
-    DrawText(hdr, boxX + boxW / 2 - hw / 2, boxY + 4, hfs, hdrCol);
+    DrawText(hdr, boxX + boxW / 2 - hw / 2, boxY + smPad, hfs, hdrCol);
 
     // Sound waveform visualization — fake oscilloscope
-    int waveY = boxY + boxH / 3 + 4;
+    int waveY = boxY + boxH / 3 + smPad;
     int waveH = boxH / 3;
-    int waveL = boxX + 8;
-    int waveR = boxX + boxW - 8;
+    int waveL = boxX + inPad;
+    int waveR = boxX + boxW - inPad;
+    int waveStep = (int)(2 * s); if (waveStep < 1) waveStep = 1;
     DrawLine(waveL, waveY + waveH / 2, waveR, waveY + waveH / 2, (Color){80, 80, 70, (unsigned char)(a * 0.4f)});
     // Animated waveform
-    for (int x = waveL; x < waveR; x += 2) {
+    for (int x = waveL; x < waveR; x += waveStep) {
         float t = (float)(x - waveL) / (float)(waveR - waveL);
         float wave = sinf(t * 20.0f + GetTime() * 15.0f) * 0.6f;
         wave += sinf(t * 50.0f + GetTime() * 25.0f) * 0.3f;
@@ -216,5 +225,5 @@ void HudDrawRadioTransmission(float timer, int sw, int sh) {
     int ffs = boxH / 5;
     const char *ftr = "RECEIVED";
     int fw = MeasureText(ftr, ffs);
-    DrawText(ftr, boxX + boxW / 2 - fw / 2, boxY + boxH - ffs - 4, ffs, (Color){180, 180, 170, a});
+    DrawText(ftr, boxX + boxW / 2 - fw / 2, boxY + boxH - ffs - smPad, ffs, (Color){180, 180, 170, a});
 }

@@ -13,6 +13,7 @@ void PlayerInit(Player *player) {
     player->damageFlashTimer = 0.0f;
     player->headBob = 0.0f;
     player->headBobTimer = 0.0f;
+    player->mouseSensitivity = MOUSE_SENSITIVITY;
 
     player->camera.position = player->position;
     player->camera.target = (Vector3){0.0f, PLAYER_HEIGHT, -1.0f};
@@ -32,8 +33,8 @@ Vector3 PlayerGetForward(Player *player) {
 void PlayerUpdate(Player *player, float dt) {
     // Mouse look
     Vector2 mouseDelta = GetMouseDelta();
-    player->yaw -= mouseDelta.x * MOUSE_SENSITIVITY;
-    player->pitch -= mouseDelta.y * MOUSE_SENSITIVITY;
+    player->yaw -= mouseDelta.x * player->mouseSensitivity;
+    player->pitch -= mouseDelta.y * player->mouseSensitivity;
 
     if (player->pitch > PITCH_LIMIT) player->pitch = PITCH_LIMIT;
     if (player->pitch < -PITCH_LIMIT) player->pitch = -PITCH_LIMIT;

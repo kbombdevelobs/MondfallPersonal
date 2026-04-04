@@ -47,7 +47,7 @@ Mondfall/
 │   ├── pickup.c/h      — Dropped enemy weapons (KOSMOS-7 SMG, LIBERTY BLASTER)
 │   ├── hud.c/h         — Health, ammo, wave counter, reload bar, ACHTUNG alert, radio transmission
 │   ├── audio.c/h       — Erika march music (synthesized from MIDI), radio static overlay
-│   ├── game.c/h        — Game state (menu/playing/paused/game over), wave management
+│   ├── game.c/h        — Game state (menu/settings/playing/paused/game over), wave management, settings
 ├── assets/
 │   ├── crt.fs          — Main CRT post-processing fragment shader (GLSL 330)
 │   ├── hud.fs          — HUD visor curve fragment shader
@@ -65,13 +65,14 @@ Mondfall/
 2. CRT shader (`crt.fs`) post-processes with: Gaussian scanlines, Trinitron phosphor mask, bloom, chromatic aberration, fishbowl distortion, film grain, breath fog, ghost reflection
 3. Scaled up to window with nearest-neighbor filtering
 4. HUD renders to separate `RenderTexture2D`, curved via `hud.fs` visor shader
-5. Menu/pause/game-over screens drawn at full window resolution
+5. HUD render texture recreated on window resize to keep elements positioned correctly
+6. Menu/pause/settings/game-over screens drawn at full window resolution with DPI-aware scaling
 
 ### Performance Optimizations
 - **Cached particle meshes:** Unit sphere and unit cube meshes generated once in `WeaponInit()`, reused via `DrawMesh()` with transform matrices for all projectiles, explosions, and beam glows — eliminates ~200 per-frame mesh regenerations
 
 ### Game Loop (main.c)
-- State machine: `STATE_MENU` → `STATE_PLAYING` → `STATE_PAUSED` / `STATE_GAME_OVER`
+- State machine: `STATE_MENU` → `STATE_PLAYING` → `STATE_PAUSED` / `STATE_GAME_OVER` / `STATE_SETTINGS`
 - Assets load on first frame (loading screen shown first)
 - Wave system: `GameUpdate` triggers waves → `LanderSpawnWave` sends landers → landers deploy enemies
 
@@ -103,6 +104,13 @@ Mondfall/
 - **LIBERTY BLASTER:** One-shot vaporize kill, wide hitbox for forgiving aim, massive recoil kick, thick lingering rail beam, heavy rail-gun sound
 - Pickup buffs only apply in player's hands — enemy weapon behavior unchanged
 
+### Settings System (game.c)
+- Mouse sensitivity: stored in `Game.mouseSensitivity`, synced to `Player.mouseSensitivity` each frame
+- Music volume: applied via `GameAudioSetMusicVolume()` each frame
+- SFX volume: applied via per-manager `SetSFXVolume()` functions (`WeaponSetSFXVolume`, `EnemyManagerSetSFXVolume`, `LanderManagerSetSFXVolume`, `PickupManagerSetSFXVolume`)
+- Screen scale: 1x–4x (640x360 to 2560x1440), applied via `SetWindowSize()` on change
+- All UI elements use `S(px)` macro scaling relative to `WINDOW_H` (menus) or `RENDER_H` (HUD) to stay proportional at any resolution
+
 ### Sound
 - All sounds procedurally generated from waveforms (no files needed for core game)
 - Erika march synthesized from MIDI note data with brass square waves + drums + radio static
@@ -122,8 +130,10 @@ Mondfall/
 | E | Pick up dropped enemy weapon |
 | V | Jackhammer (alternate) |
 | X | Ground pound (airborne: slam down / grounded: hop + slam) |
-| ESC | Pause |
-| Enter | Start game / Restart |
+| ESC | Pause / Resume |
+| Enter | Select menu option |
+| Up/Down or W/S | Navigate menus |
+| Left/Right or A/D | Adjust settings |
 
 ## Key Constants
 - `CHUNK_SIZE` — 60 units per terrain chunk
@@ -135,6 +145,7 @@ Mondfall/
 - `PLAYER_HEIGHT` — 1.8 units
 - `MOON_GRAVITY` — 1.62 m/s²
 - `RENDER_W/H` — 640x360 (internal render resolution)
+- `WINDOW_W/H` — 960x540 (default window size, used as UI scale reference)
 
 ## Adding Content
 

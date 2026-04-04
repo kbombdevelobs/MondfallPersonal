@@ -65,5 +65,6 @@ void EnemyDamage(EnemyManager *em, int index, float damage);
 void EnemyVaporize(EnemyManager *em, int index);
 int EnemyCountAlive(EnemyManager *em);
 float EnemyCheckPlayerDamage(EnemyManager *em, Vector3 playerPos, float dt);
+void EnemyManagerSetSFXVolume(EnemyManager *em, float vol);
 
 #endif

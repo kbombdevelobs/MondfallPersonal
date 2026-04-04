@@ -326,3 +326,10 @@ int LanderEnemiesRemaining(LanderManager *lm) {
     }
     return total;
 }
+
+void LanderManagerSetSFXVolume(LanderManager *lm, float vol) {
+    if (!lm->soundLoaded) return;
+    SetSoundVolume(lm->sndImpact, vol);
+    SetSoundVolume(lm->sndExplode, vol);
+    SetSoundVolume(lm->sndKlaxon, vol);
+}

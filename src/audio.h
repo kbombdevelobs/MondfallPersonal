@@ -10,6 +10,7 @@ typedef struct {
 
 void GameAudioInit(GameAudio *ga);
 void GameAudioUpdate(GameAudio *ga);
+void GameAudioSetMusicVolume(GameAudio *ga, float vol);
 void GameAudioUnload(GameAudio *ga);
 
 #endif

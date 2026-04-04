@@ -112,6 +112,10 @@ void GameAudioUpdate(GameAudio *ga) {
     if (ga->loaded) UpdateMusicStream(ga->marchMusic);
 }
 
+void GameAudioSetMusicVolume(GameAudio *ga, float vol) {
+    if (ga->loaded) SetMusicVolume(ga->marchMusic, vol);
+}
+
 void GameAudioUnload(GameAudio *ga) {
     if (ga->loaded) UnloadMusicStream(ga->marchMusic);
 }

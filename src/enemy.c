@@ -919,3 +919,12 @@ int EnemyCountAlive(EnemyManager *em) {
         if (em->enemies[i].active && em->enemies[i].state == ENEMY_ALIVE) c++;
     return c;
 }
+
+void EnemyManagerSetSFXVolume(EnemyManager *em, float vol) {
+    SetSoundVolume(em->sndSovietFire, vol);
+    SetSoundVolume(em->sndAmericanFire, vol);
+    for (int i = 0; i < em->sovietDeathCount; i++)
+        SetSoundVolume(em->sndSovietDeath[i], vol * AUDIO_DEATH_VOLUME);
+    for (int i = 0; i < em->americanDeathCount; i++)
+        SetSoundVolume(em->sndAmericanDeath[i], vol * AUDIO_DEATH_VOLUME);
+}

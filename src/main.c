@@ -21,6 +21,7 @@ int main(void) {
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(WINDOW_W, WINDOW_H, "MONDFALL - DO IT FOR BORMANN");
+    SetExitKey(0); // Disable ESC closing the window
     InitAudioDevice();
     SetTargetFPS(60);
 
@@ -57,8 +58,12 @@ int main(void) {
 
     bool assetsLoaded = false;
     bool cursorLocked = false;
+    int lastScreenScale = game.screenScale;
 
-    while (!WindowShouldClose()) {
+    while (!game.quitRequested) {
+        // Handle window close button (X button)
+        if (WindowShouldClose()) break;
+
         float dt = GetFrameTime();
 
         // Load assets after the window is visible (not before first frame)
@@ -82,16 +87,64 @@ int main(void) {
         // Update music stream
         GameAudioUpdate(&audio);
 
+        // Sync settings to systems
+        player.mouseSensitivity = game.mouseSensitivity;
+        GameAudioSetMusicVolume(&audio, game.musicVolume);
+        WeaponSetSFXVolume(&weapon, game.sfxVolume);
+        EnemyManagerSetSFXVolume(&enemies, game.sfxVolume);
+        LanderManagerSetSFXVolume(&landers, game.sfxVolume);
+        PickupManagerSetSFXVolume(&pickups, game.sfxVolume);
+
+        // Apply screen scale only when setting changes
+        if (game.screenScale != lastScreenScale) {
+            SetWindowSize(RENDER_W * game.screenScale, RENDER_H * game.screenScale);
+            lastScreenScale = game.screenScale;
+        }
+
+        // Recreate HUD render texture if window size changed
+        if (hudTarget.texture.width != GetScreenWidth() || hudTarget.texture.height != GetScreenHeight()) {
+            UnloadRenderTexture(hudTarget);
+            hudTarget = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+        }
+
         // ---- STATE MACHINE ----
         switch (game.state) {
             case STATE_MENU: {
                 if (IsKeyPressed(KEY_ENTER)) {
-                    game.state = STATE_PLAYING;
-                    GameReset(&game);
-                    PlayerInit(&player);
-                    WeaponInit(&weapon);
-                    EnemyManagerInit(&enemies);
-                    if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
+                    switch (game.menuSelection) {
+                        case 0: // Play
+                            game.state = STATE_PLAYING;
+                            GameReset(&game);
+                            PlayerInit(&player);
+                            player.mouseSensitivity = game.mouseSensitivity;
+                            WeaponInit(&weapon);
+                            EnemyManagerInit(&enemies);
+                            LanderManagerInit(&landers);
+                            PickupManagerInit(&pickups);
+                            combat = (CombatContext){&player, &weapon, &enemies, &pickups, &game};
+                            if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
+                            break;
+                        case 1: // Settings
+                            game.settingsReturnState = STATE_MENU;
+                            game.settingsSelection = 0;
+                            game.state = STATE_SETTINGS;
+                            break;
+                        case 2: // Quit
+                            game.quitRequested = true;
+                            break;
+                    }
+                }
+                break;
+            }
+
+            case STATE_SETTINGS: {
+                // Back via ESC or selecting Back option
+                if (IsKeyPressed(KEY_ESCAPE) ||
+                    (IsKeyPressed(KEY_ENTER) && game.settingsSelection == 4)) {
+                    game.state = game.settingsReturnState;
+                    if (game.settingsReturnState == STATE_PAUSED) {
+                        game.pauseSelection = 1; // keep cursor on Settings
+                    }
                 }
                 break;
             }
@@ -100,6 +153,7 @@ int main(void) {
                 // Pause
                 if (IsKeyPressed(KEY_ESCAPE)) {
                     game.state = STATE_PAUSED;
+                    game.pauseSelection = 0;
                     EnableCursor();
                     cursorLocked = false;
                     break;
@@ -167,6 +221,7 @@ int main(void) {
                 // Death check
                 if (PlayerIsDead(&player)) {
                     game.state = STATE_GAME_OVER;
+                    game.menuSelection = 0; // reset game over selection
                     EnableCursor();
                     cursorLocked = false;
                 }
@@ -175,29 +230,65 @@ int main(void) {
 
             case STATE_PAUSED: {
                 if (IsKeyPressed(KEY_ESCAPE)) {
+                    // ESC in pause = resume
                     game.state = STATE_PLAYING;
                     DisableCursor();
                     cursorLocked = true;
+                }
+                if (IsKeyPressed(KEY_ENTER)) {
+                    switch (game.pauseSelection) {
+                        case 0: // Resume
+                            game.state = STATE_PLAYING;
+                            DisableCursor();
+                            cursorLocked = true;
+                            break;
+                        case 1: // Settings
+                            game.settingsReturnState = STATE_PAUSED;
+                            game.settingsSelection = 0;
+                            game.state = STATE_SETTINGS;
+                            break;
+                        case 2: // Main Menu
+                            game.state = STATE_MENU;
+                            game.menuSelection = 0;
+                            EnableCursor();
+                            cursorLocked = false;
+                            break;
+                    }
                 }
                 break;
             }
 
             case STATE_GAME_OVER: {
-                if (IsKeyPressed(KEY_ENTER)) {
+                // Game over selection is handled inside GameDrawGameOver via menuSelection
+                if (game.menuSelection == -1) {
+                    // Restart
+                    game.menuSelection = 0;
                     game.state = STATE_PLAYING;
                     GameReset(&game);
                     PlayerInit(&player);
+                    player.mouseSensitivity = game.mouseSensitivity;
                     WeaponInit(&weapon);
                     EnemyManagerInit(&enemies);
+                    LanderManagerInit(&landers);
+                    PickupManagerInit(&pickups);
+                    combat = (CombatContext){&player, &weapon, &enemies, &pickups, &game};
                     DisableCursor();
                     cursorLocked = true;
+                } else if (game.menuSelection == -2) {
+                    // Main menu
+                    game.menuSelection = 0;
+                    game.state = STATE_MENU;
+                    EnableCursor();
+                    cursorLocked = false;
                 }
                 break;
             }
         }
 
         // ---- RENDER TO LOW-RES TARGET (gameplay only) ----
-        bool renderGameplay = (game.state == STATE_PLAYING || game.state == STATE_PAUSED || game.state == STATE_GAME_OVER);
+        bool renderGameplay = (game.state == STATE_PLAYING || game.state == STATE_PAUSED ||
+                               game.state == STATE_GAME_OVER ||
+                               (game.state == STATE_SETTINGS && game.settingsReturnState == STATE_PAUSED));
 
         if (renderGameplay) {
             BeginTextureMode(target);
@@ -210,7 +301,8 @@ int main(void) {
                 LanderManagerDraw(&landers, player.position);
                 PickupManagerDraw(&pickups);
                 WeaponDrawWorld(&weapon);
-                if (game.state == STATE_PLAYING || game.state == STATE_PAUSED) {
+                if (game.state == STATE_PLAYING || game.state == STATE_PAUSED ||
+                    (game.state == STATE_SETTINGS && game.settingsReturnState == STATE_PAUSED)) {
                     if (pickups.hasPickup)
                         PickupDrawFirstPerson(&pickups, player.camera, weapon.weaponBobTimer);
                     else
@@ -248,7 +340,8 @@ int main(void) {
             EndShaderMode();
 
             // HUD — render to texture, then draw with visor curve
-            if (game.state == STATE_PLAYING || game.state == STATE_PAUSED) {
+            if (game.state == STATE_PLAYING || game.state == STATE_PAUSED ||
+                (game.state == STATE_SETTINGS && game.settingsReturnState == STATE_PAUSED)) {
                 BeginTextureMode(hudTarget);
                 ClearBackground(BLANK);
                 HudDraw(&player, &weapon, &game, hudTarget.texture.width, hudTarget.texture.height);
@@ -269,8 +362,10 @@ int main(void) {
         // Overlays drawn at full window resolution
         if (game.state == STATE_MENU) {
             GameDrawMenu(&game);
+        } else if (game.state == STATE_SETTINGS) {
+            GameDrawSettings(&game);
         } else if (game.state == STATE_PAUSED) {
-            GameDrawPaused();
+            GameDrawPaused(&game);
         } else if (game.state == STATE_GAME_OVER) {
             GameDrawGameOver(&game);
         }

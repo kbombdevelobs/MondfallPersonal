@@ -17,6 +17,7 @@ typedef struct {
     float damageFlashTimer;
     float headBob;
     float headBobTimer;
+    float mouseSensitivity;
 } Player;
 
 void PlayerInit(Player *player);
