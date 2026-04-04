@@ -3,14 +3,7 @@
 
 #include "raylib.h"
 #include "raymath.h"
-
-#define CHUNK_SIZE 60.0f
-#define RENDER_CHUNKS 5
-#define MESH_RES 12
-#define MAX_CHUNK_CRATERS 5
-#define MAX_CHUNK_ROCKS 10
-#define MAX_CHUNKS_PER_FRAME 3
-#define MAX_STARS 300
+#include "config.h"
 
 typedef struct {
     Vector3 position;
@@ -38,8 +31,6 @@ typedef struct {
 typedef struct {
     Vector3 position;
 } Star;
-
-#define MAX_CACHED_CHUNKS (RENDER_CHUNKS * RENDER_CHUNKS)
 
 typedef struct {
     Chunk chunks[MAX_CACHED_CHUNKS];

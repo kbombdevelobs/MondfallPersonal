@@ -6,14 +6,17 @@
 void GameInit(Game *game) {
     memset(game, 0, sizeof(Game));
     game->state = STATE_MENU;
+    game->waveDelay = WAVE_DELAY;
+    game->enemiesPerWave = WAVE_ENEMIES_BASE + 1;
+}
+
+void GameReset(Game *game) {
     game->wave = 0;
     game->killCount = 0;
-    game->waveTimer = 0.0f;
-    game->waveDelay = 6.0f;
+    game->waveActive = false;
     game->enemiesRemaining = 0;
     game->enemiesSpawned = 0;
-    game->enemiesPerWave = 4;
-    game->waveActive = false;
+    game->waveTimer = 0;
 }
 
 void GameUpdate(Game *game) {
@@ -22,7 +25,7 @@ void GameUpdate(Game *game) {
             game->waveTimer += GetFrameTime();
             if (game->waveTimer >= game->waveDelay) {
                 game->wave++;
-                game->enemiesPerWave = 3 + game->wave * 2;
+                game->enemiesPerWave = WAVE_ENEMIES_BASE + game->wave * WAVE_ENEMIES_PER_WAVE;
                 game->enemiesSpawned = 0;
                 game->enemiesRemaining = game->enemiesPerWave;
                 game->waveActive = true;

@@ -454,13 +454,8 @@ void WorldDrawSky(World *world, Camera3D camera) {
     }
 }
 
-static void DrawChunk(World *world, Chunk *chunk, Vector3 playerPos) {
-    float baseX = chunk->cx * CHUNK_SIZE;
-    float baseZ = chunk->cz * CHUNK_SIZE;
-    Vector3 center = {baseX + CHUNK_SIZE * 0.5f, 0, baseZ + CHUNK_SIZE * 0.5f};
-
-    float dist = Vector3Distance(playerPos, center);
-    float fade = 1.0f; // keep for rocks/craters but terrain draws full brightness
+static void DrawChunk(Chunk *chunk, Vector3 playerPos) {
+    float fade = 1.0f;
 
     DrawModel(chunk->ground, (Vector3){0, 0, 0}, 1.0f, WHITE);
 
@@ -527,7 +522,7 @@ void WorldDraw(World *world, Vector3 playerPos) {
         if (!ch->generated) continue;
         int dx = ch->cx - pcx, dz = ch->cz - pcz;
         if (dx >= -half && dx <= half && dz >= -half && dz <= half)
-            DrawChunk(world, ch, playerPos);
+            DrawChunk(ch, playerPos);
     }
 }
 

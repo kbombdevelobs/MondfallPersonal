@@ -1,5 +1,6 @@
 #include "pickup.h"
 #include "world.h"
+#include "sound_gen.h"
 #include "rlgl.h"
 #include <stdlib.h>
 #include <math.h>
@@ -9,22 +10,20 @@ void PickupManagerInit(PickupManager *pm) {
     memset(pm, 0, sizeof(PickupManager));
     // Generate fire sounds
     {
-        int sr = 44100, n = (int)(0.12f * sr);
-        Wave w = {0}; w.frameCount=n; w.sampleRate=sr; w.sampleSize=16; w.channels=1;
-        w.data = RL_CALLOC(n, sizeof(short));
+        int sr = AUDIO_SAMPLE_RATE;
+        Wave w = SoundGenCreateWave(sr, 0.12f);
         short *d = (short *)w.data;
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < (int)w.frameCount; i++) {
             float t = (float)i/sr;
             d[i] = (short)(((float)rand()/RAND_MAX*2-1)*expf(-t*30)*16000 + sinf(t*140*6.283f)*expf(-t*20)*10000);
         }
         pm->sndSovietFire = LoadSoundFromWave(w); UnloadWave(w);
     }
     {
-        int sr = 44100, n = (int)(0.1f * sr);
-        Wave w = {0}; w.frameCount=n; w.sampleRate=sr; w.sampleSize=16; w.channels=1;
-        w.data = RL_CALLOC(n, sizeof(short));
+        int sr = AUDIO_SAMPLE_RATE;
+        Wave w = SoundGenCreateWave(sr, 0.1f);
         short *d = (short *)w.data;
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < (int)w.frameCount; i++) {
             float t = (float)i/sr;
             d[i] = (short)(sinf(t*700*6.283f)*expf(-t*35)*14000);
         }
@@ -39,7 +38,7 @@ void PickupDrop(PickupManager *pm, Vector3 pos, EnemyType type) {
         pm->guns[i].position = pos;
         pm->guns[i].position.y = WorldGetHeight(pos.x, pos.z) + 0.5f;
         pm->guns[i].gunType = type;
-        pm->guns[i].life = 15.0f;
+        pm->guns[i].life = PICKUP_LIFESPAN;
         pm->guns[i].active = true;
         pm->guns[i].bobTimer = 0;
         return;
@@ -65,7 +64,7 @@ void PickupManagerUpdate(PickupManager *pm, Vector3 playerPos, float dt) {
 }
 
 bool PickupTryGrab(PickupManager *pm, Vector3 playerPos) {
-    float bestDist = 4.0f; // pickup range
+    float bestDist = PICKUP_GRAB_RANGE;
     int bestIdx = -1;
     for (int i = 0; i < MAX_PICKUPS; i++) {
         if (!pm->guns[i].active) continue;
@@ -77,9 +76,9 @@ bool PickupTryGrab(PickupManager *pm, Vector3 playerPos) {
     DroppedGun *g = &pm->guns[bestIdx];
     pm->hasPickup = true;
     pm->pickupType = g->gunType;
-    pm->pickupAmmo = (g->gunType == ENEMY_SOVIET) ? 80 : 12;
-    pm->pickupFireRate = (g->gunType == ENEMY_SOVIET) ? 0.12f : 0.35f;
-    pm->pickupDamage = (g->gunType == ENEMY_SOVIET) ? 10.0f : 18.0f;
+    pm->pickupAmmo = (g->gunType == ENEMY_SOVIET) ? PICKUP_SOVIET_AMMO : PICKUP_AMERICAN_AMMO;
+    pm->pickupFireRate = (g->gunType == ENEMY_SOVIET) ? PICKUP_SOVIET_FIRE_RATE : PICKUP_AMERICAN_FIRE_RATE;
+    pm->pickupDamage = (g->gunType == ENEMY_SOVIET) ? PICKUP_SOVIET_DAMAGE : PICKUP_AMERICAN_DAMAGE;
     pm->pickupTimer = 0;
     pm->pickupMuzzleFlash = 0;
     pm->pickupRecoil = 0;

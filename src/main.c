@@ -1,5 +1,6 @@
 #include "raylib.h"
 #include "raymath.h"
+#include "config.h"
 #include "game.h"
 #include "player.h"
 #include "world.h"
@@ -9,19 +10,17 @@
 #include "audio.h"
 #include "lander.h"
 #include "pickup.h"
+#include "combat.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <math.h>
 
-#define RENDER_W 640
-#define RENDER_H 360
-
 int main(void) {
     srand((unsigned int)time(NULL));
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    InitWindow(960, 540, "MONDFALL - DO IT FOR BORMANN");
+    InitWindow(WINDOW_W, WINDOW_H, "MONDFALL - DO IT FOR BORMANN");
     InitAudioDevice();
     SetTargetFPS(60);
 
@@ -51,6 +50,8 @@ int main(void) {
 
     GameInit(&game);
     PlayerInit(&player);
+
+    CombatContext combat = {&player, &weapon, &enemies, &pickups, &game};
 
     bool assetsLoaded = false;
     bool cursorLocked = false;
@@ -84,11 +85,7 @@ int main(void) {
             case STATE_MENU: {
                 if (IsKeyPressed(KEY_ENTER)) {
                     game.state = STATE_PLAYING;
-                    game.wave = 0;
-                    game.killCount = 0;
-                    game.waveActive = false;
-                    game.enemiesRemaining = 0;
-                    game.waveTimer = 0;
+                    GameReset(&game);
                     PlayerInit(&player);
                     WeaponInit(&weapon);
                     EnemyManagerInit(&enemies);
@@ -122,27 +119,25 @@ int main(void) {
 
                 // Heal over time — slow regen
                 if (player.health < player.maxHealth) {
-                    player.health += 2.0f * dt;
+                    player.health += HEALTH_REGEN_RATE * dt;
                     if (player.health > player.maxHealth) player.health = player.maxHealth;
                 }
 
                 // Screen shake — landers + weapon recoil
                 float shake = LanderGetScreenShake(&landers);
-                // Weapon camera shake (different per gun)
                 if (weapon.recoil > 0.1f) {
                     float gunShake = 0;
-                    if (weapon.current == WEAPON_MOND_MP40) gunShake = weapon.recoil * 0.02f;
-                    else if (weapon.raketenFiring) gunShake = weapon.recoil * 0.08f;
-                    else if (weapon.current == WEAPON_JACKHAMMER) gunShake = weapon.recoil * 0.04f;
+                    if (weapon.current == WEAPON_MOND_MP40) gunShake = weapon.recoil * MP40_SHAKE;
+                    else if (weapon.raketenFiring) gunShake = weapon.recoil * RAKETEN_SHAKE;
+                    else if (weapon.current == WEAPON_JACKHAMMER) gunShake = weapon.recoil * JACKHAMMER_SHAKE;
                     shake += gunShake;
                 }
-                // Pickup weapon shake
                 if (pickups.hasPickup && pickups.pickupRecoil > 0.1f) {
-                    shake += pickups.pickupRecoil * 0.03f;
+                    shake += pickups.pickupRecoil * PICKUP_SHAKE;
                 }
-                if (shake > 0.05f) {
-                    player.camera.position.x += ((float)rand()/RAND_MAX - 0.5f) * shake * 0.15f;
-                    player.camera.position.y += ((float)rand()/RAND_MAX - 0.5f) * shake * 0.15f;
+                if (shake > SHAKE_THRESHOLD) {
+                    player.camera.position.x += ((float)rand()/RAND_MAX - 0.5f) * shake * SHAKE_AMPLITUDE;
+                    player.camera.position.y += ((float)rand()/RAND_MAX - 0.5f) * shake * SHAKE_AMPLITUDE;
                 }
 
                 // Weapon bob sync
@@ -150,9 +145,8 @@ int main(void) {
 
                 // Wave spawning via landers
                 if (game.waveActive && game.enemiesSpawned == 0) {
-                    // Launch landers for this wave
                     LanderSpawnWave(&landers, player.position, game.enemiesPerWave, game.wave);
-                    game.enemiesSpawned = game.enemiesPerWave; // mark as handled
+                    game.enemiesSpawned = game.enemiesPerWave;
                 }
 
                 // Check if wave is cleared (all landers done + all enemies dead)
@@ -161,129 +155,12 @@ int main(void) {
                     game.enemiesRemaining = 0;
                 }
 
-                // Shooting — pickup weapon overrides left-click when held
-                if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && pickups.hasPickup) {
-                    // Fire picked-up enemy weapon with left click
-                    Vector3 shootDir = PlayerGetForward(&player);
-                    Vector3 shootOrigin = player.camera.position;
-                    Vector3 barrelPos = WeaponGetBarrelWorldPos(&weapon, player.camera);
-                    if (PickupFire(&pickups, shootOrigin, shootDir)) {
-                        Ray pickRay = {shootOrigin, shootDir};
-                        float hd = 0;
-                        int hit = EnemyCheckHit(&enemies, pickRay, 80.0f, &hd);
-                        if (hit >= 0) {
-                            EnemyDamage(&enemies, hit, pickups.pickupDamage);
-                            if (enemies.enemies[hit].state == ENEMY_DYING) {
-                                game.killCount++;
-                                PickupDrop(&pickups, enemies.enemies[hit].position, enemies.enemies[hit].type);
-                            }
-                        }
-                        if (weapon.beamCount < MAX_BEAM_TRAILS) {
-                            Color bc = (pickups.pickupType == ENEMY_SOVIET) ?
-                                (Color){255, 80, 40, 180} : (Color){80, 160, 255, 180};
-                            weapon.beams[weapon.beamCount] = (BeamTrail){barrelPos,
-                                Vector3Add(shootOrigin, Vector3Scale(shootDir, 80.0f)), bc, 0.1f};
-                            weapon.beamCount++;
-                        }
-                        PlayerApplyRecoil(&player, shootDir, 0.3f);
-                    }
-                } else if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) || (weapon.current == WEAPON_JACKHAMMER && IsKeyDown(KEY_V))) {
-                    // Normal weapon fire
-                    Vector3 shootDir = PlayerGetForward(&player);
-                    Vector3 barrelPos = WeaponGetBarrelWorldPos(&weapon, player.camera);
-                    Vector3 shootOrigin = player.camera.position;
-
-                    if (WeaponFire(&weapon, barrelPos, shootDir)) {
-                        // Recoil push in air (moon physics!)
-                        float recoilForce = (weapon.current == WEAPON_RAKETENFAUST) ? 4.0f :
-                                           (weapon.current == WEAPON_MOND_MP40) ? 0.5f : 0;
-                        if (recoilForce > 0) PlayerApplyRecoil(&player, shootDir, recoilForce);
-
-                        if (weapon.current == WEAPON_MOND_MP40) {
-                            Ray shootRay = {shootOrigin, shootDir};
-                            float hitDist = 0;
-                            int hit = EnemyCheckHit(&enemies, shootRay, 100.0f, &hitDist);
-                            if (hit >= 0) {
-                                EnemyDamage(&enemies, hit, weapon.mp40Damage);
-                                if (enemies.enemies[hit].state == ENEMY_DYING) {
-                                    game.killCount++;
-                                    PickupDrop(&pickups, enemies.enemies[hit].position, enemies.enemies[hit].type);
-                                }
-                            }
-                        } else if (weapon.current == WEAPON_JACKHAMMER) {
-                            Vector3 meleePos = Vector3Add(shootOrigin, Vector3Scale(shootDir, weapon.jackhammerRange * 0.5f));
-                            int hit = EnemyCheckSphereHit(&enemies, meleePos, weapon.jackhammerRange);
-                            if (hit >= 0) {
-                                EnemyDamage(&enemies, hit, weapon.jackhammerDamage);
-                                if (enemies.enemies[hit].state == ENEMY_DYING) {
-                                    game.killCount++;
-                                    PickupDrop(&pickups, enemies.enemies[hit].position, enemies.enemies[hit].type);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Raketenfaust projectile hits
-                for (int i = 0; i < MAX_PROJECTILES; i++) {
-                    if (!weapon.projectiles[i].active) continue;
-                    int hit = EnemyCheckSphereHit(&enemies, weapon.projectiles[i].position, weapon.projectiles[i].radius);
-                    if (hit >= 0) {
-                        for (int j = 0; j < MAX_ENEMIES; j++) {
-                            if (!enemies.enemies[j].active || enemies.enemies[j].state != ENEMY_ALIVE) continue;
-                            float d = Vector3Distance(weapon.projectiles[i].position, enemies.enemies[j].position);
-                            if (d < weapon.projectiles[i].radius) {
-                                float dmg = weapon.projectiles[i].damage * (1.0f - d / weapon.projectiles[i].radius);
-                                EnemyDamage(&enemies, j, dmg);
-                                if (enemies.enemies[j].state == ENEMY_DYING) {
-                                    game.killCount++;
-                                    PickupDrop(&pickups, enemies.enemies[j].position, enemies.enemies[j].type);
-                                }
-                            }
-                        }
-                        WeaponSpawnExplosion(&weapon, weapon.projectiles[i].position, weapon.projectiles[i].radius);
-                        weapon.projectiles[i].active = false;
-                    }
-                    // Ground hit
-                    float groundH = WorldGetHeight(weapon.projectiles[i].position.x, weapon.projectiles[i].position.z);
-                    if (weapon.projectiles[i].position.y <= groundH) {
-                        WeaponSpawnExplosion(&weapon, weapon.projectiles[i].position, weapon.projectiles[i].radius);
-                        weapon.projectiles[i].active = false;
-                    }
-                }
-
-                // MEGA BEAM — update position each frame + kill everything in path
-                if (weapon.raketenFiring) {
-                    Vector3 shootDir2 = PlayerGetForward(&player);
-                    Vector3 barrel2 = WeaponGetBarrelWorldPos(&weapon, player.camera);
-                    weapon.raketenBeamStart = barrel2;
-                    weapon.raketenBeamEnd = Vector3Add(player.camera.position, Vector3Scale(shootDir2, 100.0f));
-                    // MASSIVE knockback — beam pushes you hard opposite
-                    player.velocity.x -= shootDir2.x * 25.0f * dt;
-                    player.velocity.z -= shootDir2.z * 25.0f * dt;
-                    player.velocity.y += 5.0f * dt; // lifts you off ground
-                    player.onGround = false;
-                    // Kill everything in the beam path
-                    Ray beamRay = {player.camera.position, shootDir2};
-                    for (int ei = 0; ei < MAX_ENEMIES; ei++) {
-                        Enemy *en = &enemies.enemies[ei];
-                        if (!en->active || en->state != ENEMY_ALIVE) continue;
-                        BoundingBox box = {
-                            {en->position.x-1.0f, en->position.y-2.0f, en->position.z-1.0f},
-                            {en->position.x+1.0f, en->position.y+2.0f, en->position.z+1.0f}};
-                        RayCollision col = GetRayCollisionBox(beamRay, box);
-                        if (col.hit && col.distance < 100.0f) {
-                            game.killCount++;
-                            EnemyVaporize(&enemies, ei); // no pickup — vaporized
-                        }
-                    }
-                }
-
-                // Enemy damage to player
-                float dmg = EnemyCheckPlayerDamage(&enemies, player.position, dt);
-                if (dmg > 0) {
-                    PlayerTakeDamage(&player, dmg);
-                }
+                // Combat resolution
+                CombatProcessPickupFire(&combat);
+                CombatProcessWeaponFire(&combat);
+                CombatProcessProjectiles(&combat);
+                CombatProcessBeam(&combat, dt);
+                CombatProcessEnemyDamage(&combat, dt);
 
                 // Death check
                 if (PlayerIsDead(&player)) {
@@ -306,11 +183,7 @@ int main(void) {
             case STATE_GAME_OVER: {
                 if (IsKeyPressed(KEY_ENTER)) {
                     game.state = STATE_PLAYING;
-                    game.wave = 0;
-                    game.killCount = 0;
-                    game.waveActive = false;
-                    game.enemiesRemaining = 0;
-                    game.waveTimer = 0;
+                    GameReset(&game);
                     PlayerInit(&player);
                     WeaponInit(&weapon);
                     EnemyManagerInit(&enemies);
@@ -342,7 +215,6 @@ int main(void) {
                         WeaponDrawFirst(&weapon, player.camera);
                 }
             EndMode3D();
-            // HUD drawn AFTER shader pass — see below
             EndTextureMode();
         }
 

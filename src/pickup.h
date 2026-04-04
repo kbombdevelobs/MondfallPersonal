@@ -3,9 +3,8 @@
 
 #include "raylib.h"
 #include "raymath.h"
+#include "config.h"
 #include "enemy.h"
-
-#define MAX_PICKUPS 30
 
 typedef struct {
     Vector3 position;

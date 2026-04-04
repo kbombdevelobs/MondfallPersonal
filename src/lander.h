@@ -3,9 +3,8 @@
 
 #include "raylib.h"
 #include "raymath.h"
+#include "config.h"
 #include "enemy.h"
-
-#define MAX_LANDERS 4
 
 typedef enum {
     LANDER_INACTIVE,

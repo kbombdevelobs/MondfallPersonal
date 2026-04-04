@@ -1,5 +1,6 @@
 #include "lander.h"
 #include "world.h"
+#include "sound_gen.h"
 #include "rlgl.h"
 #include <math.h>
 #include <string.h>
@@ -9,11 +10,10 @@ void LanderManagerInit(LanderManager *lm) {
     memset(lm, 0, sizeof(LanderManager));
     // Impact sound — deep thud
     {
-        int sr = 44100, n = (int)(0.8f * sr);
-        Wave w = {0}; w.frameCount = n; w.sampleRate = sr; w.sampleSize = 16; w.channels = 1;
-        w.data = RL_CALLOC(n, sizeof(short));
+        int sr = AUDIO_SAMPLE_RATE;
+        Wave w = SoundGenCreateWave(sr, 0.8f);
         short *d = (short *)w.data;
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < (int)w.frameCount; i++) {
             float t = (float)i / sr;
             d[i] = (short)(sinf(t * 40.0f * 6.283f) * expf(-t * 4.0f) * 28000.0f
                           + ((float)rand()/RAND_MAX*2-1) * expf(-t * 6.0f) * 12000.0f);
@@ -22,11 +22,10 @@ void LanderManagerInit(LanderManager *lm) {
     }
     // Explosion sound
     {
-        int sr = 44100, n = (int)(1.0f * sr);
-        Wave w = {0}; w.frameCount = n; w.sampleRate = sr; w.sampleSize = 16; w.channels = 1;
-        w.data = RL_CALLOC(n, sizeof(short));
+        int sr = AUDIO_SAMPLE_RATE;
+        Wave w = SoundGenCreateWave(sr, 1.0f);
         short *d = (short *)w.data;
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < (int)w.frameCount; i++) {
             float t = (float)i / sr;
             d[i] = (short)((sinf(t*55*6.283f)*0.4f + ((float)rand()/RAND_MAX*2-1)*0.5f)
                           * expf(-t * 3.0f) * 30000.0f);
@@ -35,11 +34,10 @@ void LanderManagerInit(LanderManager *lm) {
     }
     // Air raid klaxon — WW2 style siren, 3 rising wails
     {
-        int sr = 44100, n = (int)(3.0f * sr);
-        Wave w = {0}; w.frameCount = n; w.sampleRate = sr; w.sampleSize = 16; w.channels = 1;
-        w.data = RL_CALLOC(n, sizeof(short));
+        int sr = AUDIO_SAMPLE_RATE;
+        Wave w = SoundGenCreateWave(sr, 3.0f);
         short *d = (short *)w.data;
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < (int)w.frameCount; i++) {
             float t = (float)i / sr;
             // Three wail cycles over 3 seconds
             float cycle = fmodf(t, 1.0f);

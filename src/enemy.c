@@ -1,5 +1,6 @@
 #include "enemy.h"
 #include "world.h"
+#include "sound_gen.h"
 #include "rlgl.h"
 #include <math.h>
 #include <string.h>
@@ -15,11 +16,10 @@ void EnemyManagerInit(EnemyManager *em) {
 
     // Enemy shooting sounds
     {
-        int sr = 44100, samples = (int)(0.1f * sr);
-        Wave w = {0}; w.frameCount = samples; w.sampleRate = sr; w.sampleSize = 16; w.channels = 1;
-        w.data = RL_CALLOC(samples, sizeof(short));
+        int sr = AUDIO_SAMPLE_RATE;
+        Wave w = SoundGenCreateWave(sr, 0.1f);
         short *d = (short *)w.data;
-        for (int i = 0; i < samples; i++) {
+        for (int i = 0; i < (int)w.frameCount; i++) {
             float t = (float)i / sr;
             d[i] = (short)(((float)rand()/RAND_MAX*2-1) * expf(-t*35) * 18000 + sinf(t*150*2*3.14159f)*expf(-t*20)*10000);
         }
@@ -27,11 +27,10 @@ void EnemyManagerInit(EnemyManager *em) {
         UnloadWave(w);
     }
     {
-        int sr = 44100, samples = (int)(0.08f * sr);
-        Wave w = {0}; w.frameCount = samples; w.sampleRate = sr; w.sampleSize = 16; w.channels = 1;
-        w.data = RL_CALLOC(samples, sizeof(short));
+        int sr = AUDIO_SAMPLE_RATE;
+        Wave w = SoundGenCreateWave(sr, 0.08f);
         short *d = (short *)w.data;
-        for (int i = 0; i < samples; i++) {
+        for (int i = 0; i < (int)w.frameCount; i++) {
             float t = (float)i / sr;
             d[i] = (short)(sinf(t*800*2*3.14159f) * expf(-t*40) * 16000);
         }
@@ -49,25 +48,10 @@ void EnemyManagerInit(EnemyManager *em) {
         if (!FileExists(deathFiles[df])) continue;
         Wave deathWav = LoadWave(deathFiles[df]);
         if (deathWav.frameCount <= 0) { UnloadWave(deathWav); continue; }
-        // Downsample to 8000Hz mono for radio quality
-        WaveFormat(&deathWav, 8000, 16, 1);
-        // Degrade: overdrive, crackle, pops
-        short *d = (short *)deathWav.data;
-        int n = deathWav.frameCount;
-        float avg = 0;
-        for (int i = 0; i < n; i++) {
-            float s = (float)d[i] / 32767.0f;
-            avg = avg * 0.95f + s * 0.05f;
-            s -= avg; // high-pass (kill bass)
-            s *= 2.5f; // overdrive
-            if (s > 0.7f) s = 0.7f;
-            if (s < -0.7f) s = -0.7f;
-            s += ((float)rand() / RAND_MAX * 2.0f - 1.0f) * 0.08f; // crackle
-            if (rand() % 800 == 0) s += ((float)rand() / RAND_MAX - 0.5f) * 0.5f; // pop
-            d[i] = (short)(s * 20000.0f);
-        }
+        WaveFormat(&deathWav, AUDIO_RADIO_SAMPLE_RATE, 16, 1);
+        SoundGenDegradeRadio(&deathWav);
         em->sndSovietDeath[em->sovietDeathCount] = LoadSoundFromWave(deathWav);
-        SetSoundVolume(em->sndSovietDeath[em->sovietDeathCount], 0.4f);
+        SetSoundVolume(em->sndSovietDeath[em->sovietDeathCount], AUDIO_DEATH_VOLUME);
         UnloadWave(deathWav);
         em->sovietDeathCount++;
     }
@@ -82,23 +66,10 @@ void EnemyManagerInit(EnemyManager *em) {
         if (!FileExists(amDeathFiles[df])) continue;
         Wave dw = LoadWave(amDeathFiles[df]);
         if (dw.frameCount <= 0) { UnloadWave(dw); continue; }
-        WaveFormat(&dw, 8000, 16, 1);
-        short *d = (short *)dw.data;
-        int n = dw.frameCount;
-        float avg2 = 0;
-        for (int i = 0; i < n; i++) {
-            float s = (float)d[i] / 32767.0f;
-            avg2 = avg2 * 0.95f + s * 0.05f;
-            s -= avg2;
-            s *= 2.5f;
-            if (s > 0.7f) s = 0.7f;
-            if (s < -0.7f) s = -0.7f;
-            s += ((float)rand() / RAND_MAX * 2.0f - 1.0f) * 0.08f;
-            if (rand() % 800 == 0) s += ((float)rand() / RAND_MAX - 0.5f) * 0.5f;
-            d[i] = (short)(s * 20000.0f);
-        }
+        WaveFormat(&dw, AUDIO_RADIO_SAMPLE_RATE, 16, 1);
+        SoundGenDegradeRadio(&dw);
         em->sndAmericanDeath[em->americanDeathCount] = LoadSoundFromWave(dw);
-        SetSoundVolume(em->sndAmericanDeath[em->americanDeathCount], 0.4f);
+        SetSoundVolume(em->sndAmericanDeath[em->americanDeathCount], AUDIO_DEATH_VOLUME);
         UnloadWave(dw);
         em->americanDeathCount++;
     }
@@ -125,19 +96,19 @@ static void EnemyInit(Enemy *e, EnemyType type, Vector3 pos) {
     e->animState = ANIM_IDLE;
     e->active = true;
     e->strafeDir = (rand() % 2) ? 1.0f : -1.0f;
-    e->strafeTimer = 1.5f + (float)rand() / RAND_MAX * 2.0f;
-    e->dodgeCooldown = 3.0f;
+    e->strafeTimer = AI_STRAFE_TIMER_BASE + (float)rand() / RAND_MAX * AI_STRAFE_TIMER_RAND;
+    e->dodgeCooldown = AI_DODGE_COOLDOWN;
 
     if (type == ENEMY_SOVIET) {
-        e->health = 80; e->maxHealth = 80;
-        e->speed = 5.5f; e->damage = 7;
-        e->attackRange = 22; e->attackRate = 0.15f;
-        e->preferredDist = 8; e->behavior = AI_ADVANCE;
+        e->health = SOVIET_HEALTH; e->maxHealth = SOVIET_HEALTH;
+        e->speed = SOVIET_SPEED; e->damage = SOVIET_DAMAGE;
+        e->attackRange = SOVIET_ATTACK_RANGE; e->attackRate = SOVIET_ATTACK_RATE;
+        e->preferredDist = SOVIET_PREFERRED_DIST; e->behavior = AI_ADVANCE;
     } else {
-        e->health = 55; e->maxHealth = 55;
-        e->speed = 5; e->damage = 10;
-        e->attackRange = 30; e->attackRate = 0.4f;
-        e->preferredDist = 18; e->behavior = AI_STRAFE;
+        e->health = AMERICAN_HEALTH; e->maxHealth = AMERICAN_HEALTH;
+        e->speed = AMERICAN_SPEED; e->damage = AMERICAN_DAMAGE;
+        e->attackRange = AMERICAN_ATTACK_RANGE; e->attackRate = AMERICAN_ATTACK_RATE;
+        e->preferredDist = AMERICAN_PREFERRED_DIST; e->behavior = AI_STRAFE;
     }
 }
 

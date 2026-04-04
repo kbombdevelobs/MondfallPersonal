@@ -2,6 +2,7 @@
 #define GAME_H
 
 #include "raylib.h"
+#include "config.h"
 
 typedef enum {
     STATE_MENU,
@@ -24,6 +25,7 @@ typedef struct {
 } Game;
 
 void GameInit(Game *game);
+void GameReset(Game *game);
 void GameUpdate(Game *game);
 void GameDrawMenu(Game *game);
 void GameDrawPaused(void);

@@ -3,8 +3,7 @@
 
 #include "raylib.h"
 #include "raymath.h"
-
-#define MAX_ENEMIES 50
+#include "config.h"
 
 typedef enum { ENEMY_SOVIET, ENEMY_AMERICAN } EnemyType;
 typedef enum { ENEMY_ALIVE, ENEMY_DYING, ENEMY_VAPORIZING, ENEMY_DEAD } EnemyState;

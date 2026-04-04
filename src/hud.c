@@ -3,7 +3,7 @@
 #include <math.h>
 
 void HudDrawLanderArrows(LanderManager *lm, Camera3D camera, int sw, int sh) {
-    int cx = sw / 2, cy = sh / 2;
+    int cx = sw / 2;
 
     // ACHTUNG only during klaxon wait — stops once landers appear
     bool incoming = false;

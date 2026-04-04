@@ -1,45 +1,21 @@
 #include "weapon.h"
+#include "sound_gen.h"
 #include "rlgl.h"
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
 
 // ---- Procedural sound generation ----
-static Wave GenWaveNoise(float duration, float freq, float decay) {
-    int sampleRate = 44100;
-    int samples = (int)(duration * sampleRate);
-    Wave wave = {0};
-    wave.frameCount = samples;
-    wave.sampleRate = sampleRate;
-    wave.sampleSize = 16;
-    wave.channels = 1;
-    wave.data = RL_CALLOC(samples, sizeof(short));
-    short *d = (short *)wave.data;
-    for (int i = 0; i < samples; i++) {
-        float t = (float)i / sampleRate;
-        float env = expf(-t * decay);
-        float noise = ((float)rand() / RAND_MAX * 2.0f - 1.0f);
-        float tone = sinf(t * freq * 2.0f * PI);
-        d[i] = (short)((noise * 0.6f + tone * 0.4f) * env * 28000.0f);
-    }
-    return wave;
-}
-
 static Sound GenSoundGunshot(void) {
-    Wave w = GenWaveNoise(0.15f, 120.0f, 25.0f);
-    Sound s = LoadSoundFromWave(w);
-    UnloadWave(w);
-    return s;
+    return SoundGenNoiseTone(0.15f, 120.0f, 25.0f);
 }
 
 static Sound GenSoundBeamBlast(void) {
     // 2.5 second sustained energy beam roar
-    int sr = 44100, samples = (int)(2.5f * sr);
-    Wave wave = {0};
-    wave.frameCount = samples; wave.sampleRate = sr; wave.sampleSize = 16; wave.channels = 1;
-    wave.data = RL_CALLOC(samples, sizeof(short));
+    int sr = AUDIO_SAMPLE_RATE;
+    Wave wave = SoundGenCreateWave(sr, 2.5f);
     short *d = (short *)wave.data;
-    for (int i = 0; i < samples; i++) {
+    for (int i = 0; i < (int)wave.frameCount; i++) {
         float t = (float)i / sr;
         // Ramp up then sustain then fade
         float env = 1.0f;
@@ -58,19 +34,14 @@ static Sound GenSoundBeamBlast(void) {
 }
 
 static Sound GenSoundJackhammer(void) {
-    Wave w = GenWaveNoise(0.12f, 200.0f, 30.0f);
-    Sound s = LoadSoundFromWave(w);
-    UnloadWave(w);
-    return s;
+    return SoundGenNoiseTone(0.12f, 200.0f, 30.0f);
 }
 
 static Sound GenSoundReload(void) {
-    int sr = 44100, samples = (int)(0.5f * sr);
-    Wave wave = {0};
-    wave.frameCount = samples; wave.sampleRate = sr; wave.sampleSize = 16; wave.channels = 1;
-    wave.data = RL_CALLOC(samples, sizeof(short));
+    int sr = AUDIO_SAMPLE_RATE;
+    Wave wave = SoundGenCreateWave(sr, 0.5f);
     short *d = (short *)wave.data;
-    for (int i = 0; i < samples; i++) {
+    for (int i = 0; i < (int)wave.frameCount; i++) {
         float t = (float)i / sr;
         float click1 = (t > 0.05f && t < 0.08f) ? sinf(t * 3000) * 0.8f : 0;
         float click2 = (t > 0.25f && t < 0.3f) ? sinf(t * 2000) * 0.6f : 0;
@@ -83,12 +54,10 @@ static Sound GenSoundReload(void) {
 }
 
 static Sound GenSoundExplosion(void) {
-    int sr = 44100, samples = (int)(0.6f * sr);
-    Wave wave = {0};
-    wave.frameCount = samples; wave.sampleRate = sr; wave.sampleSize = 16; wave.channels = 1;
-    wave.data = RL_CALLOC(samples, sizeof(short));
+    int sr = AUDIO_SAMPLE_RATE;
+    Wave wave = SoundGenCreateWave(sr, 0.6f);
     short *d = (short *)wave.data;
-    for (int i = 0; i < samples; i++) {
+    for (int i = 0; i < (int)wave.frameCount; i++) {
         float t = (float)i / sr;
         float env = expf(-t * 5.0f);
         float boom = sinf(t * 50.0f * 2.0f * PI) * expf(-t * 8.0f);
@@ -102,12 +71,10 @@ static Sound GenSoundExplosion(void) {
 }
 
 static Sound GenSoundEmpty(void) {
-    int sr = 44100, samples = (int)(0.05f * sr);
-    Wave wave = {0};
-    wave.frameCount = samples; wave.sampleRate = sr; wave.sampleSize = 16; wave.channels = 1;
-    wave.data = RL_CALLOC(samples, sizeof(short));
+    int sr = AUDIO_SAMPLE_RATE;
+    Wave wave = SoundGenCreateWave(sr, 0.05f);
     short *d = (short *)wave.data;
-    for (int i = 0; i < samples; i++) {
+    for (int i = 0; i < (int)wave.frameCount; i++) {
         float t = (float)i / sr;
         d[i] = (short)(sinf(t * 4000) * expf(-t * 80) * 15000.0f);
     }
@@ -122,13 +89,13 @@ void WeaponInit(Weapon *w) {
 
     memset(w, 0, sizeof(Weapon));
     w->current = WEAPON_MOND_MP40;
-    w->mp40Mag = 32; w->mp40MagSize = 32; w->mp40Reserve = 128;
-    w->mp40FireRate = 0.08f; w->mp40Damage = 25.0f;
-    w->raketenMag = 5; w->raketenMagSize = 5; w->raketenReserve = 10;
-    w->raketenFireRate = 0.1f; w->raketenDamage = 500.0f; w->raketenRadius = 3.0f;
-    w->raketenBeamDuration = 2.0f;
-    w->raketenCooldown = 2.0f;
-    w->jackhammerDamage = 45.0f; w->jackhammerRange = 3.5f; w->jackhammerFireRate = 0.35f;
+    w->mp40Mag = MP40_MAG_SIZE; w->mp40MagSize = MP40_MAG_SIZE; w->mp40Reserve = MP40_RESERVE;
+    w->mp40FireRate = MP40_FIRE_RATE; w->mp40Damage = MP40_DAMAGE;
+    w->raketenMag = RAKETEN_MAG_SIZE; w->raketenMagSize = RAKETEN_MAG_SIZE; w->raketenReserve = RAKETEN_RESERVE;
+    w->raketenFireRate = RAKETEN_FIRE_RATE; w->raketenDamage = RAKETEN_DAMAGE; w->raketenRadius = RAKETEN_BLAST_RADIUS;
+    w->raketenBeamDuration = RAKETEN_BEAM_DURATION;
+    w->raketenCooldown = RAKETEN_COOLDOWN;
+    w->jackhammerDamage = JACKHAMMER_DAMAGE; w->jackhammerRange = JACKHAMMER_RANGE; w->jackhammerFireRate = JACKHAMMER_FIRE_RATE;
 
     if (hadSound) {
         w->sndMp40Fire=s1; w->sndRaketenFire=s2; w->sndJackhammerHit=s3; w->sndReload=s4; w->sndEmpty=s5;

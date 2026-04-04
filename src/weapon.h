@@ -3,6 +3,7 @@
 
 #include "raylib.h"
 #include "raymath.h"
+#include "config.h"
 
 typedef enum {
     WEAPON_MOND_MP40,
@@ -21,9 +22,6 @@ typedef struct {
     bool active;
 } Explosion;
 
-#define MAX_BEAM_TRAILS 20
-#define MAX_PROJECTILES 30
-#define MAX_EXPLOSIONS 10
 
 typedef struct {
     Vector3 position, velocity;

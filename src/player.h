@@ -3,13 +3,7 @@
 
 #include "raylib.h"
 #include "raymath.h"
-
-#define MOON_GRAVITY 1.62f
-#define PLAYER_SPEED 8.0f
-#define PLAYER_JUMP_FORCE 6.0f
-#define MOUSE_SENSITIVITY 0.003f
-#define PLAYER_HEIGHT 1.8f
-#define PLAYER_MAX_HEALTH 100.0f
+#include "config.h"
 
 typedef struct {
     Camera3D camera;
