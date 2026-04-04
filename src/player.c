@@ -40,7 +40,7 @@ void PlayerUpdate(Player *player, float dt) {
 
     // Movement direction vectors (horizontal only)
     Vector3 forward = {sinf(player->yaw), 0.0f, cosf(player->yaw)};
-    Vector3 right = {cosf(player->yaw), 0.0f, -sinf(player->yaw)};
+    Vector3 right = {-cosf(player->yaw), 0.0f, sinf(player->yaw)};
 
     Vector3 moveDir = {0};
     bool moving = false;

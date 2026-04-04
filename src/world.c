@@ -348,23 +348,110 @@ void WorldUpdate(World *world, Vector3 playerPos) {
 }
 
 void WorldDrawSky(World *world, Camera3D camera) {
+    // Stars — bigger cubes so they survive pixelation
     for (int i = 0; i < world->starCount; i++) {
         Vector3 sp = world->stars[i].position;
         sp.x += camera.position.x;
         sp.z += camera.position.z;
-        DrawPoint3D(sp, WHITE);
-        // Draw a tiny cross for brighter stars
-        if (i % 5 == 0) {
-            DrawLine3D(Vector3Add(sp, (Vector3){-0.3f,0,0}), Vector3Add(sp, (Vector3){0.3f,0,0}), WHITE);
-            DrawLine3D(Vector3Add(sp, (Vector3){0,-0.3f,0}), Vector3Add(sp, (Vector3){0,0.3f,0}), WHITE);
+
+        if (i % 8 == 0) {
+            // Bright star — large, slight color
+            DrawCube(sp, 1.5f, 1.5f, 1.5f, (Color){255, 255, 230, 255});
+        } else if (i % 3 == 0) {
+            // Medium star
+            DrawCube(sp, 1.0f, 1.0f, 1.0f, WHITE);
+        } else {
+            // Dim star — still a cube so it renders
+            DrawCube(sp, 0.6f, 0.6f, 0.6f, (Color){200, 200, 210, 255});
         }
     }
-    Vector3 ep = {camera.position.x - 100.0f, 150.0f, camera.position.z - 200.0f};
-    DrawSphereEx(ep, 30.0f, 12, 12, (Color){35, 70, 150, 255});   // ocean
-    DrawSphereEx((Vector3){ep.x+6, ep.y+4, ep.z+26}, 13.0f, 6, 6, (Color){45, 120, 45, 220}); // continent
-    DrawSphereEx((Vector3){ep.x-10, ep.y-8, ep.z+22}, 9.0f, 6, 6, (Color){50, 130, 50, 200}); // continent 2
-    DrawSphereEx((Vector3){ep.x+2, ep.y+12, ep.z+24}, 7.0f, 5, 5, (Color){220, 220, 220, 180}); // ice cap
-    DrawSphereWires(ep, 30.5f, 12, 12, (Color){80, 140, 220, 30}); // atmosphere glow
+
+    // Earth — flat billboard, obviously Earth
+    Vector3 ep = {camera.position.x - 80.0f, 120.0f, camera.position.z - 180.0f};
+    Vector3 toCamera = Vector3Normalize(Vector3Subtract(camera.position, ep));
+    Vector3 earthRight = Vector3Normalize(Vector3CrossProduct(toCamera, (Vector3){0,1,0}));
+    Vector3 earthUp = Vector3CrossProduct(earthRight, toCamera);
+    float R = 25.0f;
+
+    // Draw Earth as a filled disc of pixels
+    // Use a grid and check distance from center
+    int res = 20; // grid resolution across diameter
+    float step = R * 2.0f / (float)res;
+    for (int gy = 0; gy < res; gy++) {
+        for (int gx = 0; gx < res; gx++) {
+            float lx = -R + ((float)gx + 0.5f) * step; // local X (-R to R)
+            float ly = -R + ((float)gy + 0.5f) * step; // local Y (-R to R)
+            float d = sqrtf(lx * lx + ly * ly);
+            if (d > R) continue; // outside circle
+
+            // Normalize to -1..1
+            float nx = lx / R;
+            float ny = ly / R;
+
+            Color ec = {30, 65, 150, 255}; // ocean blue
+
+            // === CONTINENTS — recognizable shapes ===
+            // North America (upper-left quadrant)
+            if (nx > -0.7f && nx < -0.05f && ny > 0.1f && ny < 0.7f) ec = (Color){50, 130, 55, 255};
+            // Central America (thin strip)
+            if (nx > -0.35f && nx < -0.15f && ny > -0.05f && ny < 0.15f) ec = (Color){55, 125, 50, 255};
+            // South America (lower-left)
+            if (nx > -0.4f && nx < -0.05f && ny > -0.7f && ny < -0.05f &&
+                fabsf(nx + 0.2f) < 0.2f - ny * 0.1f) ec = (Color){48, 135, 52, 255};
+            // Europe (upper-center-right, small)
+            if (nx > 0.05f && nx < 0.35f && ny > 0.35f && ny < 0.6f) ec = (Color){55, 128, 48, 255};
+            // Africa (center-right, big)
+            if (nx > 0.1f && nx < 0.5f && ny > -0.45f && ny < 0.35f &&
+                fabsf(nx - 0.3f) < 0.2f - fabsf(ny) * 0.1f) ec = (Color){60, 135, 45, 255};
+            // Asia (upper-right, large mass)
+            if (nx > 0.3f && nx < 0.85f && ny > 0.15f && ny < 0.7f) ec = (Color){52, 125, 50, 255};
+            // Australia (lower-right, small)
+            if (nx > 0.45f && nx < 0.7f && ny > -0.55f && ny < -0.3f) ec = (Color){65, 130, 48, 255};
+
+            // Desert areas (Sahara, Arabia)
+            if (nx > 0.1f && nx < 0.45f && ny > 0.1f && ny < 0.3f) ec = (Color){170, 155, 100, 255};
+            if (nx > 0.35f && nx < 0.55f && ny > 0.05f && ny < 0.2f) ec = (Color){175, 160, 105, 255};
+
+            // Ice caps
+            if (ny > 0.8f) ec = (Color){230, 235, 240, 255}; // north pole
+            if (ny < -0.82f) ec = (Color){225, 230, 238, 255}; // south pole
+
+            // Cloud wisps — white patches scattered
+            float cloudNoise = sinf(nx * 8.0f + 2.0f) * sinf(ny * 6.0f + 1.0f);
+            if (cloudNoise > 0.5f) {
+                ec.r = (unsigned char)fminf(ec.r + 80, 255);
+                ec.g = (unsigned char)fminf(ec.g + 80, 255);
+                ec.b = (unsigned char)fminf(ec.b + 80, 255);
+            }
+
+            // Edge darkening (atmospheric limb)
+            float limb = 1.0f - (d / R);
+            if (limb < 0.15f) {
+                float f = limb / 0.15f;
+                ec.r = (unsigned char)(ec.r * f + 40 * (1.0f - f));
+                ec.g = (unsigned char)(ec.g * f + 80 * (1.0f - f));
+                ec.b = (unsigned char)(ec.b * f + 180 * (1.0f - f));
+            }
+
+            Vector3 p = Vector3Add(ep,
+                Vector3Add(Vector3Scale(earthRight, lx),
+                           Vector3Scale(earthUp, ly)));
+            DrawCube(p, step * 0.95f, step * 0.95f, step * 0.95f, ec);
+        }
+    }
+
+    // Atmosphere halo — blue glow ring just outside the disc
+    for (int s = 0; s < 40; s++) {
+        float a = (float)s / 40.0f * 2.0f * PI;
+        for (int layer = 0; layer < 3; layer++) {
+            float lr = R + 1.5f + (float)layer * 1.5f;
+            Vector3 p = Vector3Add(ep,
+                Vector3Add(Vector3Scale(earthRight, cosf(a) * lr),
+                           Vector3Scale(earthUp, sinf(a) * lr)));
+            unsigned char ha = (unsigned char)(50 - layer * 15);
+            DrawCube(p, 2.0f, 2.0f, 2.0f, (Color){80, 150, 255, ha});
+        }
+    }
 }
 
 static void DrawChunk(World *world, Chunk *chunk, Vector3 playerPos) {
