@@ -137,7 +137,7 @@
 #define PICKUP_SOVIET_FIRE_RATE  0.05f   // fastest fire rate in game
 #define PICKUP_SOVIET_DAMAGE     35.0f   // hits harder than MP40
 #define PICKUP_SOVIET_RANGE      80.0f
-#define PICKUP_SOVIET_RECOIL     0.6f    // snappy kick
+#define PICKUP_SOVIET_RECOIL     2.0f    // snappy kick
 
 // --- Pickup Weapon Stats: American (LIBERTY BLASTER) ---
 #define PICKUP_AMERICAN_AMMO     8

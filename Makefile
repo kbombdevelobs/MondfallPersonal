@@ -20,7 +20,15 @@ run: $(TARGET)
 models:
 	python3 scripts/gen_models.py
 
-clean:
-	rm -f $(OBJ) $(TARGET)
+TEST_SRC = tests/test_game.c
+TEST_OBJ = $(filter-out src/main.o,$(OBJ))
+TEST_TARGET = tests/test_game
 
-.PHONY: all clean run models
+test: $(TEST_OBJ) $(TEST_SRC)
+	$(CC) $(CFLAGS) $(TEST_SRC) $(TEST_OBJ) -o $(TEST_TARGET) $(LDFLAGS)
+	./$(TEST_TARGET)
+
+clean:
+	rm -f $(OBJ) $(TARGET) $(TEST_TARGET)
+
+.PHONY: all clean run models test

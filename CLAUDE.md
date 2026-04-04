@@ -21,9 +21,18 @@ make run
 # Just build
 make
 
+# Run unit tests (ALWAYS run before committing)
+make test
+
 # Clean
 make clean
 ```
+
+## Testing Rules
+- **Always run `make test` before committing.** All tests must pass.
+- Tests are in `tests/test_game.c` — ~35 tests covering config sanity, player physics, weapon logic, pickup system, enemy hit detection, world height, and game state.
+- Tests run without GPU/window — they exercise pure game logic only.
+- When adding new gameplay features, add corresponding tests.
 
 ## Project Structure
 ```
