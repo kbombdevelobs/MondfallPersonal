@@ -94,13 +94,70 @@ float ValueNoise(float x, float z) {
     return LerpF(LerpF(a, b, fx), LerpF(c, d, fx), fz);
 }
 
-// Multi-octave gradient noise for terrain
+// Rilles — sinuous lunar channels, great for cover
+static float RilleDepth(float x, float z, float seed) {
+    float ca = cosf(seed), sa = sinf(seed);
+    float along = x * ca + z * sa;
+    float perp = -x * sa + z * ca;
+    // Meandering center line
+    float center = sinf(along * 0.005f + seed) * 80.0f
+                 + sinf(along * 0.013f + seed * 2.3f) * 30.0f;
+    float dist = fabsf(perp - center);
+    float width = 6.0f + sinf(along * 0.008f + seed * 1.7f) * 2.0f;
+    if (dist > width) return 0.0f;
+    float t = dist / width;
+    return -(1.0f - t * t) * 2.5f;
+}
+
+// Maria factor — large flat dark "sea" regions via cell noise
+float WorldGetMareFactor(float x, float z) {
+    float s = 0.002f;
+    float nx = x * s, nz = z * s;
+    float ix = floorf(nx), iz = floorf(nz);
+    float minDist = 999.0f;
+    for (int di = -1; di <= 1; di++) {
+        for (int dj = -1; dj <= 1; dj++) {
+            float cx = ix + di + Hash2D(ix + di, iz + dj);
+            float cz = iz + dj + Hash2D(ix + di + 37, iz + dj + 53);
+            float dx = nx - cx, dz = nz - cz;
+            float d = dx * dx + dz * dz;
+            if (d < minDist) minDist = d;
+        }
+    }
+    float t = 1.0f - minDist * 4.0f;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    return t * t; // 0 = highlands, 1 = mare center
+}
+
+// Multi-octave gradient noise for terrain with domain warping + features
 float WorldGetHeight(float x, float z) {
-    float h = 0;
     float s = 0.012f;
-    h += GradientNoise(x * s, z * s) * 8.0f;                // big hills
-    h += GradientNoise(x * s * 2.5f, z * s * 2.5f) * 3.0f; // ridges
-    h += GradientNoise(x * s * 6.0f, z * s * 6.0f) * 1.0f; // bumps
-    h += GradientNoise(x * s * 15.0f, z * s * 15.0f) * 0.3f; // fine grit
+    float sx = x * s, sz = z * s;
+
+    // Domain warp — organic, non-repetitive shapes
+    float warpX = GradientNoise(sx + 5.3f, sz + 1.3f) * 4.0f;
+    float warpZ = GradientNoise(sx + 9.2f, sz + 2.8f) * 4.0f;
+    float wsx = sx + warpX * 0.15f;
+    float wsz = sz + warpZ * 0.15f;
+
+    // FBM with warped large octaves, unwarped fine detail
+    float h = 0;
+    h += GradientNoise(wsx, wsz) * 8.0f;                     // big hills (warped)
+    h += GradientNoise(wsx * 2.5f, wsz * 2.5f) * 3.0f;      // ridges (warped)
+    h += GradientNoise(sx * 6.0f, sz * 6.0f) * 1.0f;         // bumps (crisp)
+    h += GradientNoise(sx * 15.0f, sz * 15.0f) * 0.3f;       // fine grit (crisp)
+
+    // Rilles — two channels at different angles
+    h += RilleDepth(x, z, 0.0f);
+    h += RilleDepth(x, z, 1.2f);
+
+    // Maria — flatten terrain in dark sea regions
+    float mare = WorldGetMareFactor(x, z);
+    if (mare > 0.05f) {
+        // Pull height toward flat baseline, reduce noise in maria
+        h = LerpF(h, -3.0f, mare * 0.7f);
+    }
+
     return h - 5.0f;
 }

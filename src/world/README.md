@@ -6,12 +6,12 @@ Split from `world.c` (was 660 lines) into subfolder per 500-line rule.
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `world_noise.h/c` | ~106 | Noise functions: Perlin gradient noise (permutation table, quintic fade), legacy ValueNoise/Hash2D for texture gen, `WorldGetHeight()` |
-| `world_draw.h/c` | ~187 | All world rendering: `WorldDrawSky()` (stars, Earth billboard), `DrawChunk()` (boulders, crater rims), `WorldDraw()` (frustum culling + chunk iteration) |
+| `world_noise.h/c` | ~163 | Noise functions: Perlin gradient noise, domain warping, rilles, maria biomes, `WorldGetHeight()`, `WorldGetMareFactor()` |
+| `world_draw.h/c` | ~190 | All world rendering: `WorldDrawSky()` (stars, Earth billboard), `DrawChunk()` (boulders, crater rims), `WorldDraw()` (frustum culling + chunk iteration) |
 
-## Remaining in src/world.c (~338 lines)
+## Remaining in src/world.c (~375 lines)
 
-Core chunk management: texture generation, crater height computation, terrain mesh generation (vertices, normals, slope-based vertex colors, baked sun lighting), chunk create/find/evict, `WorldInit`, `WorldUpdate`, `WorldUnload`, `WorldCheckCollision`.
+Core chunk management: texture generation, crater profiles (terraced walls + central peaks), terrain mesh generation (vertices, normals, slope-based vertex colors, baked sun lighting, maria darkening), chunk create/find/evict, `WorldInit`, `WorldUpdate`, `WorldUnload`, `WorldCheckCollision`.
 
 ## Key Types (defined in src/world.h)
 
@@ -24,11 +24,14 @@ Core chunk management: texture generation, crater height computation, terrain me
 
 | Function | File | Description |
 |----------|------|-------------|
-| `WorldGetHeight(x, z)` | world_noise.c | 4-octave Perlin gradient noise heightmap |
+| `WorldGetHeight(x, z)` | world_noise.c | Domain-warped 4-octave Perlin noise + rilles + maria flattening |
+| `WorldGetMareFactor(x, z)` | world_noise.c | Cell-noise biome factor: 0 = highlands, 1 = mare center |
 | `GradientNoise(x, z)` | world_noise.c | Core Perlin noise with permutation table |
-| `WorldDraw(world, pos, cam)` | world_draw.c | Renders visible chunks with frustum culling |
+| `RilleDepth(x, z, seed)` | world_noise.c | Sinuous lunar channel depth (static) |
+| `WorldDraw(world, pos, cam)` | world_draw.c | Renders visible chunks with 4-corner frustum culling |
 | `WorldDrawSky(world, cam)` | world_draw.c | Stars + Earth billboard |
 | `WorldInit/Update/Unload` | world.c | Lifecycle management |
-| `WorldCheckCollision` | world.c | Boulder AABB collision (X/Z only) |
-| `GenTerrainMesh` | world.c | Mesh gen with slope colors + baked sun lighting |
+| `WorldCheckCollision` | world.c | Boulder AABB collision (X/Z only, NULL-safe) |
+| `CraterProfile(t, r, depth)` | world.c | Terraced walls + central peaks for large craters |
 | `CraterHeight` | world.c | Min-depth crater overlay across chunk borders |
+| `GenTerrainMesh` | world.c | Mesh gen with slope colors, maria darkening, baked sun lighting |

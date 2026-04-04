@@ -169,17 +169,23 @@ void WorldDraw(World *world, Vector3 playerPos, Camera3D camera) {
         int dx = ch->cx - pcx, dz = ch->cz - pcz;
         if (dx < -half || dx > half || dz < -half || dz > half) continue;
 
-        // Frustum cull: skip chunks behind camera (except the player's own chunk)
-        if (abs(dx) + abs(dz) > 0) {
-            Vector3 chunkCenter = {
-                (ch->cx + 0.5f) * CHUNK_SIZE, 0.0f,
-                (ch->cz + 0.5f) * CHUNK_SIZE
-            };
-            Vector3 toChunk = Vector3Subtract(chunkCenter, camera.position);
-            float dot = toChunk.x * camFwd.x + toChunk.z * camFwd.z;
-            float dist = sqrtf(toChunk.x * toChunk.x + toChunk.z * toChunk.z);
-            if (dot < -CHUNK_SIZE) continue;
-            if (dist > CHUNK_SIZE * 2.0f && dist > 0.01f && dot / dist < 0.15f) continue;
+        // Frustum cull: only skip chunks fully behind camera
+        // Test all 4 corners — if ANY corner is in front of camera, draw the chunk
+        if (abs(dx) + abs(dz) > 1) {
+            float cx0 = ch->cx * CHUNK_SIZE;
+            float cz0 = ch->cz * CHUNK_SIZE;
+            float cx1 = cx0 + CHUNK_SIZE;
+            float cz1 = cz0 + CHUNK_SIZE;
+            float d0 = (cx0 - camera.position.x) * camFwd.x + (cz0 - camera.position.z) * camFwd.z;
+            float d1 = (cx1 - camera.position.x) * camFwd.x + (cz0 - camera.position.z) * camFwd.z;
+            float d2 = (cx0 - camera.position.x) * camFwd.x + (cz1 - camera.position.z) * camFwd.z;
+            float d3 = (cx1 - camera.position.x) * camFwd.x + (cz1 - camera.position.z) * camFwd.z;
+            float maxDot = d0;
+            if (d1 > maxDot) maxDot = d1;
+            if (d2 > maxDot) maxDot = d2;
+            if (d3 > maxDot) maxDot = d3;
+            // Only cull if ALL corners are behind camera
+            if (maxDot < 0.0f) continue;
         }
 
         DrawChunk(ch, playerPos);

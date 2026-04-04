@@ -68,6 +68,39 @@ static Texture2D GenMoonTexture(void) {
     return tex;
 }
 
+// Crater profile with terracing and central peaks for large craters
+static float CraterProfile(float t, float r, float depth) {
+    // t = 0 at center, 1 at rim edge
+    // Raised rim outside
+    if (t > 0.85f) {
+        float rimT = (t - 0.85f) / 0.15f;
+        return depth * 0.35f * (1.0f - rimT * rimT);
+    }
+
+    // Base bowl shape
+    float bowl = -(1.0f - t * t) * depth * 2.5f;
+
+    // Central peak for large craters (radius > 5)
+    if (r > 5.0f && t < 0.15f) {
+        float peakT = t / 0.15f;
+        bowl += depth * 1.5f * (1.0f - peakT * peakT);
+    }
+
+    // Terraced walls for large craters
+    if (r > 5.0f && t > 0.3f && t < 0.85f) {
+        float wallT = (t - 0.3f) / 0.55f; // 0..1 across wall zone
+        float stepF = floorf(wallT * 3.0f) / 3.0f;
+        float frac = wallT * 3.0f - floorf(wallT * 3.0f);
+        // Flatten each terrace, smooth transition between steps
+        float smooth = frac < 0.2f ? frac / 0.2f : 1.0f;
+        float terraceT = stepF + smooth / 3.0f;
+        float flatBowl = -(1.0f - (0.3f + terraceT * 0.55f) * (0.3f + terraceT * 0.55f)) * depth * 2.5f;
+        bowl = LerpF(flatBowl, bowl, 0.5f);
+    }
+
+    return bowl;
+}
+
 // Global crater height modifier — checks ALL nearby chunks so craters span borders
 // Uses min-depth approach to fix overlapping crater artifacts
 static float CraterHeight(World *world, float wx, float wz) {
@@ -82,14 +115,14 @@ static float CraterHeight(World *world, float wx, float wz) {
             float dz = wz - ch->craters[c].position.z;
             float dist2 = dx * dx + dz * dz;
             float r = ch->craters[c].radius;
-            if (dist2 >= r * r) continue;
+            // Check slightly beyond rim for the raised rim zone
+            if (dist2 >= r * r * 1.44f) continue; // 1.2x radius squared
             float dist = sqrtf(dist2);
             float t = dist / r;
-            float depression = -(1.0f - t * t) * ch->craters[c].depth * 2.5f;
-            float rim = 0.0f;
-            if (t > 0.8f) rim = ((t - 0.8f) / 0.2f) * ch->craters[c].depth * 0.4f;
-            if (depression < minDepression) minDepression = depression;
-            if (rim > maxRim) maxRim = rim;
+            if (t > 1.0f) continue;
+            float profile = CraterProfile(t, r, ch->craters[c].depth);
+            if (profile < 0 && profile < minDepression) minDepression = profile;
+            if (profile > 0 && profile > maxRim) maxRim = profile;
         }
     }
     return (minDepression < -0.1f) ? minDepression : minDepression + maxRim;
@@ -134,8 +167,12 @@ static Model GenTerrainMesh(int cx, int cz, Texture2D moonTex, World *world) {
         float slopeDarken = slope * 8.0f;
         if (slopeDarken > 35.0f) slopeDarken = 35.0f;
 
-        int shade = (int)(145.0f + cn * 60.0f + craterDarken * 80.0f - slopeDarken);
-        if (shade < 70) shade = 70;
+        // Maria darkening — dark basalt seas
+        float mare = WorldGetMareFactor(vx, vz);
+        float mareDarken = mare * 25.0f;
+
+        int shade = (int)(145.0f + cn * 60.0f + craterDarken * 80.0f - slopeDarken - mareDarken);
+        if (shade < 60) shade = 60;
         if (shade > 200) shade = 200;
         mesh.colors[i * 4 + 0] = (unsigned char)shade;
         mesh.colors[i * 4 + 1] = (unsigned char)shade;
@@ -324,6 +361,7 @@ void WorldUpdate(World *world, Vector3 playerPos) {
 }
 
 bool WorldCheckCollision(World *world, Vector3 pos, float radius) {
+    if (!world) return false;
     for (int i = 0; i < world->chunkCount; i++) {
         Chunk *ch = &world->chunks[i];
         if (!ch->generated) continue;

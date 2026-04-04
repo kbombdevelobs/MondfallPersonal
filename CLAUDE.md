@@ -79,7 +79,7 @@ Mondfall/
 │   ├── soviet_death_sounds/  — Soviet faction radio death sounds (mp3)
 │   ├── american_death_sounds/ — American faction radio death sounds (mp3)
 ├── tests/
-│   └── test_game.c     — ~39 unit tests (no GPU required)
+│   └── test_game.c     — ~71 unit tests (no GPU required)
 ├── Makefile
 └── .gitignore
 ```
@@ -103,16 +103,21 @@ Mondfall/
 - Assets load on first frame (loading screen shown first)
 - Wave system: `GameUpdate` triggers waves → `LanderSpawnWave` sends landers → landers deploy enemies
 
-### World System (world.c)
+### World System (world.c + world/)
 - Infinite terrain via chunk system (60x60 unit chunks, 5x5 render grid)
-- `WorldGetHeight(x, z)` — deterministic multi-octave Perlin gradient noise (permutation table + quintic fade), used by all systems
+- `WorldGetHeight(x, z)` — deterministic multi-octave Perlin gradient noise with domain warping for organic shapes
+- **Domain warping:** large-scale octaves fed through secondary noise to break repetition; fine detail stays crisp
+- **Rilles:** two sinuous lunar channels at different angles carved into heightmap — natural gameplay trenches
+- **Maria:** cell-noise biome regions where terrain flattens and darkens (dark basalt "seas")
+- **Craters:** `CraterProfile()` with terraced walls and central peaks for large craters (radius > 5), simple bowls for small; min-depth overlap resolution
 - Baked directional lighting: low-angle sun dot product multiplied into vertex colors during mesh generation (0.15 ambient floor)
 - Slope-based vertex coloring: steep terrain darkened by sampling 4 neighboring heights
-- Craters baked into mesh via `CraterHeight()` using min-depth approach (deepest crater wins at overlap, depressions override rims)
-- Frustum culling in `WorldDraw()` via camera forward dot product — skips chunks behind camera
+- Maria darkening: vertex colors reduced in dark sea biome regions
+- Frustum culling in `WorldDraw()` — tests all 4 chunk corners, only culls chunks fully behind camera
 - Vertex-displaced meshes with world-space UVs and vertex colors for seamless chunks
 - Sphere-cluster boulders with LOD (detail reduces with distance)
 - Boulder collision checks Y-axis so players can jump over rocks
+- Horizon fog in CRT shader: subtle radial fade to black at screen edges
 
 ### Enemy System (enemy.c)
 - Two factions: Soviet (red uniforms, gold helmets) and American (navy blue, silver helmets)
@@ -188,7 +193,7 @@ Drop `.mp3` files in `assets/soviet_death_sounds/` or `assets/american_death_sou
 All weapon stats are in `WeaponInit()` in `weapon.c`. Viewmodels are drawn in `WeaponDrawFirst()`. Enemy weapon visuals are in `DrawAstronautModel()` in `enemy.c`.
 
 ### Modifying Terrain
-Height function is `WorldGetHeight()` in `world.c` — uses 4-octave Perlin gradient noise via `GradientNoise()` (permutation table based). Adjust octave scales/amplitudes for different terrain character. Rock sizes in `GenerateChunk()`. Crater parameters there too. Vertex colors are computed per-vertex at mesh generation time with slope darkening and baked sun lighting — modify the sun direction vector in `GenTerrainMesh()` to change shadow angle. The legacy `ValueNoise()`/`Hash2D()` functions are still used for texture generation only.
+Height function is `WorldGetHeight()` in `src/world/world_noise.c` — uses domain-warped 4-octave Perlin gradient noise + rille channels + maria flattening. Adjust warp strength (0.15 multiplier), octave scales/amplitudes, or rille angles/widths for different terrain character. `WorldGetMareFactor()` controls biome regions — tune the cell noise scale (0.002) for larger/smaller maria. Crater profiles are in `CraterProfile()` in `src/world.c` — terracing and central peaks only activate for radius > 5. Sun direction vector is in `GenTerrainMesh()` — modify for different shadow angles. Rock sizes in `GenerateChunk()`. The CRT shader horizon fog is in `assets/crt.fs` (search for "HORIZON FOG").
 
 ### Shaders
 `assets/crt.fs` is the main post-processing shader — edit and reload (no recompile needed, it's loaded at runtime). `assets/hud.fs` curves the HUD overlay.
