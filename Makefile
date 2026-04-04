@@ -6,7 +6,7 @@ SRC = src/main.c src/game.c src/player.c src/world.c src/weapon.c src/enemy.c sr
 OBJ = $(SRC:.c=.o)
 TARGET = mondfall
 
-all: $(TARGET)
+all: $(TARGET) test
 
 $(TARGET): $(OBJ)
 	$(CC) $(OBJ) -o $@ $(LDFLAGS)
