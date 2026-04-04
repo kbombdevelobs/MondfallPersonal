@@ -294,13 +294,34 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
         bool moving = false;
 
         if (e->type == ENEMY_SOVIET) {
-            // SOVIET: Charge as a spread — run at player with wide strafe to form a line
-            if (dist > 4.0f) {
-                // Sprint toward player with wide spread
+            // SOVIET: Charge as a spread — run at player with wide strafe
+            // Check if a structure blocks the direct charge path
+            bool sovStructBlock = false;
+            StructureManager *sovStructs = StructureGetActive();
+            if (sovStructs && dist > 6.0f) {
+                float collR = MOONBASE_EXTERIOR_RADIUS + 1.0f;
+                for (int si = 0; si < sovStructs->count; si++) {
+                    Structure *st = &sovStructs->structures[si];
+                    if (!st->active) continue;
+                    Vector3 toS = {st->worldPos.x - e->position.x, 0, st->worldPos.z - e->position.z};
+                    Vector3 toP = {playerPos.x - e->position.x, 0, playerPos.z - e->position.z};
+                    float tsLen = sqrtf(toS.x * toS.x + toS.z * toS.z);
+                    float tpLen = sqrtf(toP.x * toP.x + toP.z * toP.z);
+                    if (tsLen < tpLen && tsLen < collR * 3.0f) {
+                        float dot = (toS.x * toP.x + toS.z * toP.z) / (tsLen * tpLen + 0.001f);
+                        if (dot > 0.5f) { sovStructBlock = true; break; }
+                    }
+                }
+            }
+
+            if (sovStructBlock) {
+                // Rush wide around — heavy strafe to split around the base
+                moveDir = Vector3Add(fwd, Vector3Scale(strafe, e->strafeDir * 2.0f));
+                moving = true; e->behavior = AI_ADVANCE;
+            } else if (dist > 4.0f) {
                 moveDir = Vector3Add(fwd, Vector3Scale(strafe, e->strafeDir * 0.6f));
                 moving = true; e->behavior = AI_ADVANCE;
             } else {
-                // In melee range — circle strafe fast
                 moveDir = Vector3Add(Vector3Scale(strafe, e->strafeDir * 1.5f), Vector3Scale(fwd, 0.2f));
                 moving = true; e->behavior = AI_STRAFE;
             }
