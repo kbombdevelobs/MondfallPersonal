@@ -5,6 +5,7 @@
 #include "raylib.h"
 
 void EcsEnemySystemsRegister(ecs_world_t *world);
+void EcsEnemySystemsCleanup(void);
 
 void EcsEnemyDamage(ecs_world_t *world, ecs_entity_t entity, float damage);
 void EcsEnemyVaporize(ecs_world_t *world, ecs_entity_t entity);

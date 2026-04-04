@@ -81,6 +81,30 @@ Raketenfaust ammo initialization, weapon name strings for Jackhammer and Raketen
 ### 13. Config Cross-Checks (7 tests)
 Jackhammer one-shots both factions, player height and moon gravity are positive, render resolution is valid landscape, chunk size is positive, max enemies is within reasonable bounds (10-200).
 
+### 14. Structure System (2 tests)
+Structure spawn chance config validation, unique interior Y-offset per structure.
+
+### 15. ECS Lifecycle (5 tests)
+`GameEcsInit()` creates a valid world, reinit creates a fresh empty world (old enemies gone), `EcsEnemySystemsCleanup()` nulls the alive query, double-cleanup is safe (no crash), enemies cleared on reinit.
+
+### 16. ECS Faction Stats (8 tests)
+Soviet/American prefab stats match `config.h` constants. Cross-faction comparisons: Americans have longer range and prefer more distance, Soviets are faster with more health and faster fire rate, Americans hit harder per shot.
+
+### 17. ECS Component Integrity (6 tests)
+Transform position roundtrip, faction tag correctness for both types, `EcAlive` tag present on spawn, velocity initially zero, AI starts in `AI_ADVANCE`.
+
+### 18. ECS Damage (6 tests)
+Partial damage leaves enemy alive with correct remaining health, exact-health damage kills (transitions to `EcDying`), overkill removes `EcAlive`, multi-hit accumulation and eventual kill, vaporize sets `EcVaporizing` (not `EcDying`), eviscerate sets `EcEviscerating` (not `EcDying` or `EcVaporizing`).
+
+### 19. ECS Hit Detection (6 tests)
+Sphere hit at exact range, dead enemies excluded from sphere hits, sphere picks closest entity, ray hit on enemy directly ahead, ray miss on perpendicular enemy, ray respects max distance.
+
+### 20. Game State Transitions (3 tests)
+`GameReset()` clears wave/kill/spawn state, `GameInit()` starts in `STATE_MENU`, wave delay is positive.
+
+### 21. AI Config Sanity (6 tests)
+AI turn speed positive, dodge cooldown positive, LOD distances ordered (LOD1 < LOD2 < CULL), enemy ground offset positive, AI stagger divisor at least 1, structure collision radius blocks enemy approach.
+
 ## Adding New Tests
 
 1. Define a test function using `TEST(test_descriptive_name)` in the appropriate category section
@@ -93,4 +117,4 @@ Jackhammer one-shots both factions, player height and moon gravity are positive,
 
 | File | Role |
 |------|------|
-| `tests/test_game.c` | All unit tests (~70 tests across 13 categories) |
+| `tests/test_game.c` | All unit tests (~127 tests across 21 categories) |

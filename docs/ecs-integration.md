@@ -44,9 +44,10 @@ These legacy files are not listed in the Makefile `SRC` variable and are not par
 
 The global ECS world is managed by `ecs_world.c`:
 
-- `GameEcsInit()` -- Creates (or recreates) the flecs world. Called at startup and on every game restart/new game to ensure a clean enemy slate.
+- `GameEcsInit()` -- Creates (or recreates) the flecs world. On reinit, calls `EcsEnemySystemsCleanup()` and `EcsEnemyResourcesUnload()` before destroying the old world to prevent query and resource leaks.
 - `GameEcsGetWorld()` -- Returns the global `ecs_world_t*`.
 - `GameEcsFini()` -- Destroys the world at shutdown.
+- `EcsEnemySystemsCleanup()` -- Frees the stored `g_aliveQuery` and nulls it. Safe to call multiple times. Called on reinit and at shutdown.
 
 After world creation, `main.c` calls the registration sequence:
 1. `EcsEnemyComponentsRegister(world)` -- registers all component types and creates prefab entities
@@ -95,7 +96,7 @@ Registered in `EcsEnemySystemsRegister()`, executed via `ecs_progress(world, dt)
 |--------|-------------------|---------|
 | `SysAITargeting` | EcTransform, EcAIState, EcAlive | Face enemies toward player |
 | `SysAIBehavior` | EcTransform, EcAIState, EcCombatStats, EcFaction, EcVelocity, EcAlive | Soviet rush / American tactical AI |
-| `SysCollisionAvoidance` | EcTransform, EcVelocity, EcAlive | Push apart overlapping enemies |
+| `SysCollisionAvoidance` | EcTransform, EcVelocity, EcAlive | Push apart overlapping enemies (properly frees nested iterators on early break) |
 | `SysPhysics` | EcTransform, EcVelocity, EcAnimation, EcAlive | Apply velocity, gravity, jumping, animation |
 | `SysAttack` | EcTransform, EcAIState, EcCombatStats, EcFaction, EcAnimation, EcAlive | Enemy shooting at player |
 | `SysRagdollDeath` | EcTransform, EcRagdollDeath, EcDying | Ragdoll/crumple physics and cleanup |

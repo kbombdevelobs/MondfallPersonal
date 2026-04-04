@@ -20,22 +20,23 @@ related_docs:
 ```
 main.c (game loop)
   |
-  |-- State Machine: MENU -> PLAYING <-> PAUSED -> GAME_OVER
+  |-- State Machine: MENU -> INTRO -> PLAYING <-> PAUSED / SETTINGS / GAME_OVER
   |
   |-- Update Phase (STATE_PLAYING)
   |     |-- PlayerUpdate        (player.c)    movement, physics, camera
   |     |-- GameUpdate          (game.c)      wave timer, progression
   |     |-- WeaponUpdate        (weapon.c)    fire rates, reload, projectiles
-  |     |-- EnemyManagerUpdate  (enemy.c)     AI, animation, attacks
+  |     |-- ecs_progress         (flecs)       AI, physics, attacks, death (enemy ECS systems)
   |     |-- WorldUpdate         (world.c)     chunk loading around player
   |     |-- LanderManagerUpdate (lander.c)    descent, deployment, explosions
   |     |-- PickupManagerUpdate (pickup.c)    despawn timers, held weapon
-  |     |-- Combat*             (combat.c)    hit detection, damage, kills
+  |     |-- StructureManagerUpdate (structure.c) moon base teleport, resupply
+  |     |-- EcsCombat*          (combat_ecs.c) hit detection, damage, kills
   |
   |-- Render Phase (3-layer pipeline)
         |-- Layer 1: 3D scene -> 640x360 RenderTexture
         |     |-- WorldDrawSky / WorldDraw
-        |     |-- EnemyManagerDraw
+        |     |-- EcsEnemyManagerDraw (enemy_draw_ecs.c)
         |     |-- LanderManagerDraw
         |     |-- PickupManagerDraw / WeaponDrawWorld
         |     |-- WeaponDrawFirst / PickupDrawFirstPerson
@@ -61,10 +62,15 @@ player.c  weapon.c  enemy.c  world.c  game.c  lander.c  pickup.c
                             weapon enemy lander pickup
                               .c    .c    .c    .c
 
-combat.h  <-- player.h, weapon.h, enemy.h, pickup.h, game.h
+combat_ecs.h  <-- player.h, weapon.h, pickup.h, game.h, flecs.h
     |
     v
-combat.c  (orchestrates hit detection across all systems)
+combat_ecs.c  (orchestrates ECS hit detection across all systems)
+
+ecs_world.h  <-- flecs.h
+    |
+    v
+ecs_world.c  (global ECS world lifecycle: init, get, fini, cleanup)
 
 hud.h  <-- player.h, weapon.h, game.h, pickup.h, lander.h
     |
@@ -88,10 +94,10 @@ Each system uses a manager struct that owns its pool of entities:
 
 All pools are fixed-size arrays. No heap allocation at runtime.
 
-### Combat Context (`combat.c`)
-A `CombatContext` struct holds pointers to all managers, passed to five focused
-functions that handle different combat scenarios. This keeps main.c's game loop
-clean while combat logic stays centralized and testable.
+### ECS Combat Context (`combat_ecs.c`)
+An `EcsCombatContext` struct holds pointers to player, weapon, pickups, game, and
+the flecs world. Four processing functions handle pickup fire, weapon fire,
+projectiles, and beam damage each frame. This replaced the legacy `CombatContext`.
 
 ### Procedural Sound (`sound_gen.c`)
 Shared utilities for procedural audio generation. `SoundGenCreateWave` allocates
@@ -110,7 +116,7 @@ world pointer through every function.
 3. Scaled to window with **nearest-neighbor filtering** (crispy pixels)
 4. **HUD** renders to a separate full-resolution `RenderTexture2D`
 5. **Visor Shader** (`resources/hud.fs`) curves the HUD overlay
-6. **Menu/Pause/Game Over** screens drawn at full window resolution on top
+6. **Menu/Pause/Settings/Intro/Game Over** screens drawn at full window resolution on top, using `S(px)` DPI-aware scaling
 
 ## Wave System Flow
 

@@ -23,26 +23,31 @@ Astronaut enemies (Soviet and American factions), AI behaviors, spawning, hit de
 | `enemy_components.h` | **Active** | All ECS component types: EcTransform, EcVelocity, EcFaction, EcAlive, EcCombatStats, EcAIState, EcAnimation, plus death-state components (EcDying, EcVaporizing, EcEviscerating, EcRagdollDeath, EcVaporizeDeath, EcEviscerateDeath), singletons (EcEnemyResources, EcGameContext), and prefab entity externs |
 | `enemy_components.c` | **Active** | Component registration with flecs via ECS_COMPONENT_DEFINE macros; creates Soviet and American prefab entities with default stats from config.h |
 | `enemy_systems.h` | **Active** | ECS system registration API and public functions: EcsEnemyDamage, EcsEnemyVaporize, EcsEnemyEviscerate, EcsEnemyCountAlive |
-| `enemy_systems.c` | **Active** | All ECS systems: SysAITargeting, SysAIBehavior, SysMovement, SysGravity, SysShooting, SysRagdollDeath, SysVaporizeDeath, SysEviscerateDeath, SysCleanupDead. Contains stored queries for nested iteration. |
+| `enemy_systems.c` | **Active** | Central API: EcsEnemyDamage, EcsEnemyVaporize, EcsEnemyEviscerate, EcsEnemyCountAlive, EcsEnemySystemsCleanup, EcsEnemySystemsRegister. Delegates to sub-system files. |
+| `enemy_ai.h/c` | **Active** | AI systems: SysAITargeting, SysAIBehavior, SysCollisionAvoidance |
+| `enemy_physics.h/c` | **Active** | Physics + combat systems: SysPhysics, SysAttack |
+| `enemy_death_systems.h/c` | **Active** | Death systems: SysRagdollDeath, SysVaporizeDeath, SysEviscerateDeath, SysRadioTimer |
 | `enemy_spawn.h` | **Active** | Spawn API: EcsEnemySpawnAt, EcsEnemySpawnAroundPlayer |
 | `enemy_spawn.c` | **Active** | Entity creation with full component setup; places enemies at terrain height via WorldGetHeight; configures faction-specific stats and AI parameters |
 | `enemy_draw_ecs.h` | **Active** | ECS draw bridge API: EcsEnemyManagerDraw, EcsEnemyResourcesInit/Unload |
 | `enemy_draw_ecs.c` | **Active** | Queries ECS components, fills temporary legacy Enemy structs, and delegates to DrawAstronautModel. Handles resource loading (models, sounds, death audio). |
 | `enemy_draw.h` | **Active** | Draw API: DrawAstronautModel (all states), DrawAstronautLOD1, DrawAstronautLOD2 |
-| `enemy_draw.c` | **Active** | All enemy rendering: alive astronaut model (torso/helmet/arms/legs/gun/backpack), ragdoll death with pressurized air jets and blood spurts, crumple death with terrain-conforming blood pool mesh, vaporize death (jerk/freeze/swell/pop/disintegrate), eviscerate death (limbs fly apart with blood). ~630 lines. |
+| `enemy_draw.c` | **Active** | Alive astronaut rendering (torso/helmet/arms/legs/gun/backpack), LOD1/LOD2 draw functions. Delegates death states to enemy_draw_death.c. ~256 lines. |
+| `enemy_draw_death.h` | **Active** | Death rendering API: DrawAstronautEviscerate, DrawAstronautVaporize, DrawAstronautRagdoll |
+| `enemy_draw_death.c` | **Active** | Death state rendering: eviscerate (limbs fly apart with blood), vaporize (jerk/freeze/swell/pop/disintegrate), ragdoll (suit breach jets, blood pools). ~500 lines. |
 | `enemy.h` | **Legacy** | Defines legacy Enemy and EnemyManager structs. Kept because DrawAstronautModel still takes these struct pointers. Not compiled independently -- included by enemy_draw_ecs.c and enemy_draw.c for struct definitions. |
-| `enemy.c` | **Legacy** | Original monolithic enemy logic (init, AI, spawning, hit detection, damage). NOT compiled by the Makefile. Superseded by enemy_components.c + enemy_systems.c + enemy_spawn.c. Retained as reference only. |
+| `../legacy/enemy.c` | **Legacy** | Moved to `src/legacy/`. Original monolithic enemy logic, superseded by ECS files. |
 
 ## Compiled Sources (from Makefile)
 
 The Makefile compiles these files from src/enemy/:
 - `enemy_components.c`
-- `enemy_systems.c`
+- `enemy_systems.c`, `enemy_ai.c`, `enemy_physics.c`, `enemy_death_systems.c`
 - `enemy_spawn.c`
 - `enemy_draw_ecs.c`
-- `enemy_draw.c`
+- `enemy_draw.c`, `enemy_draw_death.c`
 
-Note: `enemy.c` is NOT compiled. The `enemy.h` header is still included transitively for struct definitions used by the draw code.
+Note: `enemy.c` has been moved to `src/legacy/`. The `enemy.h` header is still included transitively for struct definitions used by the draw code.
 
 ## Enemy States (ECS tags)
 
@@ -79,6 +84,7 @@ Note: `enemy.c` is NOT compiled. The `enemy.h` header is still included transiti
 | `EcsEnemyVaporize` | enemy_systems.c | Instant beam death (no weapon drop) |
 | `EcsEnemyEviscerate` | enemy_systems.c | Jackhammer death (drops weapon, limbs fly) |
 | `EcsEnemyCountAlive` | enemy_systems.c | Count entities with EcAlive tag |
+| `EcsEnemySystemsCleanup` | enemy_systems.c | Free stored alive query; safe to call multiple times |
 | `EcsEnemyManagerDraw` | enemy_draw_ecs.c | Query ECS, fill legacy structs, delegate to DrawAstronautModel |
 | `EcsEnemyResourcesInit` | enemy_draw_ecs.c | Load models, sounds, death audio into EcEnemyResources singleton |
 | `DrawAstronautModel` | enemy_draw.c | Render a single astronaut in any state (alive/dying/vaporizing/eviscerating) |
