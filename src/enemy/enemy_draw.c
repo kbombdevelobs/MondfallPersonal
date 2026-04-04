@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stddef.h>
 
+
 void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     Vector3 pos = e->position;
     Color tint = WHITE;
@@ -119,16 +120,6 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
                     DrawSphereEx(sp, 0.05f, 3, 3, bloodCol);
                 }
             }
-            // Blood pool — starts immediately, grows huge
-            if (t > 0.3f) {
-                float poolR = (t - 0.3f) * 1.2f;
-                if (poolR > 3.5f) poolR = 3.5f;
-                float poolY = WorldGetHeight(tp.x, tp.z) + 0.02f;
-                DrawCube((Vector3){tp.x, poolY, tp.z}, poolR, 0.03f, poolR * 0.8f,
-                    (Color){100, 4, 2, (unsigned char)(fade * 220)});
-                DrawCube((Vector3){tp.x + 0.2f, poolY + 0.01f, tp.z - 0.1f}, poolR * 0.6f, 0.02f, poolR * 0.5f,
-                    (Color){140, 8, 4, (unsigned char)(fade * 180)});
-            }
         }
         // 2=right arm, 3=left arm
         for (int ai = 2; ai <= 3; ai++) {
@@ -159,14 +150,6 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
                     Vector3 dp = {ap.x + sinf(dt2)*0.1f, ap.y - 0.3f - d*0.15f, ap.z + cosf(dt2)*0.1f};
                     DrawSphereEx(dp, 0.03f, 3, 3, darkBlood);
                 }
-            }
-            // Arm blood pool
-            if (t > 0.8f) {
-                float gH = WorldGetHeight(ap.x, ap.z) + 0.02f;
-                float pr = (t - 0.8f) * 0.5f;
-                if (pr > 1.5f) pr = 1.5f;
-                DrawCube((Vector3){ap.x, gH, ap.z}, pr, 0.02f, pr * 0.6f,
-                    (Color){110, 5, 2, (unsigned char)(fade * 180)});
             }
         }
         // 4=right leg, 5=left leg
@@ -200,14 +183,6 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
                     Vector3 dp = {lp.x + sinf(dt2*2)*0.2f, lp.y - d*0.2f, lp.z + cosf(dt2*3)*0.2f};
                     DrawSphereEx(dp, 0.04f, 3, 3, darkBlood);
                 }
-            }
-            // Leg blood pool
-            if (t > 0.5f) {
-                float gH = WorldGetHeight(lp.x, lp.z) + 0.02f;
-                float pr = (t - 0.5f) * 0.6f;
-                if (pr > 1.8f) pr = 1.8f;
-                DrawCube((Vector3){lp.x, gH, lp.z}, pr, 0.02f, pr * 0.7f,
-                    (Color){105, 4, 2, (unsigned char)(fade * 190)});
             }
         }
 
@@ -253,23 +228,6 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
                 Vector3 mp = {pos.x + cosf(ma)*mr, pos.y + my, pos.z + sinf(ma)*mr};
                 DrawSphereEx(mp, 0.12f + sinf(t*3+m)*0.04f, 3, 3,
                     (Color){150, 10, 5, (unsigned char)(mistFade * 80)});
-            }
-        }
-
-        // === MAIN BLOOD POOL AT IMPACT POINT — grows massive ===
-        if (t > 0.1f) {
-            float poolR = t * 1.0f;
-            if (poolR > 4.0f) poolR = 4.0f;
-            float poolY = WorldGetHeight(pos.x, pos.z) + 0.01f;
-            DrawCube((Vector3){pos.x, poolY, pos.z}, poolR, 0.03f, poolR * 0.85f,
-                (Color){90, 3, 1, (unsigned char)(fade * 230)});
-            DrawCube((Vector3){pos.x + 0.3f, poolY + 0.01f, pos.z - 0.2f}, poolR * 0.7f, 0.02f, poolR * 0.5f,
-                (Color){130, 6, 3, (unsigned char)(fade * 180)});
-            // Glossy highlights in the pool
-            if (poolR > 1.0f) {
-                DrawCube((Vector3){pos.x - 0.15f, poolY + 0.02f, pos.z + 0.1f},
-                    poolR * 0.3f, 0.01f, poolR * 0.2f,
-                    (Color){180, 20, 10, (unsigned char)(fade * 100)});
             }
         }
 
