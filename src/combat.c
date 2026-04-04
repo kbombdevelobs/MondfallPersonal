@@ -121,14 +121,21 @@ void CombatProcessWeaponFire(CombatContext *ctx) {
                 }
             }
         } else if (weapon->current == WEAPON_JACKHAMMER) {
+            // Lunge forward — hard impulse + lock out WASD for duration
+            Vector3 lungeDir = {shootDir.x, 0, shootDir.z};
+            lungeDir = Vector3Normalize(lungeDir);
+            player->velocity.x = lungeDir.x * JACKHAMMER_LUNGE_SPEED;
+            player->velocity.z = lungeDir.z * JACKHAMMER_LUNGE_SPEED;
+            player->velocity.y = 2.5f; // lift for punch feel
+            player->lungeTimer = JACKHAMMER_LUNGE_DURATION;
+
             Vector3 meleePos = Vector3Add(shootOrigin, Vector3Scale(shootDir, weapon->jackhammerRange * 0.5f));
             int hit = EnemyCheckSphereHit(enemies, meleePos, weapon->jackhammerRange);
             if (hit >= 0) {
-                EnemyDamage(enemies, hit, weapon->jackhammerDamage);
-                if (enemies->enemies[hit].state == ENEMY_DYING) {
-                    game->killCount++;
-                    PickupDrop(pickups, enemies->enemies[hit].position, enemies->enemies[hit].type);
-                }
+                // One-hit eviscerate kill — enemy torn apart, drops weapon
+                game->killCount++;
+                PickupDrop(pickups, enemies->enemies[hit].position, enemies->enemies[hit].type);
+                EnemyEviscerate(enemies, hit, shootDir);
             }
         }
     }

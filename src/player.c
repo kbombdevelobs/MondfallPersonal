@@ -39,6 +39,11 @@ void PlayerUpdate(Player *player, float dt) {
     if (player->pitch > PITCH_LIMIT) player->pitch = PITCH_LIMIT;
     if (player->pitch < -PITCH_LIMIT) player->pitch = -PITCH_LIMIT;
 
+    // Lunge timer — blocks WASD while active
+    if (player->lungeTimer > 0) {
+        player->lungeTimer -= dt;
+    }
+
     // Movement direction vectors (horizontal only)
     Vector3 forward = {sinf(player->yaw), 0.0f, cosf(player->yaw)};
     Vector3 right = {-cosf(player->yaw), 0.0f, sinf(player->yaw)};
@@ -46,21 +51,29 @@ void PlayerUpdate(Player *player, float dt) {
     Vector3 moveDir = {0};
     bool moving = false;
 
-    if (IsKeyDown(KEY_W)) { moveDir = Vector3Add(moveDir, forward); moving = true; }
-    if (IsKeyDown(KEY_S)) { moveDir = Vector3Subtract(moveDir, forward); moving = true; }
-    if (IsKeyDown(KEY_D)) { moveDir = Vector3Add(moveDir, right); moving = true; }
-    if (IsKeyDown(KEY_A)) { moveDir = Vector3Subtract(moveDir, right); moving = true; }
+    // During lunge, WASD is locked out — velocity is purely from the lunge impulse
+    if (player->lungeTimer <= 0) {
+        if (IsKeyDown(KEY_W)) { moveDir = Vector3Add(moveDir, forward); moving = true; }
+        if (IsKeyDown(KEY_S)) { moveDir = Vector3Subtract(moveDir, forward); moving = true; }
+        if (IsKeyDown(KEY_D)) { moveDir = Vector3Add(moveDir, right); moving = true; }
+        if (IsKeyDown(KEY_A)) { moveDir = Vector3Subtract(moveDir, right); moving = true; }
 
-    if (moving) {
-        moveDir = Vector3Normalize(moveDir);
-        float speed = PLAYER_SPEED;
-        if (IsKeyDown(KEY_LEFT_SHIFT)) speed *= SPRINT_MULTIPLIER;
-        player->velocity.x = moveDir.x * speed;
-        player->velocity.z = moveDir.z * speed;
+        if (moving) {
+            moveDir = Vector3Normalize(moveDir);
+            float speed = PLAYER_SPEED;
+            if (IsKeyDown(KEY_LEFT_SHIFT)) speed *= SPRINT_MULTIPLIER;
+            player->velocity.x = moveDir.x * speed;
+            player->velocity.z = moveDir.z * speed;
+        } else {
+            // Moon-like sliding deceleration
+            player->velocity.x *= (1.0f - DECEL_FRICTION * dt);
+            player->velocity.z *= (1.0f - DECEL_FRICTION * dt);
+        }
     } else {
-        // Moon-like sliding deceleration
-        player->velocity.x *= (1.0f - DECEL_FRICTION * dt);
-        player->velocity.z *= (1.0f - DECEL_FRICTION * dt);
+        // During lunge: mild drag so it doesn't feel floaty at the end
+        player->velocity.x *= (1.0f - 2.0f * dt);
+        player->velocity.z *= (1.0f - 2.0f * dt);
+        moving = true; // keep head bob going
     }
 
     // Jump (floaty moon jump)

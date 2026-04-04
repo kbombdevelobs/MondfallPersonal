@@ -3,7 +3,7 @@
 
 #include "player.h"
 #include "weapon.h"
-#include "enemy.h"
+#include "enemy/enemy.h"
 #include "pickup.h"
 #include "game.h"
 

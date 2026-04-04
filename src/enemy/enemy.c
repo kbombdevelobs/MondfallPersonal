@@ -1,7 +1,7 @@
 #include "enemy.h"
+#include "enemy_draw.h"
 #include "world.h"
 #include "sound_gen.h"
-#include "rlgl.h"
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
@@ -193,6 +193,28 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
                 else e->position.y = gH;
             }
 
+            if (e->deathTimer <= 0) { e->state = ENEMY_DEAD; e->active = false; em->count--; }
+            continue;
+        }
+        if (e->state == ENEMY_EVISCERATING) {
+            e->deathTimer -= dt;
+            e->evisTimer += dt;
+            float t = e->evisTimer;
+            for (int li = 0; li < 6; li++) {
+                e->evisLimbPos[li] = Vector3Add(e->evisLimbPos[li], Vector3Scale(e->evisLimbVel[li], dt));
+                e->evisLimbVel[li].y -= MOON_GRAVITY * dt;
+                float gH = WorldGetHeight(
+                    e->position.x + e->evisLimbPos[li].x,
+                    e->position.z + e->evisLimbPos[li].z);
+                float limbGround = gH - e->position.y + 0.1f;
+                if (e->evisLimbPos[li].y < limbGround) {
+                    e->evisLimbPos[li].y = limbGround;
+                    e->evisLimbVel[li].y = fabsf(e->evisLimbVel[li].y) * 0.2f;
+                    e->evisLimbVel[li].x *= 0.6f;
+                    e->evisLimbVel[li].z *= 0.6f;
+                }
+                if (t < 3.0f) e->evisBloodTimer[li] += dt;
+            }
             if (e->deathTimer <= 0) { e->state = ENEMY_DEAD; e->active = false; em->count--; }
             continue;
         }
@@ -413,396 +435,6 @@ float EnemyCheckPlayerDamage(EnemyManager *em, Vector3 playerPos, float dt) {
     return total;
 }
 
-static void DrawAstronautModel(EnemyManager *em, Enemy *e) {
-    Vector3 pos = e->position;
-    Color tint = WHITE;
-    if (e->hitFlash > 0) {
-        unsigned char v = (unsigned char)(150 + e->hitFlash * 105);
-        tint = (Color){255, v, v, 255};
-    }
-
-    Color visorColor, accentColor, suitBase, suitDark, bootColor, beltColor, buckleColor, helmetColor, gloveColor, backpackColor;
-
-    if (e->type == ENEMY_SOVIET) {
-        // Soviet: deep red uniform (#CD0000), gold helmet (#FFD700), black boots, brown belt + gold buckle
-        suitBase     = (Color){205, 0, 0, 255};      // USSR red
-        suitDark     = (Color){160, 0, 0, 255};      // darker red panels
-        accentColor  = (Color){255, 215, 0, 255};    // gold accent (#FFD700)
-        visorColor   = (Color){255, 200, 50, 230};   // gold visor
-        helmetColor  = (Color){220, 185, 40, 255};   // gold/yellow helmet
-        bootColor    = (Color){25, 25, 22, 255};     // matte black boots
-        beltColor    = (Color){120, 75, 35, 255};    // medium brown leather
-        buckleColor  = (Color){255, 215, 0, 255};    // polished gold buckle
-        gloveColor   = (Color){30, 30, 28, 255};     // black gloves
-        backpackColor= (Color){140, 10, 10, 255};    // dark red backpack
-    } else {
-        // American: navy blue uniform, silver/chrome helmet, tan boots, olive belt + silver buckle
-        suitBase     = (Color){25, 40, 90, 255};     // navy blue
-        suitDark     = (Color){18, 28, 65, 255};     // darker navy panels
-        accentColor  = (Color){220, 220, 230, 255};  // silver/white accent
-        visorColor   = (Color){100, 170, 255, 230};  // blue visor
-        helmetColor  = (Color){195, 200, 210, 255};  // silver/chrome helmet
-        bootColor    = (Color){140, 115, 75, 255};   // tan boots
-        beltColor    = (Color){80, 85, 60, 255};     // olive drab belt
-        buckleColor  = (Color){200, 205, 215, 255};  // silver buckle
-        gloveColor   = (Color){160, 155, 140, 255};  // light tan gloves
-        backpackColor= (Color){30, 45, 80, 255};     // dark navy backpack
-    }
-
-    // === VAPORIZE — 3 phases: jerk, freeze, disintegrate ===
-    if (e->state == ENEMY_VAPORIZING) {
-        float t = e->vaporizeTimer;
-        float sc = e->vaporizeScale;
-
-        rlPushMatrix();
-        rlTranslatef(pos.x, pos.y, pos.z);
-        rlRotatef(e->facingAngle * RAD2DEG, 0, 1, 0);
-
-        if (t < 0.8f) {
-            // PHASE 1: JERK — violent spasms fading to stillness
-            float intensity = 1.0f - t / 0.8f;
-            float jerk = sinf(t * 40.0f) * intensity;
-            rlRotatef(jerk * 20.0f, 1, 0, 0);
-            rlRotatef(sinf(t * 30.0f) * 12.0f * intensity, 0, 0, 1);
-            unsigned char flash = (unsigned char)(200 + sinf(t * 50.0f) * 55 * intensity);
-            Color jCol = {flash, flash, flash, 255};
-            DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, jCol);
-            DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, jCol);
-            // Arms flailing, slowing
-            float armJerk = sinf(t * 35.0f) * 70.0f * intensity;
-            rlPushMatrix(); rlTranslatef(0.52f, 0.3f, 0); rlRotatef(armJerk, 1, 0, 0);
-            DrawCube((Vector3){0, -0.2f, 0}, 0.22f, 0.8f, 0.22f, jCol); rlPopMatrix();
-            rlPushMatrix(); rlTranslatef(-0.52f, 0.3f, 0); rlRotatef(-armJerk*0.7f, 1, 0, 0);
-            DrawCube((Vector3){0, -0.2f, 0}, 0.22f, 0.8f, 0.22f, jCol); rlPopMatrix();
-            float legJerk = sinf(t * 45.0f) * 55.0f * intensity;
-            rlPushMatrix(); rlTranslatef(0.22f, -0.85f, 0); rlRotatef(legJerk, 1, 0, 0);
-            DrawCube((Vector3){0, -0.2f, 0}, 0.3f, 0.75f, 0.3f, jCol); rlPopMatrix();
-            rlPushMatrix(); rlTranslatef(-0.22f, -0.85f, 0); rlRotatef(-legJerk*0.6f, 1, 0, 0);
-            DrawCube((Vector3){0, -0.2f, 0}, 0.3f, 0.75f, 0.3f, jCol); rlPopMatrix();
-        } else if ((e->deathStyle == 0 && t < 2.0f) || (e->deathStyle == 1 && t < 2.0f)) {
-            // PHASE 2: FREEZE
-            float glow = (t - 0.8f) / 1.2f;
-            unsigned char gr = 255;
-            unsigned char gg = (unsigned char)(240 - glow * 100);
-            unsigned char gb = (unsigned char)(180 - glow * 130);
-            Color fCol = {gr, gg, gb, 255};
-            rlRotatef(4.0f, 1, 0, 0);
-            rlRotatef(2.0f, 0, 0, 1);
-            DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, fCol);
-            DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, fCol);
-            DrawCube((Vector3){0.52f, 0.1f, 0}, 0.22f, 0.8f, 0.22f, fCol);
-            DrawCube((Vector3){-0.52f, 0.12f, 0.08f}, 0.22f, 0.8f, 0.22f, fCol);
-            DrawCube((Vector3){0.22f, -0.9f, 0.08f}, 0.3f, 0.75f, 0.3f, fCol);
-            DrawCube((Vector3){-0.22f, -0.88f, -0.04f}, 0.3f, 0.75f, 0.3f, fCol);
-            // Energy crackle — slow, eerie
-            for (int c = 0; c < 6; c++) {
-                float ca = sinf(GetTime() * 8.0f + c * 2.5f);
-                Vector3 c1 = {ca * 0.5f, -0.6f + c * 0.35f, ca * 0.25f};
-                Vector3 c2 = {-ca * 0.35f, -0.4f + c * 0.35f, -ca * 0.3f};
-                unsigned char la = (unsigned char)(180 - glow * 60);
-                DrawLine3D(Vector3Add(pos, c1), Vector3Add(pos, c2), (Color){255, 255, 200, la});
-            }
-            // Faint hum glow around body
-            DrawSphereWires(pos, 1.2f + sinf(GetTime() * 3.0f) * 0.1f, 6, 6,
-                (Color){255, gg, gb, (unsigned char)(40 + glow * 30)});
-        } else if (e->deathStyle == 1 && t < 2.5f) {
-            // PHASE 2b: SWELL (15% only)
-            float swellT = (t - 2.0f) / 0.5f;
-            float swSc = 1.0f + swellT * 1.0f; // swell to 2x
-            rlScalef(swSc, swSc * 0.85f, swSc); // thinner vertically — stretched look
-            rlRotatef(4.0f, 1, 0, 0);
-            // Getting hotter — bright white/yellow
-            Color swCol = {255, (unsigned char)(255 - swellT * 60), (unsigned char)(200 - swellT * 120), 255};
-            DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, swCol);
-            DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, swCol);
-            DrawCube((Vector3){0.52f, 0.1f, 0}, 0.22f, 0.8f, 0.22f, swCol);
-            DrawCube((Vector3){-0.52f, 0.1f, 0}, 0.22f, 0.8f, 0.22f, swCol);
-            DrawCube((Vector3){0.22f, -0.9f, 0}, 0.3f, 0.75f, 0.3f, swCol);
-            DrawCube((Vector3){-0.22f, -0.9f, 0}, 0.3f, 0.75f, 0.3f, swCol);
-        } else if (e->deathStyle == 1 && t < 2.6f) {
-            // PHASE 2c: POP (15% only)
-            float popT = (t - 2.5f) / 0.1f;
-            DrawSphereEx(pos, 2.0f * (1.0f - popT), 5, 5,
-                (Color){255, 255, 220, (unsigned char)((1.0f - popT) * 250)});
-            // Draw body briefly at normal scale, charred
-            rlRotatef(4.0f, 1, 0, 0);
-            Color popCol = {200, 100, 50, 255};
-            DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, popCol);
-            DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, popCol);
-        } else {
-            // PHASE 3: DISINTEGRATE
-            float startDis = (e->deathStyle == 1) ? 2.6f : 2.0f;
-            float disDur = (e->deathStyle == 1) ? 3.2f : 2.3f;
-            float disT = (t - startDis) / disDur;
-            if (disT > 1.0f) disT = 1.0f;
-            unsigned char da = (unsigned char)(255 * (1.0f - disT));
-            Color dCol = {255, (unsigned char)(160 * (1.0f - disT)),
-                         (unsigned char)(60 * (1.0f - disT)), da};
-            rlScalef(sc, sc, sc);
-            rlRotatef(4.0f, 1, 0, 0);
-            // Head — first to go
-            if (disT < 0.2f)
-                DrawSphere((Vector3){0, 1.1f, 0}, 0.48f * (1.0f - disT/0.2f), dCol);
-            // Arms — dissolve early
-            if (disT < 0.35f) {
-                float as = 1.0f - disT / 0.35f;
-                DrawCube((Vector3){0.52f, 0.1f, 0}, 0.22f*as, 0.8f*as, 0.22f*as, dCol);
-                DrawCube((Vector3){-0.52f, 0.1f, 0}, 0.22f*as, 0.8f*as, 0.22f*as, dCol);
-            }
-            // Legs — mid
-            if (disT < 0.55f) {
-                float ls = 1.0f - disT / 0.55f;
-                DrawCube((Vector3){0.22f, -0.9f, 0}, 0.3f*ls, 0.75f*ls, 0.3f*ls, dCol);
-                DrawCube((Vector3){-0.22f, -0.9f, 0}, 0.3f*ls, 0.75f*ls, 0.3f*ls, dCol);
-            }
-            // Torso — last to go
-            float ts = 1.0f - disT;
-            if (ts > 0) DrawCube((Vector3){0, 0, 0}, 0.9f*ts, 1.5f*ts, 0.55f*ts, dCol);
-        }
-        rlPopMatrix();
-
-        // Ash/ember particles throughout all phases
-        float particleT = t / 2.4f;
-        for (int p = 0; p < 10; p++) {
-            float pa = (float)p * 0.628f + t * 3.0f;
-            float pr = particleT * 3.5f + (float)p * 0.2f;
-            float py = particleT * 1.5f + sinf(pa * 2.0f) * 0.5f;
-            Vector3 pp = {pos.x + cosf(pa) * pr, pos.y + py, pos.z + sinf(pa) * pr};
-            float ps = 0.06f + (1.0f - particleT) * 0.08f;
-            DrawSphereEx(pp, ps, 3, 3, (Color){255, 200, 120, (unsigned char)((1.0f - particleT) * 160)});
-        }
-        // Blood mist
-        for (int b = 0; b < 6; b++) {
-            float ba = (float)b * 1.05f + t * 2.5f;
-            float br = particleT * 2.0f + (float)b * 0.15f;
-            float by = particleT * 0.8f + sinf(ba) * 0.3f - 0.3f;
-            DrawSphereEx((Vector3){pos.x + cosf(ba)*br, pos.y + by, pos.z + sinf(ba)*br},
-                0.05f, 3, 3, (Color){150, 12, 8, (unsigned char)((1.0f - particleT) * 140)});
-        }
-        // Initial flash
-        if (t < 0.15f) {
-            DrawSphereEx(pos, 2.0f * (1.0f - t / 0.15f), 4, 4,
-                (Color){255, 255, 240, (unsigned char)((1.0f - t / 0.15f) * 220)});
-        }
-        return;
-    }
-
-    rlPushMatrix();
-    rlTranslatef(pos.x, pos.y, pos.z);
-    rlRotatef(e->facingAngle * RAD2DEG, 0, 1, 0);
-    // Ragdoll multi-axis tumble
-    if (e->state == ENEMY_DYING) {
-        rlRotatef(e->deathAngle, 1, 0, 0);
-        rlRotatef(e->deathAngle * 0.7f, 0, 0, 1);
-    }
-
-    // === TORSO — layered for depth ===
-    DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, suitBase);               // main body
-    DrawCube((Vector3){0, 0.2f, 0.02f}, 0.7f, 0.6f, 0.5f, suitDark);         // chest plate
-    DrawCubeWires((Vector3){0, 0, 0}, 0.91f, 1.51f, 0.56f, suitDark); // seams
-    // Collar ring
-    DrawCube((Vector3){0, 0.72f, 0}, 0.55f, 0.1f, 0.45f, suitDark);
-    // Waist belt — leather with buckle
-    DrawCube((Vector3){0, -0.55f, 0}, 0.92f, 0.1f, 0.57f, beltColor);
-    DrawCubeWires((Vector3){0, -0.55f, 0}, 0.93f, 0.11f, 0.58f, (Color){beltColor.r/2, beltColor.g/2, beltColor.b/2, 180});
-    // Belt buckle — centered front
-    DrawCube((Vector3){0, -0.55f, 0.29f}, 0.12f, 0.09f, 0.02f, buckleColor);
-    DrawCubeWires((Vector3){0, -0.55f, 0.29f}, 0.13f, 0.1f, 0.03f, (Color){buckleColor.r/2, buckleColor.g/2, buckleColor.b/2, 200});
-    // Shoulder pads
-    DrawCube((Vector3){0.5f, 0.6f, 0}, 0.18f, 0.2f, 0.4f, suitDark);
-    DrawCube((Vector3){-0.5f, 0.6f, 0}, 0.18f, 0.2f, 0.4f, suitDark);
-    // Faction patches
-    DrawCube((Vector3){0.5f, 0.62f, 0.15f}, 0.15f, 0.12f, 0.02f, accentColor);
-    DrawCube((Vector3){-0.5f, 0.62f, 0.15f}, 0.15f, 0.12f, 0.02f, accentColor);
-    // Chest badge
-    DrawCube((Vector3){0.2f, 0.35f, 0.28f}, 0.12f, 0.12f, 0.02f, accentColor);
-
-    // === HELMET — faction colored ===
-    DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, helmetColor);
-    DrawCube((Vector3){0, 0.8f, 0}, 0.65f, 0.08f, 0.55f, suitDark); // neck ring
-    DrawModel(em->mdlVisor, (Vector3){0, 1.12f, 0.32f}, 1.0f, visorColor);
-    // Visor frame
-    DrawCubeWires((Vector3){0, 1.12f, 0.34f}, 0.42f, 0.32f, 0.04f, (Color){160,158,152,200});
-    // Antenna nub on top
-    DrawCube((Vector3){0.12f, 1.55f, 0}, 0.03f, 0.12f, 0.03f, accentColor);
-
-    // === BACKPACK — faction colored ===
-    DrawCube((Vector3){0, 0.1f, -0.42f}, 0.62f, 0.9f, 0.28f, backpackColor);
-    DrawCubeWires((Vector3){0, 0.1f, -0.42f}, 0.63f, 0.91f, 0.29f, suitDark);
-    // Vent grilles
-    for (int v = 0; v < 3; v++) {
-        float vy = -0.1f + v * 0.3f;
-        DrawCube((Vector3){0, vy, -0.57f}, 0.45f, 0.05f, 0.01f, suitDark);
-    }
-    // Hoses to helmet
-    Color hoseColor = (e->type == ENEMY_SOVIET) ? (Color){100,30,30,255} : (Color){60,65,90,255};
-    DrawCube((Vector3){0.18f, 0.65f, -0.25f}, 0.05f, 0.5f, 0.05f, hoseColor);
-    DrawCube((Vector3){-0.18f, 0.65f, -0.25f}, 0.05f, 0.5f, 0.05f, hoseColor);
-
-    // === GUN — two-handed hold, centered in front of body ===
-    float gunAim = e->shootAnim * -25.0f; // tilts up when shooting
-    rlPushMatrix();
-    rlTranslatef(0.2f, 0.05f, 0.55f); // slightly right of center
-    rlRotatef(gunAim, 1, 0, 0);
-
-    if (e->type == ENEMY_SOVIET) {
-        Color GM = {40,42,50,255};
-        Color BK = {25,27,32,255};
-        Color RD = {255,40,20,230};
-        // Big chunky receiver
-        DrawCube((Vector3){0,0,0}, 0.16f, 0.14f, 1.0f, GM);
-        DrawCubeWires((Vector3){0,0,0}, 0.161f, 0.141f, 1.01f, BK);
-        // Barrel — thick
-        DrawCube((Vector3){0,0.02f,0.6f}, 0.09f, 0.09f, 0.35f, BK);
-        // Muzzle brake — wide
-        DrawCube((Vector3){0,0.02f,0.82f}, 0.13f, 0.13f, 0.07f, GM);
-        DrawCubeWires((Vector3){0,0.02f,0.82f}, 0.131f, 0.131f, 0.071f, BK);
-        // Drum magazine — big and round underneath
-        DrawSphere((Vector3){0,-0.16f,0.0f}, 0.13f, GM);
-        DrawSphere((Vector3){0,-0.16f,0.12f}, 0.11f, GM);
-        // Red glow strips on sides
-        DrawCube((Vector3){0.085f,0,0}, 0.008f, 0.04f, 0.7f, RD);
-        DrawCube((Vector3){-0.085f,0,0}, 0.008f, 0.04f, 0.7f, RD);
-        // Stock
-        DrawCube((Vector3){0,0,-0.4f}, 0.06f, 0.12f, 0.3f, BK);
-        DrawCube((Vector3){0,-0.02f,-0.55f}, 0.09f, 0.08f, 0.06f, GM);
-    } else {
-        Color GM = {30,35,50,255};
-        Color BK = {20,23,35,255};
-        Color BL = {50,130,255,230};
-        // Sleek futuristic body
-        DrawCube((Vector3){0,0,0}, 0.14f, 0.14f, 0.8f, GM);
-        DrawCubeWires((Vector3){0,0,0}, 0.141f, 0.141f, 0.801f, BK);
-        // Dish barrel — wide antenna
-        DrawCube((Vector3){0,0,0.48f}, 0.18f, 0.18f, 0.12f, GM);
-        DrawCube((Vector3){0,0,0.58f}, 0.26f, 0.26f, 0.05f, BK);
-        DrawCubeWires((Vector3){0,0,0.58f}, 0.261f, 0.261f, 0.051f, (Color){40,80,180,150});
-        // Blue energy core on top
-        DrawCube((Vector3){0,0.12f,-0.05f}, 0.08f, 0.08f, 0.08f, BL);
-        DrawSphere((Vector3){0,0.12f,-0.05f}, 0.05f, (Color){120,200,255,200});
-        // Blue accent strips
-        DrawCube((Vector3){0.075f,0,0}, 0.008f, 0.03f, 0.6f, BL);
-        DrawCube((Vector3){-0.075f,0,0}, 0.008f, 0.03f, 0.6f, BL);
-        // Stock
-        DrawCube((Vector3){0,0,-0.35f}, 0.08f, 0.1f, 0.15f, BK);
-    }
-    // Muzzle flash
-    if (e->muzzleFlash > 0) {
-        float mz = (e->type == ENEMY_SOVIET) ? 0.88f : 0.64f;
-        Color fc = (e->type == ENEMY_SOVIET) ?
-            (Color){255,180,50,(unsigned char)(e->muzzleFlash*230)} :
-            (Color){80,180,255,(unsigned char)(e->muzzleFlash*230)};
-        DrawSphere((Vector3){0,0,mz}, e->muzzleFlash*0.18f, fc);
-    }
-    rlPopMatrix(); // gun
-
-    // === ARMS — big swinging motion + gun hold ===
-    float armSwing = sinf(e->walkCycle) * 25.0f; // degrees
-    // Right arm — swings opposite to left leg
-    rlPushMatrix();
-    rlTranslatef(0.52f, 0.35f, 0.1f);
-    rlRotatef(-25 - armSwing + gunAim * 0.4f, 1, 0, 0);
-    rlRotatef(-12, 0, 0, 1);
-    DrawModel(em->mdlArm, (Vector3){0, 0, 0}, 1.0f, tint);
-    DrawCube((Vector3){0, -0.42f, 0}, 0.24f, 0.16f, 0.24f, gloveColor);
-    rlPopMatrix();
-    // Left arm — swings opposite to right leg
-    rlPushMatrix();
-    rlTranslatef(-0.52f, 0.35f, 0.1f);
-    rlRotatef(-25 + armSwing + gunAim * 0.4f, 1, 0, 0);
-    rlRotatef(12, 0, 0, 1);
-    DrawModel(em->mdlArm, (Vector3){0, 0, 0}, 1.0f, tint);
-    DrawCube((Vector3){0, -0.42f, 0}, 0.24f, 0.16f, 0.24f, gloveColor);
-    rlPopMatrix();
-
-    // === LEGS — big dramatic strides ===
-    float legSwing = sinf(e->walkCycle) * 35.0f; // degrees — big stride
-    // Right leg
-    rlPushMatrix();
-    rlTranslatef(0.22f, -0.85f, 0);
-    rlRotatef(legSwing, 1, 0, 0);
-    // Upper leg
-    DrawCube((Vector3){0, -0.05f, 0}, 0.3f, 0.45f, 0.3f, suitBase);
-    DrawCubeWires((Vector3){0, -0.05f, 0}, 0.31f, 0.46f, 0.31f, suitDark);
-    // Knee joint
-    DrawCube((Vector3){0, -0.3f, 0}, 0.22f, 0.08f, 0.22f, suitDark);
-    // Lower leg (slight bend opposite to upper)
-    rlPushMatrix();
-    rlTranslatef(0, -0.3f, 0);
-    rlRotatef(-legSwing * 0.4f, 1, 0, 0); // knee bends
-    DrawCube((Vector3){0, -0.2f, 0}, 0.28f, 0.4f, 0.28f, suitBase);
-    DrawModel(em->mdlBoot, (Vector3){0, -0.44f, 0.04f}, 1.0f, bootColor);
-    rlPopMatrix();
-    rlPopMatrix();
-    // Left leg
-    rlPushMatrix();
-    rlTranslatef(-0.22f, -0.85f, 0);
-    rlRotatef(-legSwing, 1, 0, 0);
-    DrawCube((Vector3){0, -0.05f, 0}, 0.3f, 0.45f, 0.3f, suitBase);
-    DrawCubeWires((Vector3){0, -0.05f, 0}, 0.31f, 0.46f, 0.31f, suitDark);
-    DrawCube((Vector3){0, -0.3f, 0}, 0.22f, 0.08f, 0.22f, suitDark);
-    rlPushMatrix();
-    rlTranslatef(0, -0.3f, 0);
-    rlRotatef(legSwing * 0.4f, 1, 0, 0);
-    DrawCube((Vector3){0, -0.2f, 0}, 0.28f, 0.4f, 0.28f, suitBase);
-    DrawModel(em->mdlBoot, (Vector3){0, -0.44f, 0.04f}, 1.0f, bootColor);
-    rlPopMatrix();
-    rlPopMatrix();
-
-    rlPopMatrix(); // root
-
-    // Death particles
-    if (e->state == ENEMY_DYING) {
-        if (e->deathStyle == 0) {
-            // RAGDOLL: gas leak + blood spray from a limb
-            int limbSeed = (int)((size_t)e % 4);
-            Vector3 leakOff = {0, 0, 0};
-            switch (limbSeed) {
-                case 0: leakOff = (Vector3){0, 1.1f, 0}; break;
-                case 1: leakOff = (Vector3){0.5f, 0.3f, 0.1f}; break;
-                case 2: leakOff = (Vector3){-0.2f, -0.9f, 0}; break;
-                case 3: leakOff = (Vector3){0, 0.1f, -0.4f}; break;
-            }
-            for (int p = 0; p < 10; p++) {
-                float pt = GetTime() * 8.0f + (float)p * 1.2f + e->deathAngle * 0.1f;
-                float spread = (float)p * 0.18f + 0.1f;
-                float px = pos.x + leakOff.x + cosf(pt) * spread;
-                float py = pos.y + leakOff.y + sinf(pt * 0.7f) * 0.3f + (float)p * 0.15f;
-                float pz = pos.z + leakOff.z + sinf(pt) * spread;
-                DrawSphereEx((Vector3){px, py, pz}, 0.05f + (float)p * 0.025f, 3, 3,
-                    (Color){220, 220, 220, (unsigned char)(180 - p * 15)});
-            }
-            for (int b = 0; b < 8; b++) {
-                float bt = GetTime() * 6.0f + (float)b * 2.0f + e->deathAngle * 0.15f;
-                float bspread = (float)b * 0.12f + 0.05f;
-                DrawSphereEx((Vector3){
-                    pos.x + leakOff.x + cosf(bt+1)*bspread,
-                    pos.y + leakOff.y - (float)b * 0.1f,
-                    pos.z + leakOff.z + sinf(bt+1)*bspread},
-                    0.04f, 3, 3, (Color){180, 20, 20, (unsigned char)(200 - b * 20)});
-            }
-        } else {
-            // CRUMPLE: blood pool spreading on ground
-            float gH = WorldGetHeight(pos.x, pos.z) + 0.05f;
-            float poolTime = 4.0f - e->deathTimer; // time since death
-            float poolR = 0.3f + poolTime * 0.4f; // grows over time
-            if (poolR > 2.5f) poolR = 2.5f;
-            // Dark blood pool — flat cylinder on ground
-            DrawCylinder((Vector3){pos.x, gH, pos.z}, poolR, poolR * 1.1f, 0.02f, 8,
-                (Color){120, 8, 5, 200});
-            DrawCylinder((Vector3){pos.x, gH + 0.01f, pos.z}, poolR * 0.6f, poolR * 0.7f, 0.02f, 6,
-                (Color){160, 15, 10, 220});
-            // A few floating blood droplets
-            for (int b = 0; b < 3; b++) {
-                float bt = GetTime() * 3.0f + (float)b * 2.1f;
-                float bx = pos.x + cosf(bt) * poolR * 0.3f;
-                float bz = pos.z + sinf(bt) * poolR * 0.3f;
-                DrawSphereEx((Vector3){bx, gH + 0.1f + sinf(bt*2)*0.05f, bz},
-                    0.03f, 3, 3, (Color){160, 15, 10, 160});
-            }
-        }
-    }
-}
 
 void EnemyManagerDraw(EnemyManager *em) {
     for (int i = 0; i < MAX_ENEMIES; i++)
@@ -907,6 +539,54 @@ void EnemyVaporize(EnemyManager *em, int index) {
         } else if (e->type == ENEMY_AMERICAN && em->americanDeathCount > 0 && em->americanDeathPlays < 3) {
             int pick = GetRandomValue(0, em->americanDeathCount - 1);
             PlaySound(em->sndAmericanDeath[pick]);
+            em->americanDeathPlays++;
+            em->radioTransmissionTimer = 3.0f;
+        }
+    }
+}
+
+void EnemyEviscerate(EnemyManager *em, int index, Vector3 hitDir) {
+    if (index < 0 || index >= MAX_ENEMIES) return;
+    Enemy *e = &em->enemies[index];
+    e->state = ENEMY_EVISCERATING;
+    e->evisTimer = 0;
+    e->health = 0;
+    e->deathTimer = 6.0f;
+    e->evisDir = Vector3Normalize(hitDir);
+
+    // 0=head, 1=torso, 2=right arm, 3=left arm, 4=right leg, 5=left leg
+    Vector3 origins[6] = {
+        {0, 1.1f, 0}, {0, 0, 0}, {0.52f, 0.3f, 0},
+        {-0.52f, 0.3f, 0}, {0.22f, -0.85f, 0}, {-0.22f, -0.85f, 0}
+    };
+    for (int i = 0; i < 6; i++) {
+        e->evisLimbPos[i] = origins[i];
+        e->evisBloodTimer[i] = 0;
+        float rx = ((float)rand() / RAND_MAX - 0.5f) * 6.0f;
+        float ry = 2.0f + ((float)rand() / RAND_MAX) * 5.0f;
+        float rz = ((float)rand() / RAND_MAX - 0.5f) * 6.0f;
+        e->evisLimbVel[i] = (Vector3){
+            hitDir.x * 4.0f + rx + origins[i].x * 2.0f, ry,
+            hitDir.z * 4.0f + rz + origins[i].z * 2.0f
+        };
+    }
+    e->evisLimbVel[1].x += hitDir.x * 3.0f;
+    e->evisLimbVel[1].z += hitDir.z * 3.0f;
+    e->evisLimbVel[0].y += 4.0f;
+
+    // Death radio sound
+    bool anyPlaying = false;
+    for (int si = 0; si < em->sovietDeathCount; si++)
+        if (IsSoundPlaying(em->sndSovietDeath[si])) anyPlaying = true;
+    for (int ai = 0; ai < em->americanDeathCount; ai++)
+        if (IsSoundPlaying(em->sndAmericanDeath[ai])) anyPlaying = true;
+    if (!anyPlaying && (rand() % 100 < 65)) {
+        if (e->type == ENEMY_SOVIET && em->sovietDeathCount > 0 && em->sovietDeathPlays < 3) {
+            PlaySound(em->sndSovietDeath[GetRandomValue(0, em->sovietDeathCount - 1)]);
+            em->sovietDeathPlays++;
+            em->radioTransmissionTimer = 3.0f;
+        } else if (e->type == ENEMY_AMERICAN && em->americanDeathCount > 0 && em->americanDeathPlays < 3) {
+            PlaySound(em->sndAmericanDeath[GetRandomValue(0, em->americanDeathCount - 1)]);
             em->americanDeathPlays++;
             em->radioTransmissionTimer = 3.0f;
         }

@@ -8,7 +8,7 @@
 #include "../src/config.h"
 #include "../src/player.h"
 #include "../src/weapon.h"
-#include "../src/enemy.h"
+#include "../src/enemy/enemy.h"
 #include "../src/pickup.h"
 #include "../src/game.h"
 #include "../src/world.h"
