@@ -1,6 +1,7 @@
 #include "enemy.h"
 #include "enemy_draw.h"
 #include "world.h"
+#include "structure/structure.h"
 #include "sound_gen.h"
 #include <math.h>
 #include <string.h>
@@ -383,8 +384,14 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
         if (moving && Vector3Length(moveDir) > 0.01f) {
             moveDir = Vector3Normalize(moveDir);
             float spd = e->speed * (e->behavior == AI_DODGE ? 2.0f : 1.0f);
-            e->position.x += moveDir.x * spd * dt;
-            e->position.z += moveDir.z * spd * dt;
+            float newX = e->position.x + moveDir.x * spd * dt;
+            float newZ = e->position.z + moveDir.z * spd * dt;
+            // Structure collision — push enemies around bases
+            StructureManager *structs = StructureGetActive();
+            if (!structs || !StructureCheckCollision(structs, (Vector3){newX, e->position.y, newZ}, 0.8f)) {
+                e->position.x = newX;
+                e->position.z = newZ;
+            }
             e->walkCycle += dt * spd * 1.5f;
             e->animState = ANIM_WALK;
         } else {

@@ -215,6 +215,9 @@ int main(void) {
                 // World chunks always update (for terrain height)
                 WorldUpdate(&world, player.position);
 
+                // Discover new structures in nearby chunks
+                StructureManagerCheckSpawns(&structures, player.position);
+
                 // --- SIMULATION FREEZE when inside structure ---
                 if (!insideStructure) {
                     GameUpdate(&game);
