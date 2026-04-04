@@ -70,6 +70,10 @@ void main() {
     vec3 ghost = texture(texture0, ghostUV).rgb;
     col += ghost * 0.025; // very faint reflection
 
+    // === HORIZON FOG (subtle distance fade at far edges) ===
+    float horizDist = length(uv - 0.5) * 1.4;
+    col = mix(col, vec3(0.01, 0.01, 0.02), smoothstep(0.7, 1.0, horizDist) * 0.6);
+
     // === ELLIPTICAL VIGNETTE (helmet-shaped, wider than tall) ===
     vec2 vigUV = (uv - 0.5) * vec2(1.3, 1.6); // stretched vertically
     float vig = 1.0 - dot(vigUV, vigUV);

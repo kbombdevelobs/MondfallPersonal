@@ -47,8 +47,6 @@ typedef struct {
 void WorldInit(World *world);
 World *WorldGetActive(void);
 void WorldUpdate(World *world, Vector3 playerPos);
-void WorldDraw(World *world, Vector3 playerPos);
-void WorldDrawSky(World *world, Camera3D camera);
 float WorldGetHeight(float x, float z);
 bool WorldCheckCollision(World *world, Vector3 pos, float radius);
 void WorldUnload(World *world);

@@ -61,7 +61,11 @@ Mondfall/
 │   │   ├── enemy_draw.h — Draw API
 │   │   ├── enemy_draw.c — All enemy rendering (alive, dying, vaporizing, eviscerating)
 │   │   └── README.md   — System overview for agents
-│   ├── world.c/h       — Infinite chunked terrain, heightmap, craters, boulders, sky
+│   ├── world.c/h       — Core chunk management, terrain mesh gen, craters, collision
+│   ├── world/           — World rendering & noise (see src/world/README.md)
+│   │   ├── world_noise.h/c — Perlin gradient noise, ValueNoise, WorldGetHeight()
+│   │   ├── world_draw.h/c  — Sky rendering, chunk drawing, frustum culling
+│   │   └── README.md
 │   ├── lander.c/h      — Moon lander wave system with descent, deployment, self-destruct
 │   ├── pickup.c/h      — Dropped enemy weapons (KOSMOS-7 SMG, LIBERTY BLASTER)
 │   ├── hud.c/h         — Health, ammo, wave counter, reload bar, ACHTUNG alert, radio transmission
@@ -75,7 +79,7 @@ Mondfall/
 │   ├── soviet_death_sounds/  — Soviet faction radio death sounds (mp3)
 │   ├── american_death_sounds/ — American faction radio death sounds (mp3)
 ├── tests/
-│   └── test_game.c     — ~39 unit tests (no GPU required)
+│   └── test_game.c     — ~71 unit tests (no GPU required)
 ├── Makefile
 └── .gitignore
 ```
@@ -92,18 +96,30 @@ Mondfall/
 
 ### Performance Optimizations
 - **Cached particle meshes:** Unit sphere and unit cube meshes generated once in `WeaponInit()`, reused via `DrawMesh()` with transform matrices for all projectiles, explosions, and beam glows — eliminates ~200 per-frame mesh regenerations
+- **Frustum culling:** `WorldDraw()` culls chunks behind camera or outside ~80 degree cone, cutting terrain draw calls roughly in half
 
 ### Game Loop (main.c)
 - State machine: `STATE_MENU` → `STATE_PLAYING` → `STATE_PAUSED` / `STATE_GAME_OVER` / `STATE_SETTINGS`
 - Assets load on first frame (loading screen shown first)
 - Wave system: `GameUpdate` triggers waves → `LanderSpawnWave` sends landers → landers deploy enemies
 
-### World System (world.c)
+### World System (world.c + world/)
 - Infinite terrain via chunk system (60x60 unit chunks, 5x5 render grid)
-- `WorldGetHeight(x, z)` — deterministic multi-octave value noise, used by all systems
+- `WorldGetHeight(x, z)` — deterministic multi-octave Perlin gradient noise with domain warping for organic shapes
+- **Domain warping:** large-scale octaves fed through secondary noise to break repetition; fine detail stays crisp
+- **Rilles:** two sinuous lunar channels at different angles carved into heightmap — natural gameplay trenches
+- **Maria:** cell-noise biome regions where terrain flattens and darkens (dark basalt "seas")
+- **Wrinkle ridges:** narrow raised linear features in mare regions, modulated along length
+- **Ejecta rays:** bright radial streaks in vertex colors around large craters (radius > 4.5)
+- **Craters:** `CraterProfile()` with terraced walls and central peaks for large craters (radius > 5), simple bowls for small; min-depth overlap resolution
+- Baked directional lighting: analytical normals from WorldGetHeight (seamless across chunks) with low-angle sun dot product (0.15 ambient floor)
+- Slope-based vertex coloring: steep terrain darkened by sampling 4 neighboring heights
+- Maria darkening: vertex colors reduced in dark sea biome regions
+- Frustum culling in `WorldDraw()` — tests all 4 chunk corners, only culls chunks fully behind camera
 - Vertex-displaced meshes with world-space UVs and vertex colors for seamless chunks
-- Craters baked into mesh via `CraterHeight()` which checks all loaded chunks
 - Sphere-cluster boulders with LOD (detail reduces with distance)
+- Boulder collision checks Y-axis so players can jump over rocks
+- Horizon fog in CRT shader: subtle radial fade to black at screen edges
 
 ### Enemy System (enemy.c)
 - Two factions: Soviet (red uniforms, gold helmets) and American (navy blue, silver helmets)
@@ -111,6 +127,7 @@ Mondfall/
 - Soviet: aggressive rushers, wide spread, circle-strafe close
 - American: tactical, seek cover behind rocks, maintain distance, retreat when hurt
 - Four death types: ragdoll blowout (60%), crumple + blood pool (40%), vaporize (beam only), eviscerate (jackhammer only)
+- Blood pools are terrain-conforming triangle fan meshes — each vertex placed at `WorldGetHeight`, draping over slopes and craters
 - Vaporize sequence: jerk → freeze → optional swell/pop (15%) → disintegrate
 - Eviscerate sequence: limbs separate with physics (head/torso/arms/legs fly apart), blood spurts from stumps, bone fragments, blood pool forms under torso, enemy drops weapon
 
@@ -179,7 +196,7 @@ Drop `.mp3` files in `assets/soviet_death_sounds/` or `assets/american_death_sou
 All weapon stats are in `WeaponInit()` in `weapon.c`. Viewmodels are drawn in `WeaponDrawFirst()`. Enemy weapon visuals are in `DrawAstronautModel()` in `enemy.c`.
 
 ### Modifying Terrain
-Height function is `WorldGetHeight()` in `world.c`. Adjust noise octaves/scales for different terrain. Rock sizes in `GenerateChunk()`. Crater parameters there too.
+Height function is `WorldGetHeight()` in `src/world/world_noise.c` — uses domain-warped 4-octave Perlin gradient noise + rille channels + maria flattening. Adjust warp strength (0.15 multiplier), octave scales/amplitudes, or rille angles/widths for different terrain character. `WorldGetMareFactor()` controls biome regions — tune the cell noise scale (0.002) for larger/smaller maria. Crater profiles are in `CraterProfile()` in `src/world.c` — terracing and central peaks only activate for radius > 5. Sun direction vector is in `GenTerrainMesh()` — modify for different shadow angles. Rock sizes in `GenerateChunk()`. The CRT shader horizon fog is in `assets/crt.fs` (search for "HORIZON FOG").
 
 ### Shaders
 `assets/crt.fs` is the main post-processing shader — edit and reload (no recompile needed, it's loaded at runtime). `assets/hud.fs` curves the HUD overlay.

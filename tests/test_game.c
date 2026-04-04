@@ -12,6 +12,7 @@
 #include "../src/pickup.h"
 #include "../src/game.h"
 #include "../src/world.h"
+#include "../src/world/world_noise.h"
 
 // ---- Minimal test framework ----
 static int tests_run = 0;
@@ -451,6 +452,248 @@ TEST(test_game_reset) {
 }
 
 // ============================================================================
+// 8. NOISE FUNCTIONS
+// ============================================================================
+
+TEST(test_gradient_noise_deterministic) {
+    float a = GradientNoise(1.5f, 2.7f);
+    float b = GradientNoise(1.5f, 2.7f);
+    ASSERT_FLOAT_EQ(a, b, 0.0001f);
+}
+
+TEST(test_gradient_noise_range) {
+    // Sample many points, gradient noise should stay bounded
+    for (int i = 0; i < 100; i++) {
+        float x = (float)i * 3.7f;
+        float z = (float)i * 5.3f;
+        float n = GradientNoise(x, z);
+        ASSERT(n > -2.0f && n < 2.0f);
+    }
+}
+
+TEST(test_gradient_noise_varies) {
+    // Sample 10 distinct points — at least 2 should differ meaningfully
+    float vals[10];
+    for (int i = 0; i < 10; i++) {
+        vals[i] = GradientNoise((float)i * 7.3f + 0.5f, (float)i * 11.1f + 0.5f);
+    }
+    float minV = vals[0], maxV = vals[0];
+    for (int i = 1; i < 10; i++) {
+        if (vals[i] < minV) minV = vals[i];
+        if (vals[i] > maxV) maxV = vals[i];
+    }
+    ASSERT(maxV - minV > 0.01f);
+}
+
+TEST(test_value_noise_deterministic) {
+    float a = ValueNoise(3.14f, 2.72f);
+    float b = ValueNoise(3.14f, 2.72f);
+    ASSERT_FLOAT_EQ(a, b, 0.0001f);
+}
+
+TEST(test_value_noise_range) {
+    for (int i = 0; i < 100; i++) {
+        float n = ValueNoise((float)i * 1.1f, (float)i * 2.2f);
+        ASSERT(n >= 0.0f && n <= 1.0f);
+    }
+}
+
+TEST(test_lerpf_boundaries) {
+    ASSERT_FLOAT_EQ(LerpF(0.0f, 10.0f, 0.0f), 0.0f, 0.001f);
+    ASSERT_FLOAT_EQ(LerpF(0.0f, 10.0f, 1.0f), 10.0f, 0.001f);
+    ASSERT_FLOAT_EQ(LerpF(0.0f, 10.0f, 0.5f), 5.0f, 0.001f);
+}
+
+TEST(test_hash2d_deterministic) {
+    float a = Hash2D(5.0f, 10.0f);
+    float b = Hash2D(5.0f, 10.0f);
+    ASSERT_FLOAT_EQ(a, b, 0.0001f);
+}
+
+TEST(test_hash2d_range) {
+    for (int i = 0; i < 100; i++) {
+        float h = Hash2D((float)i, (float)(i * 7));
+        ASSERT(h >= 0.0f && h <= 1.0f);
+    }
+}
+
+// ============================================================================
+// 9. TERRAIN FEATURES (domain warp, rilles, maria)
+// ============================================================================
+
+TEST(test_world_height_continuity) {
+    // Height should change smoothly — no huge jumps between nearby points
+    float prev = WorldGetHeight(0.0f, 0.0f);
+    for (int i = 1; i <= 20; i++) {
+        float curr = WorldGetHeight((float)i * 0.5f, 0.0f);
+        float diff = fabsf(curr - prev);
+        ASSERT(diff < 5.0f); // no more than 5 units jump per 0.5 unit step
+        prev = curr;
+    }
+}
+
+TEST(test_world_height_large_coords) {
+    // Should not NaN or explode at large world coordinates
+    float h1 = WorldGetHeight(10000.0f, 10000.0f);
+    float h2 = WorldGetHeight(-5000.0f, 7000.0f);
+    ASSERT(!isnan(h1));
+    ASSERT(!isinf(h1));
+    ASSERT(!isnan(h2));
+    ASSERT(!isinf(h2));
+}
+
+TEST(test_world_height_negative_coords) {
+    float h = WorldGetHeight(-100.0f, -200.0f);
+    ASSERT(!isnan(h));
+    ASSERT(!isinf(h));
+    ASSERT(h > -50.0f && h < 50.0f);
+}
+
+TEST(test_mare_factor_range) {
+    // Mare factor should always be [0, 1]
+    for (int i = 0; i < 50; i++) {
+        float m = WorldGetMareFactor((float)i * 100.0f, (float)i * 77.0f);
+        ASSERT(m >= 0.0f);
+        ASSERT(m <= 1.0f);
+    }
+}
+
+TEST(test_mare_factor_deterministic) {
+    float a = WorldGetMareFactor(42.0f, 99.0f);
+    float b = WorldGetMareFactor(42.0f, 99.0f);
+    ASSERT_FLOAT_EQ(a, b, 0.0001f);
+}
+
+TEST(test_mare_factor_large_coords) {
+    float m = WorldGetMareFactor(50000.0f, -30000.0f);
+    ASSERT(!isnan(m));
+    ASSERT(m >= 0.0f && m <= 1.0f);
+}
+
+// ============================================================================
+// 10. COLLISION SYSTEM
+// ============================================================================
+
+TEST(test_collision_no_world) {
+    // WorldCheckCollision with NULL world should not crash
+    bool hit = WorldCheckCollision(NULL, (Vector3){0,0,0}, 1.0f);
+    ASSERT(!hit);
+}
+
+TEST(test_collision_empty_world) {
+    World w;
+    memset(&w, 0, sizeof(w));
+    bool hit = WorldCheckCollision(&w, (Vector3){0,0,0}, 1.0f);
+    ASSERT(!hit);
+}
+
+// ============================================================================
+// 11. ENEMY ADVANCED
+// ============================================================================
+
+TEST(test_enemy_count_alive) {
+    EnemyManager em = make_enemies();
+    place_enemy(&em, 0, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    place_enemy(&em, 1, (Vector3){5,0,0}, 55, ENEMY_AMERICAN);
+    ASSERT(EnemyCountAlive(&em) == 2);
+}
+
+TEST(test_enemy_count_alive_after_kill) {
+    EnemyManager em = make_enemies();
+    place_enemy(&em, 0, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    place_enemy(&em, 1, (Vector3){5,0,0}, 55, ENEMY_AMERICAN);
+    EnemyDamage(&em, 0, 9999.0f);
+    ASSERT(EnemyCountAlive(&em) == 1);
+}
+
+TEST(test_enemy_vaporize) {
+    EnemyManager em = make_enemies();
+    place_enemy(&em, 0, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    EnemyVaporize(&em, 0);
+    ASSERT(em.enemies[0].state == ENEMY_VAPORIZING);
+}
+
+TEST(test_enemy_eviscerate) {
+    EnemyManager em = make_enemies();
+    place_enemy(&em, 0, (Vector3){0,0,0}, 80, ENEMY_SOVIET);
+    EnemyEviscerate(&em, 0, (Vector3){0,0,1});
+    ASSERT(em.enemies[0].state == ENEMY_EVISCERATING);
+}
+
+TEST(test_enemy_sphere_hit_multiple) {
+    EnemyManager em = make_enemies();
+    place_enemy(&em, 0, (Vector3){10,0,0}, 80, ENEMY_SOVIET);
+    place_enemy(&em, 1, (Vector3){3,0,0}, 55, ENEMY_AMERICAN);
+    // Sphere at origin with radius 5 should hit enemy 1 (at dist 3) not enemy 0 (at dist 10)
+    int hit = EnemyCheckSphereHit(&em, (Vector3){0,0,0}, 5.0f);
+    ASSERT(hit == 1);
+}
+
+// ============================================================================
+// 12. WEAPON ADVANCED
+// ============================================================================
+
+TEST(test_weapon_raketenfaust_ammo) {
+    Weapon w = make_weapon(WEAPON_RAKETENFAUST);
+    ASSERT(WeaponGetAmmo(&w) == RAKETEN_MAG_SIZE);
+    ASSERT(WeaponGetMaxAmmo(&w) == RAKETEN_MAG_SIZE);
+}
+
+TEST(test_weapon_jackhammer_name) {
+    Weapon w = make_weapon(WEAPON_JACKHAMMER);
+    ASSERT(strcmp(WeaponGetName(&w), "JACKHAMMER") == 0);
+}
+
+TEST(test_weapon_raketenfaust_name) {
+    Weapon w = make_weapon(WEAPON_RAKETENFAUST);
+    ASSERT(strcmp(WeaponGetName(&w), "RAKETENFAUST") == 0);
+}
+
+TEST(test_weapon_switch_preserves_ammo) {
+    Weapon w = make_weapon(WEAPON_MOND_MP40);
+    w.mp40Mag = 15; // partially used
+    WeaponSwitch(&w, WEAPON_RAKETENFAUST);
+    WeaponSwitch(&w, WEAPON_MOND_MP40);
+    // MP40 ammo should still be 15
+    ASSERT(WeaponGetAmmo(&w) == 15);
+}
+
+// ============================================================================
+// 13. CONFIG CROSS-CHECKS
+// ============================================================================
+
+TEST(test_jackhammer_oneshots_soviets) {
+    ASSERT_GT(JACKHAMMER_DAMAGE, SOVIET_HEALTH);
+}
+
+TEST(test_jackhammer_oneshots_americans) {
+    ASSERT_GT(JACKHAMMER_DAMAGE, AMERICAN_HEALTH);
+}
+
+TEST(test_player_height_positive) {
+    ASSERT_GT(PLAYER_HEIGHT, 0.0f);
+}
+
+TEST(test_moon_gravity_positive) {
+    ASSERT_GT(MOON_GRAVITY, 0.0f);
+}
+
+TEST(test_render_resolution_valid) {
+    ASSERT_GT(RENDER_W, 0);
+    ASSERT_GT(RENDER_H, 0);
+    ASSERT(RENDER_W >= RENDER_H); // landscape
+}
+
+TEST(test_chunk_size_positive) {
+    ASSERT_GT(CHUNK_SIZE, 0.0f);
+}
+
+TEST(test_max_enemies_reasonable) {
+    ASSERT(MAX_ENEMIES >= 10);
+    ASSERT(MAX_ENEMIES <= 200);
+}
+
+// ============================================================================
 // MAIN — run all tests
 // ============================================================================
 
@@ -509,6 +752,50 @@ int main(void) {
     printf("\n[Game State]\n");
     RUN(test_game_init_state);
     RUN(test_game_reset);
+
+    printf("\n[Noise Functions]\n");
+    RUN(test_gradient_noise_deterministic);
+    RUN(test_gradient_noise_range);
+    RUN(test_gradient_noise_varies);
+    RUN(test_value_noise_deterministic);
+    RUN(test_value_noise_range);
+    RUN(test_lerpf_boundaries);
+    RUN(test_hash2d_deterministic);
+    RUN(test_hash2d_range);
+
+    printf("\n[Terrain Features]\n");
+    RUN(test_world_height_continuity);
+    RUN(test_world_height_large_coords);
+    RUN(test_world_height_negative_coords);
+    RUN(test_mare_factor_range);
+    RUN(test_mare_factor_deterministic);
+    RUN(test_mare_factor_large_coords);
+
+    printf("\n[Collision System]\n");
+    RUN(test_collision_no_world);
+    RUN(test_collision_empty_world);
+
+    printf("\n[Enemy Advanced]\n");
+    RUN(test_enemy_count_alive);
+    RUN(test_enemy_count_alive_after_kill);
+    RUN(test_enemy_vaporize);
+    RUN(test_enemy_eviscerate);
+    RUN(test_enemy_sphere_hit_multiple);
+
+    printf("\n[Weapon Advanced]\n");
+    RUN(test_weapon_raketenfaust_ammo);
+    RUN(test_weapon_jackhammer_name);
+    RUN(test_weapon_raketenfaust_name);
+    RUN(test_weapon_switch_preserves_ammo);
+
+    printf("\n[Config Cross-Checks]\n");
+    RUN(test_jackhammer_oneshots_soviets);
+    RUN(test_jackhammer_oneshots_americans);
+    RUN(test_player_height_positive);
+    RUN(test_moon_gravity_positive);
+    RUN(test_render_resolution_valid);
+    RUN(test_chunk_size_positive);
+    RUN(test_max_enemies_reasonable);
 
     printf("\n=== RESULTS: %d/%d passed", tests_passed, tests_run);
     if (tests_failed > 0) printf(", %d FAILED", tests_failed);
