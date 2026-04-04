@@ -178,7 +178,7 @@ int main(void) {
             case STATE_SETTINGS: {
                 // Back via ESC or selecting Back option
                 if (IsKeyPressed(KEY_ESCAPE) ||
-                    (IsKeyPressed(KEY_ENTER) && game.settingsSelection == 4)) {
+                    (IsKeyPressed(KEY_ENTER) && game.settingsSelection == 5)) {
                     game.state = game.settingsReturnState;
                     if (game.settingsReturnState == STATE_PAUSED) {
                         game.pauseSelection = 1; // keep cursor on Settings

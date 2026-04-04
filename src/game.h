@@ -13,6 +13,13 @@ typedef enum {
     STATE_GAME_OVER
 } GameState;
 
+typedef enum {
+    DIFFICULTY_VALKYRIE,
+    DIFFICULTY_EASY,
+    DIFFICULTY_NORMAL,
+    DIFFICULTY_HARD
+} Difficulty;
+
 typedef struct {
     GameState state;
     int wave;
@@ -36,6 +43,8 @@ typedef struct {
     float musicVolume;
     float sfxVolume;
     int screenScale;        // 1-4 (1x=640x360, 2x=1280x720, etc.)
+    Difficulty difficulty;
+    float damageScaler;     // multiplier on incoming player damage
     bool quitRequested;
 
     // Intro lore screen

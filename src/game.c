@@ -60,6 +60,8 @@ void GameInit(Game *game) {
     game->musicVolume = AUDIO_MARCH_VOLUME;
     game->sfxVolume = 1.0f;
     game->screenScale = 2; // default 2x = 1280x720
+    game->difficulty = DIFFICULTY_NORMAL;
+    game->damageScaler = DIFFICULTY_NORMAL_SCALE;
     game->quitRequested = false;
 }
 
@@ -160,7 +162,7 @@ void GameDrawSettings(Game *game) {
     int titleW = MeasureText(title, titleSize);
     DrawText(title, (sw - titleW) / 2, sh / 6, titleSize, MENU_HIGHLIGHT);
 
-    int optCount = 5;
+    int optCount = 6;
     int optSize = S(24);
     int startY = sh / 4 + S(60);
     int spacing = S(46);
@@ -212,6 +214,21 @@ void GameDrawSettings(Game *game) {
                 if (game->screenScale < 4) game->screenScale++;
             }
             break;
+        case 4: // Difficulty
+            if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
+                if (game->difficulty > DIFFICULTY_VALKYRIE) game->difficulty--;
+            }
+            if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
+                if (game->difficulty < DIFFICULTY_HARD) game->difficulty++;
+            }
+            // Sync scaler
+            switch (game->difficulty) {
+                case DIFFICULTY_VALKYRIE: game->damageScaler = DIFFICULTY_VALKYRIE_SCALE; break;
+                case DIFFICULTY_EASY:     game->damageScaler = DIFFICULTY_EASY_SCALE;     break;
+                case DIFFICULTY_NORMAL:   game->damageScaler = DIFFICULTY_NORMAL_SCALE;   break;
+                case DIFFICULTY_HARD:     game->damageScaler = DIFFICULTY_HARD_SCALE;     break;
+            }
+            break;
     }
 
     DrawSlider("MOUSE SENS", game->mouseSensitivity, 0.0005f, 0.01f,
@@ -246,7 +263,32 @@ void GameDrawSettings(Game *game) {
         DrawText(" >", labelX + arrowW + valW, sy, optSize, sel ? MENU_DIM : (Color){60, 60, 60, 255});
     }
 
-    DrawMenuOption("BACK", optX, startY + spacing * 4, optSize, game->settingsSelection == 4);
+    // Difficulty option (discrete: Easy, Normal, Hard)
+    {
+        bool sel = (game->settingsSelection == 4);
+        Color labelCol = sel ? MENU_HIGHLIGHT : MENU_TEXT;
+        int dy = startY + spacing * 4;
+        if (sel) {
+            const char *cursor = "> ";
+            int cw = MeasureText(cursor, optSize);
+            DrawText(cursor, optX - cw, dy, optSize, MENU_HIGHLIGHT);
+        }
+        DrawText("DIFFICULTY", optX, dy, optSize, labelCol);
+
+        const char *diffLabels[] = { "VALKYRIE (0% DMG)", "WUNDERKIND (50% DMG)", "SOLDAT", "ENDKAMPF (150% DMG)" };
+        int di = (int)game->difficulty;
+        if (di < 0) di = 0;
+        if (di > 3) di = 3;
+
+        int labelX = optX + S(260);
+        DrawText("< ", labelX, dy, optSize, sel ? MENU_DIM : (Color){60, 60, 60, 255});
+        int arrowW = MeasureText("< ", optSize);
+        DrawText(diffLabels[di], labelX + arrowW, dy, optSize, labelCol);
+        int valW = MeasureText(diffLabels[di], optSize);
+        DrawText(" >", labelX + arrowW + valW, dy, optSize, sel ? MENU_DIM : (Color){60, 60, 60, 255});
+    }
+
+    DrawMenuOption("BACK", optX, startY + spacing * 5, optSize, game->settingsSelection == 5);
 
     // Footer
     const char *footer = "LEFT/RIGHT: ADJUST   ENTER/ESC: BACK";

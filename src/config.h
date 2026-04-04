@@ -30,6 +30,10 @@
 #define COLLISION_RADIUS     0.4f
 #define DAMAGE_FLASH_DURATION 0.3f
 #define HEALTH_REGEN_RATE    2.0f
+#define DIFFICULTY_VALKYRIE_SCALE 0.0f
+#define DIFFICULTY_EASY_SCALE   0.5f
+#define DIFFICULTY_NORMAL_SCALE 1.0f
+#define DIFFICULTY_HARD_SCALE   1.5f
 #define RECOIL_Y_FACTOR      0.3f
 
 // --- Weapon: Mond-MP40 ---

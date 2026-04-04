@@ -213,6 +213,6 @@ void CombatProcessBeam(CombatContext *ctx, float dt) {
 void CombatProcessEnemyDamage(CombatContext *ctx, float dt) {
     float dmg = EnemyCheckPlayerDamage(ctx->enemies, ctx->player->position, dt);
     if (dmg > 0) {
-        PlayerTakeDamage(ctx->player, dmg);
+        PlayerTakeDamage(ctx->player, dmg * ctx->game->damageScaler);
     }
 }
