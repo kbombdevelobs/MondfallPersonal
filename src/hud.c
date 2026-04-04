@@ -2,6 +2,64 @@
 #include <stdio.h>
 #include <math.h>
 
+void HudDrawLanderArrows(LanderManager *lm, Camera3D camera, int sw, int sh) {
+    int cx = sw / 2, cy = sh / 2;
+
+    // ACHTUNG only during klaxon wait — stops once landers appear
+    bool incoming = false;
+    for (int i = 0; i < MAX_LANDERS; i++)
+        if (lm->landers[i].state == LANDER_WAITING)
+            incoming = true;
+
+    // BIG BLARING ALERT across top of screen
+    if (incoming) {
+        float pulse = (sinf(GetTime() * 6.0f) + 1.0f) * 0.5f;
+        unsigned char pa = (unsigned char)(pulse * 255);
+
+        // Red flashing bar
+        DrawRectangle(0, sh / 8, sw, sh / 6, (Color){180, 20, 10, (unsigned char)(pulse * 80)});
+
+        // Main text
+        const char *alert = "ACHTUNG SOLDATEN";
+        int alertFs = sh / 8;
+        int alertW = MeasureText(alert, alertFs);
+        DrawText(alert, cx - alertW / 2, sh / 8 + sh / 30, alertFs, (Color){255, 50, 30, pa});
+
+        // Sub text
+        const char *sub = "FEINDLICHE LANDUNG ERKANNT";
+        int subFs = sh / 18;
+        int subW = MeasureText(sub, subFs);
+        DrawText(sub, cx - subW / 2, sh / 8 + sh / 30 + alertFs + 4, subFs, (Color){255, 200, 50, pa});
+    }
+    // (compass removed)
+    (void)camera;
+}
+
+void HudDrawPickup(PickupManager *pm, int sw, int sh) {
+    if (!pm->hasPickup) return;
+    int cx = sw / 2;
+    int barInset = sw / 7;
+
+    // Pickup weapon bar — just above bottom bar
+    int py = sh - sh / 30 - sh / 14 - sh / 18;
+    int pw = sw / 4;
+    int px = cx - pw / 2;
+    int ph = sh / 22;
+
+    DrawRectangle(px, py, pw, ph, (Color){0, 0, 0, 180});
+    DrawRectangleLines(px, py, pw, ph,
+        (pm->pickupType == ENEMY_SOVIET) ? (Color){255, 80, 40, 200} : (Color){80, 160, 255, 200});
+
+    const char *name = (pm->pickupType == ENEMY_SOVIET) ? "KOSMOS-7 SMG" : "LIBERTY BLASTER";
+    char txt[64];
+    snprintf(txt, sizeof(txt), "%s  [%d]  RMB", name, pm->pickupAmmo);
+    int fs = ph * 2 / 3;
+    int tw = MeasureText(txt, fs);
+    Color tc = (pm->pickupType == ENEMY_SOVIET) ? (Color){255, 120, 60, 255} : (Color){100, 180, 255, 255};
+    DrawText(txt, cx - tw / 2, py + ph / 2 - fs / 2, fs, tc);
+    (void)barInset;
+}
+
 void HudDraw(Player *player, Weapon *weapon, Game *game, int sw, int sh) {
     int cx = sw / 2, cy = sh / 2;
     int barInset = sw / 7;
@@ -53,7 +111,7 @@ void HudDraw(Player *player, Weapon *weapon, Game *game, int sw, int sh) {
 
     // === BOTTOM BAR ===
     int barH = sh / 14;
-    int barY = sh - sh / 20 - barH;
+    int barY = sh - sh / 30 - barH;
     DrawRectangle(topL, barY, topW, barH, (Color){0, 0, 0, 190});
     DrawLine(topL, barY, topR, barY, (Color){0, 200, 180, 100});
 
@@ -100,15 +158,10 @@ void HudDraw(Player *player, Weapon *weapon, Game *game, int sw, int sh) {
         DrawRectangle(cdX, cdY, (int)(cdW * (1.0f - cd)), cdH, (Color){255, 140, 30, 200});
     }
 
-    // Wave incoming
-    if (!game->waveActive && game->enemiesRemaining <= 0 && game->wave > 0) {
-        const char *nw = "NEXT WAVE INCOMING...";
-        int nfs = sh / 20;
-        int nwW = MeasureText(nw, nfs);
-        float alpha = (sinf(GetTime() * 4.0f) + 1.0f) * 0.5f;
-        DrawText(nw, (sw - nwW) / 2, sh / 3, nfs,
-            (Color){255, 220, 50, (unsigned char)(alpha * 255)});
-    }
+    // (wave incoming alert replaced by ACHTUNG SOLDATEN system)
+
+    // Pickup weapon indicator (above bottom bar)
+    // (drawn separately via HudDrawPickup)
 
     // Damage flash
     if (player->damageFlashTimer > 0) {

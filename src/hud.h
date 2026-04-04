@@ -5,7 +5,11 @@
 #include "player.h"
 #include "weapon.h"
 #include "game.h"
+#include "pickup.h"
+#include "lander.h"
 
 void HudDraw(Player *player, Weapon *weapon, Game *game, int screenW, int screenH);
+void HudDrawPickup(PickupManager *pm, int sw, int sh);
+void HudDrawLanderArrows(LanderManager *lm, Camera3D camera, int sw, int sh);
 
 #endif

@@ -33,6 +33,33 @@ void LanderManagerInit(LanderManager *lm) {
         }
         lm->sndExplode = LoadSoundFromWave(w); UnloadWave(w);
     }
+    // Air raid klaxon — WW2 style siren, 3 rising wails
+    {
+        int sr = 44100, n = (int)(3.0f * sr);
+        Wave w = {0}; w.frameCount = n; w.sampleRate = sr; w.sampleSize = 16; w.channels = 1;
+        w.data = RL_CALLOC(n, sizeof(short));
+        short *d = (short *)w.data;
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / sr;
+            // Three wail cycles over 3 seconds
+            float cycle = fmodf(t, 1.0f);
+            // Deep, menacing air raid siren
+            float freq = 100.0f + cycle * cycle * 200.0f; // 100-300Hz — very deep
+            // Main tone — sawtooth for that harsh mechanical siren sound
+            float saw = fmodf(t * freq, 1.0f) * 2.0f - 1.0f;
+            // Add second harmonic
+            float harm = sinf(t * freq * 2.0f * 6.283f) * 0.3f;
+            // Amplitude envelope per wail — loud then brief dip at cycle boundary
+            float env = (cycle < 0.9f) ? 1.0f : (1.0f - cycle) / 0.1f;
+            // Overall fade in/out
+            float master = 1.0f;
+            if (t < 0.1f) master = t / 0.1f;
+            if (t > 2.7f) master = (3.0f - t) / 0.3f;
+
+            d[i] = (short)((saw * 0.5f + harm) * env * master * 24000.0f);
+        }
+        lm->sndKlaxon = LoadSoundFromWave(w); UnloadWave(w);
+    }
     lm->soundLoaded = true;
 }
 
@@ -40,15 +67,19 @@ void LanderManagerUnload(LanderManager *lm) {
     if (lm->soundLoaded) {
         UnloadSound(lm->sndImpact);
         UnloadSound(lm->sndExplode);
+        UnloadSound(lm->sndKlaxon);
     }
 }
 
 void LanderSpawnWave(LanderManager *lm, Vector3 playerPos, int enemyCount, int wave) {
     // Spawn 1-3 landers around the player
     int landerCount = 1 + (wave / 3);
+    if (wave >= 5) landerCount = 2 + (wave / 2);
     if (landerCount > MAX_LANDERS) landerCount = MAX_LANDERS;
     int perLander = enemyCount / landerCount;
 
+    PlaySound(lm->sndKlaxon);
+    lm->klaxonPlayed = true;
     for (int i = 0; i < landerCount; i++) {
         Lander *l = &lm->landers[i];
         float angle = ((float)rand() / RAND_MAX) * 2.0f * PI;
@@ -72,7 +103,7 @@ void LanderSpawnWave(LanderManager *lm, Vector3 playerPos, int enemyCount, int w
         l->position = l->targetPos;
         l->position.y += 80.0f + ((float)rand() / RAND_MAX) * 40.0f;
 
-        l->state = LANDER_DESCENDING;
+        l->state = LANDER_WAITING;
         l->timer = 0;
         l->enemiesDeployed = 0;
         l->enemiesTotal = (i < landerCount - 1) ? perLander : enemyCount - perLander * i;
@@ -89,6 +120,14 @@ void LanderManagerUpdate(LanderManager *lm, EnemyManager *em, float dt) {
         l->timer += dt;
 
         switch (l->state) {
+            case LANDER_WAITING: {
+                // Wait for klaxon to finish (3 seconds) then start descent
+                if (l->timer > 3.5f) {
+                    l->state = LANDER_DESCENDING;
+                    l->timer = 0;
+                }
+                break;
+            }
             case LANDER_DESCENDING: {
                 // Fall toward target — decelerate near ground
                 float distToGround = l->position.y - l->targetPos.y;
@@ -144,10 +183,10 @@ void LanderManagerUpdate(LanderManager *lm, EnemyManager *em, float dt) {
     }
 }
 
-void LanderManagerDraw(LanderManager *lm) {
+void LanderManagerDraw(LanderManager *lm, Vector3 playerPos) {
     for (int i = 0; i < MAX_LANDERS; i++) {
         Lander *l = &lm->landers[i];
-        if (l->state == LANDER_INACTIVE || l->state == LANDER_DONE) continue;
+        if (l->state == LANDER_INACTIVE || l->state == LANDER_DONE || l->state == LANDER_WAITING) continue;
 
         Vector3 p = l->position;
 
@@ -258,6 +297,9 @@ void LanderManagerDraw(LanderManager *lm) {
 
         rlPopMatrix();
     }
+
+    // (compass drawn on HUD layer instead)
+    (void)playerPos;
 }
 
 float LanderGetScreenShake(LanderManager *lm) {
@@ -271,7 +313,8 @@ float LanderGetScreenShake(LanderManager *lm) {
 
 bool LanderWaveActive(LanderManager *lm) {
     for (int i = 0; i < MAX_LANDERS; i++) {
-        if (lm->landers[i].state != LANDER_INACTIVE && lm->landers[i].state != LANDER_DONE)
+        LanderState s = lm->landers[i].state;
+        if (s == LANDER_WAITING || s == LANDER_DESCENDING || s == LANDER_LANDED || s == LANDER_EXPLODING)
             return true;
     }
     return false;

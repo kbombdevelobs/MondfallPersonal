@@ -8,6 +8,7 @@
 #include "hud.h"
 #include "audio.h"
 #include "lander.h"
+#include "pickup.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -45,6 +46,8 @@ int main(void) {
     memset(&audio, 0, sizeof(audio));
     LanderManager landers;
     memset(&landers, 0, sizeof(landers));
+    PickupManager pickups;
+    PickupManagerInit(&pickups);
 
     GameInit(&game);
     PlayerInit(&player);
@@ -110,6 +113,12 @@ int main(void) {
                 EnemyManagerUpdate(&enemies, player.position, dt);
                 WorldUpdate(&world, player.position);
                 LanderManagerUpdate(&landers, &enemies, dt);
+                PickupManagerUpdate(&pickups, player.position, dt);
+
+                // E to pick up dropped weapon
+                if (IsKeyPressed(KEY_E)) {
+                    PickupTryGrab(&pickups, player.position);
+                }
 
                 // Heal over time — slow regen
                 if (player.health < player.maxHealth) {
@@ -140,11 +149,36 @@ int main(void) {
                     game.enemiesRemaining = 0;
                 }
 
-                // Shooting
-                if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) || (weapon.current == WEAPON_JACKHAMMER && IsKeyDown(KEY_V))) {
+                // Shooting — pickup weapon overrides left-click when held
+                if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && pickups.hasPickup) {
+                    // Fire picked-up enemy weapon with left click
+                    Vector3 shootDir = PlayerGetForward(&player);
+                    Vector3 shootOrigin = player.camera.position;
+                    Vector3 barrelPos = WeaponGetBarrelWorldPos(&weapon, player.camera);
+                    if (PickupFire(&pickups, shootOrigin, shootDir)) {
+                        Ray pickRay = {shootOrigin, shootDir};
+                        float hd = 0;
+                        int hit = EnemyCheckHit(&enemies, pickRay, 80.0f, &hd);
+                        if (hit >= 0) {
+                            EnemyDamage(&enemies, hit, pickups.pickupDamage);
+                            if (enemies.enemies[hit].state == ENEMY_DYING) {
+                                game.killCount++;
+                                PickupDrop(&pickups, enemies.enemies[hit].position, enemies.enemies[hit].type);
+                            }
+                        }
+                        if (weapon.beamCount < MAX_BEAM_TRAILS) {
+                            Color bc = (pickups.pickupType == ENEMY_SOVIET) ?
+                                (Color){255, 80, 40, 180} : (Color){80, 160, 255, 180};
+                            weapon.beams[weapon.beamCount] = (BeamTrail){barrelPos,
+                                Vector3Add(shootOrigin, Vector3Scale(shootDir, 80.0f)), bc, 0.1f};
+                            weapon.beamCount++;
+                        }
+                        PlayerApplyRecoil(&player, shootDir, 0.3f);
+                    }
+                } else if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) || (weapon.current == WEAPON_JACKHAMMER && IsKeyDown(KEY_V))) {
+                    // Normal weapon fire
                     Vector3 shootDir = PlayerGetForward(&player);
                     Vector3 barrelPos = WeaponGetBarrelWorldPos(&weapon, player.camera);
-                    // Fire uses camera pos for accurate aim, but beam starts at barrel
                     Vector3 shootOrigin = player.camera.position;
 
                     if (WeaponFire(&weapon, barrelPos, shootDir)) {
@@ -159,14 +193,20 @@ int main(void) {
                             int hit = EnemyCheckHit(&enemies, shootRay, 100.0f, &hitDist);
                             if (hit >= 0) {
                                 EnemyDamage(&enemies, hit, weapon.mp40Damage);
-                                if (enemies.enemies[hit].state == ENEMY_DYING) game.killCount++;
+                                if (enemies.enemies[hit].state == ENEMY_DYING) {
+                                    game.killCount++;
+                                    PickupDrop(&pickups, enemies.enemies[hit].position, enemies.enemies[hit].type);
+                                }
                             }
                         } else if (weapon.current == WEAPON_JACKHAMMER) {
                             Vector3 meleePos = Vector3Add(shootOrigin, Vector3Scale(shootDir, weapon.jackhammerRange * 0.5f));
                             int hit = EnemyCheckSphereHit(&enemies, meleePos, weapon.jackhammerRange);
                             if (hit >= 0) {
                                 EnemyDamage(&enemies, hit, weapon.jackhammerDamage);
-                                if (enemies.enemies[hit].state == ENEMY_DYING) game.killCount++;
+                                if (enemies.enemies[hit].state == ENEMY_DYING) {
+                                    game.killCount++;
+                                    PickupDrop(&pickups, enemies.enemies[hit].position, enemies.enemies[hit].type);
+                                }
                             }
                         }
                     }
@@ -183,7 +223,10 @@ int main(void) {
                             if (d < weapon.projectiles[i].radius) {
                                 float dmg = weapon.projectiles[i].damage * (1.0f - d / weapon.projectiles[i].radius);
                                 EnemyDamage(&enemies, j, dmg);
-                                if (enemies.enemies[j].state == ENEMY_DYING) game.killCount++;
+                                if (enemies.enemies[j].state == ENEMY_DYING) {
+                                    game.killCount++;
+                                    PickupDrop(&pickups, enemies.enemies[j].position, enemies.enemies[j].type);
+                                }
                             }
                         }
                         WeaponSpawnExplosion(&weapon, weapon.projectiles[i].position, weapon.projectiles[i].radius);
@@ -218,8 +261,11 @@ int main(void) {
                             {en->position.x+1.0f, en->position.y+2.0f, en->position.z+1.0f}};
                         RayCollision col = GetRayCollisionBox(beamRay, box);
                         if (col.hit && col.distance < 100.0f) {
-                            EnemyDamage(&enemies, ei, 999.0f); // instant kill
-                            if (enemies.enemies[ei].state == ENEMY_DYING) game.killCount++;
+                            EnemyDamage(&enemies, ei, 999.0f);
+                            if (enemies.enemies[ei].state == ENEMY_DYING) {
+                                game.killCount++;
+                                PickupDrop(&pickups, enemies.enemies[ei].position, enemies.enemies[ei].type);
+                            }
                             WeaponSpawnExplosion(&weapon, en->position, 4.0f);
                         }
                     }
@@ -278,10 +324,14 @@ int main(void) {
                 WorldDrawSky(&world, player.camera);
                 WorldDraw(&world, player.position);
                 EnemyManagerDraw(&enemies);
-                LanderManagerDraw(&landers);
+                LanderManagerDraw(&landers, player.position);
+                PickupManagerDraw(&pickups);
                 WeaponDrawWorld(&weapon);
                 if (game.state == STATE_PLAYING || game.state == STATE_PAUSED) {
-                    WeaponDrawFirst(&weapon, player.camera);
+                    if (pickups.hasPickup)
+                        PickupDrawFirstPerson(&pickups, player.camera, weapon.weaponBobTimer);
+                    else
+                        WeaponDrawFirst(&weapon, player.camera);
                 }
             EndMode3D();
             // HUD drawn AFTER shader pass — see below
@@ -320,6 +370,8 @@ int main(void) {
                 BeginTextureMode(hudTarget);
                 ClearBackground(BLANK);
                 HudDraw(&player, &weapon, &game, hudTarget.texture.width, hudTarget.texture.height);
+                HudDrawPickup(&pickups, hudTarget.texture.width, hudTarget.texture.height);
+                HudDrawLanderArrows(&landers, player.camera, hudTarget.texture.width, hudTarget.texture.height);
                 EndTextureMode();
 
                 BeginShaderMode(hudShader);

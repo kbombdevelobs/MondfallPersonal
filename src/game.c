@@ -9,7 +9,7 @@ void GameInit(Game *game) {
     game->wave = 0;
     game->killCount = 0;
     game->waveTimer = 0.0f;
-    game->waveDelay = 3.0f;
+    game->waveDelay = 6.0f;
     game->enemiesRemaining = 0;
     game->enemiesSpawned = 0;
     game->enemiesPerWave = 4;

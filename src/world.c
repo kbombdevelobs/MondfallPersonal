@@ -4,6 +4,8 @@
 #include <math.h>
 #include <string.h>
 
+static World *g_activeWorld = NULL;
+
 // ---- Noise functions for terrain height ----
 static float Hash2D(float x, float z) {
     // Simple hash for 2D noise
@@ -53,72 +55,126 @@ static float SeededFloat(unsigned int *seed, float min, float max) {
 }
 
 static Texture2D GenMoonTexture(void) {
+    // Generate texture using our own ValueNoise — guaranteed tileable
+    // because ValueNoise is continuous and deterministic at any coordinate.
+    // We sample a 256x256 region of noise space mapped to one texture tile.
     int w = 256, h = 256;
-    Image base = GenImagePerlinNoise(w, h, 0, 0, 3.0f);
-    ImageColorTint(&base, (Color){155, 150, 140, 255});
-    // Crater marks
-    for (int i = 0; i < 8; i++) {
-        int cx = GetRandomValue(30, w - 30);
-        int cy = GetRandomValue(30, h - 30);
-        int r = GetRandomValue(10, 40);
-        ImageDrawCircle(&base, cx, cy, r, (Color){125, 120, 112, 140});
-        ImageDrawCircleLines(&base, cx, cy, r + 1, (Color){172, 168, 158, 180});
-        ImageDrawCircle(&base, cx + 2, cy + 2, r - 3, (Color){115, 112, 105, 100});
+    Image img = GenImageColor(w, h, BLACK);
+
+    for (int py = 0; py < h; py++) {
+        for (int px = 0; px < w; px++) {
+            // Map pixel to noise space — one tile = 10 noise units
+            float nx = (float)px / (float)w * 10.0f;
+            float ny = (float)py / (float)h * 10.0f;
+
+            // Multi-octave noise for regolith texture
+            float n = ValueNoise(nx, ny) * 0.5f;
+            n += ValueNoise(nx * 2.5f, ny * 2.5f) * 0.25f;
+            n += ValueNoise(nx * 6.0f, ny * 6.0f) * 0.12f;
+            n += ValueNoise(nx * 13.0f, ny * 13.0f) * 0.06f;
+
+            // Crater marks — lots of them, deterministic via noise
+            float crater = 0;
+            for (int ci = 0; ci < 15; ci++) {
+                float ccx = ValueNoise((float)ci * 7.1f, 0.5f) * 10.0f;
+                float ccy = ValueNoise(0.5f, (float)ci * 7.1f) * 10.0f;
+                float cr = 0.3f + ValueNoise((float)ci * 3.3f, (float)ci * 5.7f) * 0.6f;
+                // Wrap distance for tileability
+                float ddx = nx - ccx;
+                float ddy = ny - ccy;
+                // Wrap around the 10-unit tile
+                if (ddx > 5.0f) ddx -= 10.0f;
+                if (ddx < -5.0f) ddx += 10.0f;
+                if (ddy > 5.0f) ddy -= 10.0f;
+                if (ddy < -5.0f) ddy += 10.0f;
+                float dd = sqrtf(ddx * ddx + ddy * ddy);
+                if (dd < cr) {
+                    float t = dd / cr;
+                    crater -= (1.0f - t * t) * 0.08f; // darken inside
+                    if (t > 0.75f) crater += 0.04f;    // bright rim
+                }
+            }
+
+            int shade = (int)(130.0f + n * 50.0f + crater * 200.0f);
+            if (shade < 70) shade = 70;
+            if (shade > 190) shade = 190;
+            ImageDrawPixel(&img, px, py,
+                (Color){(unsigned char)shade, (unsigned char)shade, (unsigned char)(shade - 6), 255});
+        }
     }
-    // Fine regolith noise
-    for (int i = 0; i < 200; i++) {
-        int px = GetRandomValue(0, w - 1);
-        int py = GetRandomValue(0, h - 1);
-        int shade = GetRandomValue(130, 175);
-        ImageDrawPixel(&base, px, py, (Color){(unsigned char)shade, (unsigned char)shade, (unsigned char)(shade - 8), 255});
-    }
-    // Boot print style marks
-    for (int i = 0; i < 8; i++) {
-        int px = GetRandomValue(50, w - 50);
-        int py = GetRandomValue(50, h - 50);
-        ImageDrawRectangle(&base, px, py, GetRandomValue(3, 8), GetRandomValue(12, 25), (Color){135, 132, 125, 100});
-    }
-    Texture2D tex = LoadTextureFromImage(base);
+
+    Texture2D tex = LoadTextureFromImage(img);
     SetTextureFilter(tex, TEXTURE_FILTER_BILINEAR);
     SetTextureWrap(tex, TEXTURE_WRAP_REPEAT);
-    UnloadImage(base);
+    UnloadImage(img);
     return tex;
 }
 
-// Generate chunk mesh with heightmap + crater depressions
-static Model GenTerrainMesh(int cx, int cz, Texture2D moonTex, Crater *craters, int craterCount) {
+// Global crater height modifier — checks ALL nearby chunks so craters span borders
+static float CraterHeight(World *world, float wx, float wz) {
+    if (!world) return 0;
+    float h = 0;
+    for (int i = 0; i < world->chunkCount; i++) {
+        Chunk *ch = &world->chunks[i];
+        if (!ch->generated) continue;
+        for (int c = 0; c < ch->craterCount; c++) {
+            float dx = wx - ch->craters[c].position.x;
+            float dz = wz - ch->craters[c].position.z;
+            float dist = sqrtf(dx * dx + dz * dz);
+            float r = ch->craters[c].radius;
+            if (dist < r) {
+                float t = dist / r;
+                h -= (1.0f - t * t) * ch->craters[c].depth * 2.5f;
+                if (t > 0.8f) h += ((t - 0.8f) / 0.2f) * ch->craters[c].depth * 0.4f;
+            }
+        }
+    }
+    return h;
+}
+
+// Generate chunk mesh — vertices in WORLD SPACE, drawn at origin
+static Model GenTerrainMesh(int cx, int cz, Texture2D moonTex, World *world) {
     float baseX = cx * CHUNK_SIZE;
     float baseZ = cz * CHUNK_SIZE;
 
     Mesh mesh = GenMeshPlane(CHUNK_SIZE, CHUNK_SIZE, MESH_RES, MESH_RES);
 
-    // Displace vertices by noise height + crater holes
     int vertCount = mesh.vertexCount;
     for (int i = 0; i < vertCount; i++) {
+        // GenMeshPlane verts are centered at origin: [-size/2, +size/2]
+        // Offset to world position
         float vx = mesh.vertices[i * 3 + 0] + baseX + CHUNK_SIZE * 0.5f;
         float vz = mesh.vertices[i * 3 + 2] + baseZ + CHUNK_SIZE * 0.5f;
-        float h = WorldGetHeight(vx, vz);
 
-        // Crater depressions — smooth bowl shape
-        for (int c = 0; c < craterCount; c++) {
-            float dx = vx - craters[c].position.x;
-            float dz = vz - craters[c].position.z;
-            float dist = sqrtf(dx * dx + dz * dz);
-            float r = craters[c].radius;
-            if (dist < r) {
-                // Smooth bowl: deepest at center, rim at edge
-                float t = dist / r; // 0=center, 1=edge
-                float bowl = (1.0f - t * t) * craters[c].depth * 2.5f;
-                h -= bowl;
-                // Slight rim bump at edge
-                if (t > 0.8f) {
-                    float rimT = (t - 0.8f) / 0.2f;
-                    h += rimT * craters[c].depth * 0.4f;
-                }
-            }
+        // Store world-space X/Z in the mesh
+        mesh.vertices[i * 3 + 0] = vx;
+        mesh.vertices[i * 3 + 2] = vz;
+        float craterH = CraterHeight(world, vx, vz);
+        mesh.vertices[i * 3 + 1] = WorldGetHeight(vx, vz) + craterH;
+
+        // World-space UVs
+        if (mesh.texcoords) {
+            float texScale = 1.0f / 30.0f;
+            mesh.texcoords[i * 2 + 0] = vx * texScale;
+            mesh.texcoords[i * 2 + 1] = vz * texScale;
         }
 
-        mesh.vertices[i * 3 + 1] = h;
+        // Vertex colors — continuous noise-based, guarantees no chunk seams
+        if (!mesh.colors) {
+            mesh.colors = RL_CALLOC(vertCount * 4, sizeof(unsigned char));
+        }
+        // Base shade from noise
+        float cn = ValueNoise(vx * 0.08f, vz * 0.08f) * 0.3f
+                 + ValueNoise(vx * 0.2f, vz * 0.2f) * 0.15f;
+        // Darken in craters
+        float craterDarken = (craterH < -0.1f) ? craterH * 0.15f : 0;
+        int shade = (int)(145.0f + cn * 60.0f + craterDarken * 80.0f);
+        if (shade < 80) shade = 80;
+        if (shade > 200) shade = 200;
+        mesh.colors[i * 4 + 0] = (unsigned char)shade;
+        mesh.colors[i * 4 + 1] = (unsigned char)shade;
+        mesh.colors[i * 4 + 2] = (unsigned char)(shade - 5);
+        mesh.colors[i * 4 + 3] = 255;
     }
 
     // Recalculate normals
@@ -147,7 +203,11 @@ static Model GenTerrainMesh(int cx, int cz, Texture2D moonTex, Crater *craters, 
     }
 
     UpdateMeshBuffer(mesh, 0, mesh.vertices, mesh.vertexCount * 3 * sizeof(float), 0);
+    if (mesh.texcoords)
+        UpdateMeshBuffer(mesh, 1, mesh.texcoords, mesh.vertexCount * 2 * sizeof(float), 0);
     UpdateMeshBuffer(mesh, 2, mesh.normals, mesh.vertexCount * 3 * sizeof(float), 0);
+    if (mesh.colors)
+        UpdateMeshBuffer(mesh, 3, mesh.colors, mesh.vertexCount * 4 * sizeof(unsigned char), 0);
 
     Model model = LoadModelFromMesh(mesh);
     model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = moonTex;
@@ -166,11 +226,13 @@ static void GenerateChunk(Chunk *chunk, int cx, int cz, Texture2D moonTex) {
     // Craters (visual overlays)
     chunk->craterCount = 1 + (int)(seed % MAX_CHUNK_CRATERS);
     for (int i = 0; i < chunk->craterCount; i++) {
-        float px = baseX + SeededFloat(&seed, 5.0f, CHUNK_SIZE - 5.0f);
-        float pz = baseZ + SeededFloat(&seed, 5.0f, CHUNK_SIZE - 5.0f);
-        chunk->craters[i].position = (Vector3){px, WorldGetHeight(px, pz) + 0.02f, pz};
-        chunk->craters[i].radius = SeededFloat(&seed, 2.0f, 7.0f);
-        chunk->craters[i].depth = SeededFloat(&seed, 0.15f, 0.6f);
+        float rad = SeededFloat(&seed, 2.0f, 7.0f);
+        float margin = rad + 2.0f; // keep crater fully inside chunk
+        float px = baseX + SeededFloat(&seed, margin, CHUNK_SIZE - margin);
+        float pz = baseZ + SeededFloat(&seed, margin, CHUNK_SIZE - margin);
+        chunk->craters[i].position = (Vector3){px, WorldGetHeight(px, pz), pz};
+        chunk->craters[i].radius = rad;
+        chunk->craters[i].depth = SeededFloat(&seed, 0.2f, 0.8f);
     }
 
     // Rocks
@@ -190,8 +252,8 @@ static void GenerateChunk(Chunk *chunk, int cx, int cz, Texture2D moonTex) {
         chunk->rocks[i].color = (Color){(unsigned char)shade, (unsigned char)shade, (unsigned char)(shade - 8), 255};
     }
 
-    // Generate terrain mesh with crater depressions baked in
-    chunk->ground = GenTerrainMesh(cx, cz, moonTex, chunk->craters, chunk->craterCount);
+    // Generate terrain mesh — world-space verts, craters from all chunks
+    chunk->ground = GenTerrainMesh(cx, cz, moonTex, g_activeWorld);
 }
 
 static Chunk *FindChunk(World *world, int cx, int cz) {
@@ -221,7 +283,6 @@ static Chunk *CreateChunk(World *world, int cx, int cz) {
     return &world->chunks[slot];
 }
 
-static World *g_activeWorld = NULL;
 World *WorldGetActive(void) { return g_activeWorld; }
 
 void WorldInit(World *world) {
@@ -311,18 +372,10 @@ static void DrawChunk(World *world, Chunk *chunk, Vector3 playerPos) {
     float baseZ = chunk->cz * CHUNK_SIZE;
     Vector3 center = {baseX + CHUNK_SIZE * 0.5f, 0, baseZ + CHUNK_SIZE * 0.5f};
 
-    // Distance fade for far chunks
     float dist = Vector3Distance(playerPos, center);
-    float maxDist = CHUNK_SIZE * (RENDER_CHUNKS / 2);
-    float fade = 1.0f;
-    if (dist > maxDist * 0.7f) {
-        fade = 1.0f - (dist - maxDist * 0.7f) / (maxDist * 0.3f);
-        if (fade < 0) fade = 0;
-    }
-    unsigned char alpha = (unsigned char)(fade * 255);
-    Color tint = {alpha, alpha, alpha, 255};
+    float fade = 1.0f; // keep for rocks/craters but terrain draws full brightness
 
-    DrawModel(chunk->ground, center, 1.0f, tint);
+    DrawModel(chunk->ground, (Vector3){0, 0, 0}, 1.0f, WHITE);
 
     // Crater rims — just a subtle wireframe ring since the depression is in the mesh
     for (int i = 0; i < chunk->craterCount; i++) {

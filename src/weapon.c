@@ -123,7 +123,7 @@ void WeaponInit(Weapon *w) {
     memset(w, 0, sizeof(Weapon));
     w->current = WEAPON_MOND_MP40;
     w->mp40Mag = 32; w->mp40MagSize = 32; w->mp40Reserve = 128;
-    w->mp40FireRate = 0.09f; w->mp40Damage = 12.0f;
+    w->mp40FireRate = 0.08f; w->mp40Damage = 25.0f;
     w->raketenMag = 5; w->raketenMagSize = 5; w->raketenReserve = 10;
     w->raketenFireRate = 0.1f; w->raketenDamage = 500.0f; w->raketenRadius = 3.0f;
     w->raketenBeamDuration = 2.0f;
@@ -297,7 +297,7 @@ void WeaponDrawFirst(Weapon *w, Camera3D camera) {
     Vector3 anchor = Vector3Add(Vector3Add(Vector3Add(camera.position,
         Vector3Scale(forward, 0.5f - recoilBack)),
         Vector3Scale(right, 0.28f + bobX)),
-        Vector3Scale(up, -0.25f + bobY));
+        Vector3Scale(up, -0.2f + bobY));
 
     rlPushMatrix();
     rlTranslatef(anchor.x, anchor.y, anchor.z);
@@ -345,16 +345,25 @@ void WeaponDrawFirst(Weapon *w, Camera3D camera) {
             // Energy glow behind muzzle
             DrawCube((Vector3){0, 0.025f, 0.5f}, 0.015f, 0.006f, 0.06f, CY);
 
-            // --- Side magazine (MP40 signature — left side, angled) ---
+            // --- MAGAZINE (MP40 signature — left side, big and obvious) ---
             rlPushMatrix();
-            rlTranslatef(-0.05f, -0.04f, 0.06f);
-            rlRotatef(-5, 0, 0, 1); // slight angle
-            DrawCube((Vector3){0, 0, 0}, 0.025f, 0.15f, 0.045f, CH);
-            DrawCubeWires((Vector3){0, 0, 0}, 0.026f, 0.151f, 0.046f, ST);
-            // Magazine base plate
-            DrawCube((Vector3){0, -0.08f, 0}, 0.03f, 0.012f, 0.05f, ST);
-            // Energy window on mag
-            DrawCube((Vector3){-0.015f, 0, 0}, 0.003f, 0.1f, 0.025f, CY);
+            rlTranslatef(-0.055f, -0.06f, 0.06f);
+            rlRotatef(-6, 0, 0, 1);
+            // Mag body — dark, chunky, sticks out
+            DrawCube((Vector3){0, 0, 0}, 0.035f, 0.2f, 0.055f, BK);
+            DrawCubeWires((Vector3){0, 0, 0}, 0.036f, 0.201f, 0.056f, ST);
+            // Mag ribs (horizontal lines for detail)
+            for (int mr = 0; mr < 4; mr++) {
+                float my = -0.07f + mr * 0.04f;
+                DrawCube((Vector3){-0.019f, my, 0}, 0.002f, 0.008f, 0.05f, ST);
+            }
+            // Cyan energy window — bright, glowing, visible
+            DrawCube((Vector3){-0.02f, 0, 0}, 0.004f, 0.14f, 0.03f, CY);
+            DrawCube((Vector3){-0.021f, 0, 0}, 0.002f, 0.12f, 0.025f, (Color){0,255,255,150}); // inner glow
+            // Base plate
+            DrawCube((Vector3){0, -0.105f, 0}, 0.04f, 0.015f, 0.06f, ST);
+            // Feed lips at top
+            DrawCube((Vector3){0, 0.1f, 0}, 0.03f, 0.012f, 0.04f, ST);
             rlPopMatrix();
 
             // --- Pistol grip (angled back like MP40) ---
