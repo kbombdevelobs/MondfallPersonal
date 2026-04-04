@@ -5,3 +5,5 @@ mondfall_dbg
 .DS_Store
 assets/march.wav
 Mondfall.app/
+mp3/
+*.mp3
