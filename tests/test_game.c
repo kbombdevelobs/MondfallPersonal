@@ -439,6 +439,43 @@ TEST(test_game_init_state) {
     ASSERT(g.killCount == 0);
 }
 
+TEST(test_difficulty_defaults) {
+    Game g;
+    GameInit(&g);
+    ASSERT(g.difficulty == DIFFICULTY_NORMAL);
+    ASSERT_FLOAT_EQ(g.damageScaler, DIFFICULTY_NORMAL_SCALE, 0.001f);
+}
+
+TEST(test_difficulty_valkyrie_no_damage) {
+    Player p = make_player();
+    PlayerTakeDamage(&p, 50.0f * DIFFICULTY_VALKYRIE_SCALE);
+    ASSERT_FLOAT_EQ(p.health, PLAYER_MAX_HEALTH, 0.01f);
+}
+
+TEST(test_difficulty_easy_scale) {
+    ASSERT_FLOAT_EQ(DIFFICULTY_EASY_SCALE, 0.5f, 0.001f);
+}
+
+TEST(test_difficulty_hard_scale) {
+    ASSERT_FLOAT_EQ(DIFFICULTY_HARD_SCALE, 1.5f, 0.001f);
+}
+
+TEST(test_difficulty_scaler_reduces_damage) {
+    Player p = make_player();
+    float baseDmg = 20.0f;
+    PlayerTakeDamage(&p, baseDmg * DIFFICULTY_EASY_SCALE);
+    // Easy: 20 * 0.5 = 10 damage, health = 90
+    ASSERT_FLOAT_EQ(p.health, 90.0f, 0.01f);
+}
+
+TEST(test_difficulty_scaler_increases_damage) {
+    Player p = make_player();
+    float baseDmg = 20.0f;
+    PlayerTakeDamage(&p, baseDmg * DIFFICULTY_HARD_SCALE);
+    // Hard: 20 * 1.5 = 30 damage, health = 70
+    ASSERT_FLOAT_EQ(p.health, 70.0f, 0.01f);
+}
+
 TEST(test_game_reset) {
     Game g;
     GameInit(&g);
@@ -752,6 +789,12 @@ int main(void) {
     printf("\n[Game State]\n");
     RUN(test_game_init_state);
     RUN(test_game_reset);
+    RUN(test_difficulty_defaults);
+    RUN(test_difficulty_valkyrie_no_damage);
+    RUN(test_difficulty_easy_scale);
+    RUN(test_difficulty_hard_scale);
+    RUN(test_difficulty_scaler_reduces_damage);
+    RUN(test_difficulty_scaler_increases_damage);
 
     printf("\n[Noise Functions]\n");
     RUN(test_gradient_noise_deterministic);
