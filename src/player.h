@@ -18,6 +18,7 @@ typedef struct {
     float headBob;
     float headBobTimer;
     float mouseSensitivity;
+    float lungeTimer;           // > 0 means lunge is active, WASD locked out
 } Player;
 
 void PlayerInit(Player *player);

@@ -43,6 +43,8 @@ typedef struct {
     Vector3 raketenBeamStart; // beam origin (world)
     Vector3 raketenBeamEnd;   // beam endpoint (world)
     float jackhammerDamage, jackhammerRange, jackhammerFireRate, jackhammerTimer, jackhammerAnim;
+    float jackhammerLunge;       // lunge animation timer (counts down)
+    bool jackhammerLunging;      // currently in a lunge
     bool reloading;
     float reloadTimer, reloadDuration;
     float weaponBob, weaponBobTimer, muzzleFlash, recoil;

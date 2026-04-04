@@ -34,7 +34,26 @@ static Sound GenSoundBeamBlast(void) {
 }
 
 static Sound GenSoundJackhammer(void) {
-    return SoundGenNoiseTone(0.12f, 200.0f, 30.0f);
+    // Brutal pneumatic crunch + metallic impact + servo whine
+    int sr = AUDIO_SAMPLE_RATE;
+    Wave wave = SoundGenCreateWave(sr, 0.35f);
+    short *d = (short *)wave.data;
+    for (int i = 0; i < (int)wave.frameCount; i++) {
+        float t = (float)i / sr;
+        float env = (t < 0.02f) ? t / 0.02f : expf(-(t - 0.02f) * 8.0f);
+        // Heavy impact thud
+        float thud = sinf(t * 80.0f * 2.0f * PI) * expf(-t * 12.0f) * 0.5f;
+        // Metallic crunch noise
+        float crunch = ((float)rand() / RAND_MAX * 2.0f - 1.0f) * expf(-t * 6.0f) * 0.4f;
+        // Servo whine — rising pitch
+        float whine = sinf(t * (400.0f + t * 2000.0f) * 2.0f * PI) * 0.15f * expf(-t * 4.0f);
+        // Pneumatic hiss
+        float hiss = ((float)rand() / RAND_MAX * 2.0f - 1.0f) * 0.2f * expf(-t * 10.0f);
+        d[i] = (short)((thud + crunch + whine + hiss) * env * 28000.0f);
+    }
+    Sound s = LoadSoundFromWave(wave);
+    UnloadWave(wave);
+    return s;
 }
 
 static Sound GenSoundReload(void) {
@@ -187,7 +206,12 @@ void WeaponUpdate(Weapon *w, float dt) {
     if (w->jackhammerTimer > 0) w->jackhammerTimer -= dt;
     if (w->muzzleFlash > 0) w->muzzleFlash -= dt * 8.0f;
     if (w->recoil > 0) w->recoil -= dt * 10.0f;
+    else if (w->recoil < 0) { w->recoil += dt * 16.0f; if (w->recoil > 0) w->recoil = 0; }
     if (w->jackhammerAnim > 0) w->jackhammerAnim -= dt * 6.0f;
+    if (w->jackhammerLunge > 0) {
+        w->jackhammerLunge -= dt;
+        if (w->jackhammerLunge <= 0) w->jackhammerLunging = false;
+    }
 
     if (w->reloading) { w->reloadTimer += dt; if (w->reloadTimer >= w->reloadDuration) FinishReload(w); }
 
@@ -271,7 +295,10 @@ bool WeaponFire(Weapon *w, Vector3 origin, Vector3 direction) {
         case WEAPON_JACKHAMMER:
             if (w->jackhammerTimer > 0) return false;
             w->jackhammerTimer = w->jackhammerFireRate;
-            w->jackhammerAnim = 1.0f; w->recoil = 1.5f;
+            w->jackhammerAnim = 1.0f;
+            w->recoil = -8.0f; // NEGATIVE = thrust viewmodel FORWARD (huge punch)
+            w->jackhammerLunge = JACKHAMMER_LUNGE_DURATION;
+            w->jackhammerLunging = true;
             PlaySound(w->sndJackhammerHit);
             return true;
         default: return false;
@@ -490,47 +517,112 @@ void WeaponDrawFirst(Weapon *w, Camera3D camera) {
             break;
         }
         case WEAPON_JACKHAMMER: {
-            // === JACKHAMMER: Mining tool turned melee weapon ===
-            float ao = sinf(w->jackhammerAnim * 20.0f) * w->jackhammerAnim * 0.05f;
-            Color YL = {185,175,50,255};
-            Color GR = {105,105,95,255};
-            Color MT = {155,155,148,255};
-            Color RD = {205,50,30,255};
-            Color ST = {205,205,198,255};
-            Color BK = {40,40,38,255};
+            // === JACKHAMMER: Heavy pneumatic war-hammer / industrial impaler ===
+            float ao = sinf(w->jackhammerAnim * 20.0f) * w->jackhammerAnim * 0.08f;
+            // Lunge thrust animation — push the weapon forward hard
+            float lungeThrust = 0;
+            if (w->jackhammerLunging) {
+                float lt = w->jackhammerLunge / JACKHAMMER_LUNGE_DURATION;
+                lungeThrust = sinf((1.0f - lt) * PI) * 0.25f; // thrust forward then back
+            }
+
+            Color CH = {180,185,195,255};  // chrome
+            Color GN = {50,65,40,255};     // military green
+            Color GR = {85,90,82,255};     // dark green-gray
+            Color MT = {170,170,162,255};   // brushed metal
+            Color RD = {220,40,25,255};     // hazard red
+            Color ST = {215,215,208,255};   // polished steel
+            Color BK = {30,32,28,255};      // black
+            Color YW = {210,190,40,255};    // hazard yellow
+            Color OR = {255,140,30,200};    // energy orange
+            Color BL = {140,10,5,255};      // blood/rust
 
             rlPushMatrix();
-            rlRotatef(55, 1, 0, 0);
+            rlRotatef(50, 1, 0, 0);
+            rlTranslatef(0, 0, -lungeThrust); // lunge pushes weapon forward
 
-            // Main body shaft
-            DrawCube((Vector3){0, ao, 0}, 0.045f, 0.35f, 0.045f, YL);
-            DrawCubeWires((Vector3){0, ao, 0}, 0.046f, 0.351f, 0.046f, (Color){150,140,40,255});
-            // Motor housing (top)
-            DrawCube((Vector3){0, 0.18f+ao, 0}, 0.055f, 0.06f, 0.055f, GR);
-            // Grip bars
-            DrawCube((Vector3){0, 0.14f+ao, 0}, 0.13f, 0.02f, 0.03f, GR);
-            DrawCube((Vector3){0, 0.06f+ao, 0}, 0.11f, 0.02f, 0.03f, GR);
-            // Grip rubber texture
-            DrawCube((Vector3){-0.06f, 0.1f+ao, 0}, 0.008f, 0.08f, 0.032f, BK);
-            DrawCube((Vector3){0.06f, 0.1f+ao, 0}, 0.008f, 0.08f, 0.032f, BK);
-            // Piston housing
-            DrawCube((Vector3){0, -0.13f+ao, 0}, 0.065f, 0.1f, 0.065f, MT);
-            DrawCubeWires((Vector3){0, -0.13f+ao, 0}, 0.066f, 0.101f, 0.066f, GR);
-            // Hazard stripes
-            DrawCube((Vector3){0.034f, -0.13f+ao, 0}, 0.004f, 0.08f, 0.067f, RD);
-            DrawCube((Vector3){-0.034f, -0.13f+ao, 0}, 0.004f, 0.08f, 0.067f, RD);
-            DrawCube((Vector3){0, -0.13f+ao, 0.034f}, 0.067f, 0.08f, 0.004f, RD);
-            // Chisel bit
-            DrawCube((Vector3){0, -0.22f+ao, 0}, 0.035f, 0.1f, 0.035f, ST);
-            DrawCube((Vector3){0, -0.3f+ao, 0}, 0.02f, 0.06f, 0.02f, ST);
-            // Bit tip (sharp)
-            DrawCube((Vector3){0, -0.34f+ao, 0}, 0.01f, 0.03f, 0.025f, (Color){220,220,215,255});
+            // === Main body — heavy industrial shaft ===
+            DrawCube((Vector3){0, ao, 0}, 0.06f, 0.42f, 0.06f, GN);
+            DrawCubeWires((Vector3){0, ao, 0}, 0.061f, 0.421f, 0.061f, BK);
+            // Reinforcement ribs along shaft
+            for (int r = 0; r < 4; r++) {
+                float ry = -0.12f + r * 0.09f + ao;
+                DrawCube((Vector3){0, ry, 0}, 0.065f, 0.015f, 0.065f, GR);
+            }
 
-            if (w->jackhammerAnim > 0.5f)
-                for (int i = 0; i < 4; i++)
-                    DrawSphere((Vector3){(float)GetRandomValue(-5,5)*0.01f,
-                        -0.36f+(float)GetRandomValue(-2,3)*0.01f,
-                        (float)GetRandomValue(-5,5)*0.01f}, 0.01f, YELLOW);
+            // === Motor housing (top) — bigger, industrial ===
+            DrawCube((Vector3){0, 0.22f+ao, 0}, 0.075f, 0.08f, 0.075f, CH);
+            DrawCubeWires((Vector3){0, 0.22f+ao, 0}, 0.076f, 0.081f, 0.076f, GR);
+            // Exhaust vents on motor
+            DrawCube((Vector3){0.04f, 0.24f+ao, 0}, 0.005f, 0.04f, 0.05f, BK);
+            DrawCube((Vector3){-0.04f, 0.24f+ao, 0}, 0.005f, 0.04f, 0.05f, BK);
+            // Power indicator light
+            float glow = 0.5f + sinf(GetTime() * 6.0f) * 0.5f;
+            DrawCube((Vector3){0, 0.27f+ao, 0.035f}, 0.015f, 0.015f, 0.005f,
+                (Color){(unsigned char)(255*glow), (unsigned char)(40*glow), 0, 255});
+
+            // === Grip — T-handle with rubber wrapping ===
+            DrawCube((Vector3){0, 0.16f+ao, 0}, 0.16f, 0.025f, 0.035f, MT);
+            DrawCubeWires((Vector3){0, 0.16f+ao, 0}, 0.161f, 0.026f, 0.036f, GR);
+            // Rubber grip wraps
+            DrawCube((Vector3){-0.07f, 0.16f+ao, 0}, 0.025f, 0.028f, 0.038f, BK);
+            DrawCube((Vector3){0.07f, 0.16f+ao, 0}, 0.025f, 0.028f, 0.038f, BK);
+            // Lower fore-grip
+            DrawCube((Vector3){0, 0.04f+ao, 0}, 0.035f, 0.08f, 0.04f, BK);
+
+            // === Piston housing — heavy, exposed pistons ===
+            DrawCube((Vector3){0, -0.15f+ao, 0}, 0.08f, 0.12f, 0.08f, MT);
+            DrawCubeWires((Vector3){0, -0.15f+ao, 0}, 0.081f, 0.121f, 0.081f, GR);
+            // Visible piston rods (animated)
+            float pistonTravel = ao * 3.0f;
+            DrawCube((Vector3){0.03f, -0.12f+pistonTravel, 0.03f}, 0.012f, 0.08f, 0.012f, ST);
+            DrawCube((Vector3){-0.03f, -0.12f+pistonTravel, -0.03f}, 0.012f, 0.08f, 0.012f, ST);
+            // Hydraulic lines
+            DrawCube((Vector3){0.045f, -0.08f+ao, 0}, 0.008f, 0.2f, 0.008f, RD);
+            DrawCube((Vector3){-0.045f, -0.08f+ao, 0}, 0.008f, 0.2f, 0.008f, RD);
+
+            // === Hazard stripes — front face ===
+            for (int s = 0; s < 3; s++) {
+                float sy = -0.13f + s * 0.04f + ao;
+                DrawCube((Vector3){0, sy, 0.042f}, 0.082f, 0.012f, 0.003f, YW);
+            }
+            DrawCube((Vector3){0.042f, -0.15f+ao, 0}, 0.003f, 0.1f, 0.082f, YW);
+
+            // === SPIKE HEAD — brutal war-pick style ===
+            // Transition collar
+            DrawCube((Vector3){0, -0.22f+ao, 0}, 0.07f, 0.03f, 0.07f, CH);
+            // Main spike shaft — thick, tapers to point
+            DrawCube((Vector3){0, -0.28f+ao, 0}, 0.04f, 0.1f, 0.04f, ST);
+            DrawCube((Vector3){0, -0.35f+ao, 0}, 0.025f, 0.08f, 0.025f, ST);
+            DrawCube((Vector3){0, -0.42f+ao, 0}, 0.012f, 0.06f, 0.018f, (Color){230,230,225,255});
+            // Sharp tip
+            DrawCube((Vector3){0, -0.46f+ao, 0}, 0.005f, 0.03f, 0.01f, WHITE);
+            // Side prongs — war-pick flanges
+            DrawCube((Vector3){0.04f, -0.26f+ao, 0}, 0.06f, 0.015f, 0.02f, ST);
+            DrawCube((Vector3){-0.04f, -0.26f+ao, 0}, 0.06f, 0.015f, 0.02f, ST);
+            DrawCube((Vector3){0.07f, -0.27f+ao, 0}, 0.02f, 0.025f, 0.015f, ST); // flange tips
+            DrawCube((Vector3){-0.07f, -0.27f+ao, 0}, 0.02f, 0.025f, 0.015f, ST);
+            // Blood/rust stains on spike
+            DrawCube((Vector3){0.005f, -0.38f+ao, 0.008f}, 0.02f, 0.04f, 0.008f, BL);
+            DrawCube((Vector3){-0.008f, -0.32f+ao, -0.005f}, 0.015f, 0.03f, 0.01f, BL);
+
+            // === Sparks on impact ===
+            if (w->jackhammerAnim > 0.4f) {
+                for (int i = 0; i < 8; i++) {
+                    float sx = (float)GetRandomValue(-8,8)*0.012f;
+                    float sy = -0.48f + (float)GetRandomValue(-4,4)*0.01f;
+                    float sz = (float)GetRandomValue(-8,8)*0.012f;
+                    Color sc = (i % 3 == 0) ? OR : YW;
+                    DrawSphere((Vector3){sx, sy+ao, sz}, 0.012f, sc);
+                }
+            }
+            // Energy glow when lunging
+            if (w->jackhammerLunging) {
+                float lg = w->jackhammerLunge / JACKHAMMER_LUNGE_DURATION;
+                DrawSphere((Vector3){0, -0.44f+ao, 0}, 0.08f * lg,
+                    (Color){255, 100, 20, (unsigned char)(lg * 200)});
+            }
+
             rlPopMatrix();
             break;
         }

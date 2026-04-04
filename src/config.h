@@ -56,10 +56,12 @@
 #define RAKETEN_BEAM_LIFT    5.0f
 
 // --- Weapon: Jackhammer ---
-#define JACKHAMMER_DAMAGE    45.0f
-#define JACKHAMMER_RANGE     3.5f
-#define JACKHAMMER_FIRE_RATE 0.35f
-#define JACKHAMMER_SHAKE     0.04f
+#define JACKHAMMER_DAMAGE    9999.0f
+#define JACKHAMMER_RANGE     4.5f
+#define JACKHAMMER_FIRE_RATE 0.5f
+#define JACKHAMMER_SHAKE     0.06f
+#define JACKHAMMER_LUNGE_SPEED  30.0f
+#define JACKHAMMER_LUNGE_DURATION 0.3f
 
 // --- Weapon Pools ---
 #define MAX_BEAM_TRAILS  20

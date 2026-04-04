@@ -6,7 +6,7 @@
 #include "config.h"
 
 typedef enum { ENEMY_SOVIET, ENEMY_AMERICAN } EnemyType;
-typedef enum { ENEMY_ALIVE, ENEMY_DYING, ENEMY_VAPORIZING, ENEMY_DEAD } EnemyState;
+typedef enum { ENEMY_ALIVE, ENEMY_DYING, ENEMY_VAPORIZING, ENEMY_EVISCERATING, ENEMY_DEAD } EnemyState;
 typedef enum { ANIM_IDLE, ANIM_WALK, ANIM_SHOOT, ANIM_HIT, ANIM_DEATH } EnemyAnimState;
 typedef enum { AI_ADVANCE, AI_STRAFE, AI_SHOOT, AI_DODGE, AI_RETREAT } AIBehavior;
 
@@ -33,6 +33,13 @@ typedef struct {
     // Vaporize
     float vaporizeTimer;
     float vaporizeScale;
+    // Eviscerate (jackhammer)
+    float evisTimer;
+    Vector3 evisDir;           // direction of jackhammer lunge
+    float evisLimbSpread;      // how far limbs have flown
+    Vector3 evisLimbVel[6];    // velocity for head, torso, 2 arms, 2 legs
+    Vector3 evisLimbPos[6];    // offset positions for each piece
+    float evisBloodTimer[6];   // per-limb blood spurt timer
     // Death style: 0 = ragdoll blowout, 1 = crumple + blood pool
     int deathStyle;
 } Enemy;
@@ -63,6 +70,7 @@ int EnemyCheckHit(EnemyManager *em, Ray ray, float maxDist, float *hitDist);
 int EnemyCheckSphereHit(EnemyManager *em, Vector3 center, float radius);
 void EnemyDamage(EnemyManager *em, int index, float damage);
 void EnemyVaporize(EnemyManager *em, int index);
+void EnemyEviscerate(EnemyManager *em, int index, Vector3 hitDir);
 int EnemyCountAlive(EnemyManager *em);
 float EnemyCheckPlayerDamage(EnemyManager *em, Vector3 playerPos, float dt);
 void EnemyManagerSetSFXVolume(EnemyManager *em, float vol);

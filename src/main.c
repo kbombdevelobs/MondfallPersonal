@@ -5,7 +5,7 @@
 #include "player.h"
 #include "world.h"
 #include "weapon.h"
-#include "enemy.h"
+#include "enemy/enemy.h"
 #include "hud.h"
 #include "audio.h"
 #include "lander.h"

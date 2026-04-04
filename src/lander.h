@@ -4,7 +4,7 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "config.h"
-#include "enemy.h"
+#include "enemy/enemy.h"
 
 typedef enum {
     LANDER_INACTIVE,

@@ -34,26 +34,44 @@ make clean
 - Tests run without GPU/window — they exercise pure game logic only.
 - When adding new gameplay features, add corresponding tests.
 
+## File Size Rule — MANDATORY
+**Any source file exceeding 500 lines MUST be split into smaller files in a subfolder.**
+- Create `src/<system>/` subfolder (e.g. `src/enemy/`, `src/weapon/`)
+- Split by concern: logic vs rendering vs AI vs sound
+- Add a `README.md` in each subfolder listing files, their purpose, key types, and key functions
+- Update all `#include` paths and the `Makefile`
+- Subfolder READMEs are the primary navigation aid for agents — keep them accurate
+
 ## Project Structure
 ```
 Mondfall/
 ├── src/
+│   ├── config.h        — ALL tunable game constants in one place
 │   ├── main.c          — Game loop, state machine, input, rendering pipeline
 │   ├── player.c/h      — FPS camera, WASD + mouse, moon gravity, jump, ground pound
 │   ├── weapon.c/h      — 3 weapons: Mond-MP40, Raketenfaust beam, Jackhammer
-│   ├── enemy.c/h       — Astronaut enemies, AI (Soviet rush / American tactical), animations
+│   ├── combat.c/h      — Hit processing, damage application, weapon fire dispatch
+│   ├── enemy/           — Enemy system (see src/enemy/README.md)
+│   │   ├── enemy.h     — Types, state machine, API
+│   │   ├── enemy.c     — AI, spawning, hit detection, damage, death logic
+│   │   ├── enemy_draw.h — Draw API
+│   │   ├── enemy_draw.c — All enemy rendering (alive, dying, vaporizing, eviscerating)
+│   │   └── README.md   — System overview for agents
 │   ├── world.c/h       — Infinite chunked terrain, heightmap, craters, boulders, sky
 │   ├── lander.c/h      — Moon lander wave system with descent, deployment, self-destruct
 │   ├── pickup.c/h      — Dropped enemy weapons (KOSMOS-7 SMG, LIBERTY BLASTER)
 │   ├── hud.c/h         — Health, ammo, wave counter, reload bar, ACHTUNG alert, radio transmission
 │   ├── audio.c/h       — Erika march music (synthesized from MIDI), radio static overlay
 │   ├── game.c/h        — Game state (menu/settings/playing/paused/game over), wave management, settings
+│   ├── sound_gen.c/h   — Procedural audio waveform generation utilities
 ├── assets/
 │   ├── crt.fs          — Main CRT post-processing fragment shader (GLSL 330)
 │   ├── hud.fs          — HUD visor curve fragment shader
 │   ├── march.wav       — Generated at runtime (Erika march)
 │   ├── soviet_death_sounds/  — Soviet faction radio death sounds (mp3)
 │   ├── american_death_sounds/ — American faction radio death sounds (mp3)
+├── tests/
+│   └── test_game.c     — ~39 unit tests (no GPU required)
 ├── Makefile
 └── .gitignore
 ```
@@ -88,13 +106,14 @@ Mondfall/
 - AI behaviors: `AI_ADVANCE`, `AI_STRAFE`, `AI_DODGE`, `AI_RETREAT`
 - Soviet: aggressive rushers, wide spread, circle-strafe close
 - American: tactical, seek cover behind rocks, maintain distance, retreat when hurt
-- Three death types: ragdoll blowout (60%), crumple + blood pool (40%), vaporize (beam only)
+- Four death types: ragdoll blowout (60%), crumple + blood pool (40%), vaporize (beam only), eviscerate (jackhammer only)
 - Vaporize sequence: jerk → freeze → optional swell/pop (15%) → disintegrate
+- Eviscerate sequence: limbs separate with physics (head/torso/arms/legs fly apart), blood spurts from stumps, bone fragments, blood pool forms under torso, enemy drops weapon
 
 ### Weapon System (weapon.c)
 - **Mond-MP40:** Hitscan SMG, 32-round mag, fast fire, cyan energy beams
 - **Raketenfaust:** Death beam, holds for 2 seconds, kills everything in path, massive knockback
-- **Jackhammer:** Melee mining tool, sparks on impact
+- **Jackhammer:** Pneumatic war-pick, one-hit eviscerate kill, forward lunge on attack, enemy torn apart with blood spurts + weapon drop
 - Reload system: R key, auto-reload on empty, visual tilt animation
 - All procedural 3D viewmodels drawn with `rlPushMatrix`/`DrawCube`/`rlPopMatrix`
 - Cached `meshSphere`/`meshCube` for all particle effects — projectile glows, explosion fireballs, debris use `DrawMesh()` with pre-uploaded GPU geometry instead of regenerating each frame
