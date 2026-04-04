@@ -119,11 +119,77 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
         if (e->state == ENEMY_DYING) {
             e->animState = ANIM_DEATH;
             e->deathTimer -= dt;
-            e->deathAngle += dt * 150;
-            if (e->deathAngle > 90) e->deathAngle = 90;
-            e->position.y -= dt * 1.5f;
-            float gH = WorldGetHeight(e->position.x, e->position.z) + 0.2f;
-            if (e->position.y < gH) e->position.y = gH;
+
+            if (e->deathStyle == 0) {
+                // RAGDOLL — pressurized suit blowout spin
+                e->deathAngle += e->spinX * dt;
+                e->facingAngle += e->spinY * dt * 0.02f;
+                e->position.x += e->ragdollVelX * dt;
+                e->position.z += e->ragdollVelZ * dt;
+                e->position.y += e->ragdollVelY * dt;
+                e->ragdollVelY -= 1.62f * dt;
+                e->spinX *= (1.0f - 0.3f * dt);
+                e->spinY *= (1.0f - 0.3f * dt);
+                e->ragdollVelX *= (1.0f - 0.2f * dt);
+                e->ragdollVelZ *= (1.0f - 0.2f * dt);
+                float gH = WorldGetHeight(e->position.x, e->position.z) + 0.3f;
+                if (e->position.y < gH) {
+                    e->position.y = gH;
+                    e->ragdollVelY = fabsf(e->ragdollVelY) * 0.4f;
+                    e->spinX *= 0.7f;
+                }
+            } else {
+                // CRUMPLE — just fall forward, sink to ground
+                e->deathAngle += e->spinX * dt;
+                if (e->deathAngle > 90.0f) {
+                    e->deathAngle = 90.0f;
+                    e->spinX = 0;
+                }
+                // Sink toward ground
+                float gH = WorldGetHeight(e->position.x, e->position.z) + 0.3f;
+                if (e->position.y > gH) e->position.y -= dt * 1.0f;
+                else e->position.y = gH;
+            }
+
+            if (e->deathTimer <= 0) { e->state = ENEMY_DEAD; e->active = false; em->count--; }
+            continue;
+        }
+        if (e->state == ENEMY_VAPORIZING) {
+            e->deathTimer -= dt;
+            e->vaporizeTimer += dt;
+            float t = e->vaporizeTimer;
+
+            if (t < 0.8f) {
+                // Phase 1: JERK — limbs spasm, slowing down
+                float intensity = 1.0f - t / 0.8f; // starts violent, fades
+                e->walkCycle += dt * 60.0f * intensity;
+                e->shootAnim = sinf(t * 40.0f) * 0.5f * intensity + 0.5f;
+                e->deathAngle = sinf(t * 30.0f) * 20.0f * intensity;
+                e->vaporizeScale = 1.0f;
+            } else if (t < 2.0f) {
+                // Phase 2: FREEZE
+                e->shootAnim = 0.5f;
+                e->deathAngle = 3.0f;
+                e->vaporizeScale = 1.0f;
+                e->position.y += dt * 0.15f;
+            } else if (e->deathStyle == 1 && t < 2.5f) {
+                // Phase 2b: SWELL (15% only)
+                float swellT = (t - 2.0f) / 0.5f;
+                e->vaporizeScale = 1.0f + swellT * 1.0f;
+                e->position.y += dt * 0.1f;
+            } else if (e->deathStyle == 1 && t < 2.6f) {
+                // Phase 2c: POP (15% only)
+                e->vaporizeScale = 1.0f;
+            } else {
+                // Phase 3: DISINTEGRATE
+                float startDis = (e->deathStyle == 1) ? 2.6f : 2.0f;
+                float disDur = (e->deathStyle == 1) ? 3.2f : 2.3f;
+                float disT = (t - startDis) / disDur;
+                if (disT > 1.0f) disT = 1.0f;
+                e->vaporizeScale = 1.0f - disT;
+                e->position.y += dt * 0.3f;
+            }
+
             if (e->deathTimer <= 0) { e->state = ENEMY_DEAD; e->active = false; em->count--; }
             continue;
         }
@@ -341,10 +407,152 @@ static void DrawAstronautModel(EnemyManager *em, Enemy *e) {
         backpackColor= (Color){30, 45, 80, 255};     // dark navy backpack
     }
 
+    // === VAPORIZE — 3 phases: jerk, freeze, disintegrate ===
+    if (e->state == ENEMY_VAPORIZING) {
+        float t = e->vaporizeTimer;
+        float sc = e->vaporizeScale;
+
+        rlPushMatrix();
+        rlTranslatef(pos.x, pos.y, pos.z);
+        rlRotatef(e->facingAngle * RAD2DEG, 0, 1, 0);
+
+        if (t < 0.8f) {
+            // PHASE 1: JERK — violent spasms fading to stillness
+            float intensity = 1.0f - t / 0.8f;
+            float jerk = sinf(t * 40.0f) * intensity;
+            rlRotatef(jerk * 20.0f, 1, 0, 0);
+            rlRotatef(sinf(t * 30.0f) * 12.0f * intensity, 0, 0, 1);
+            unsigned char flash = (unsigned char)(200 + sinf(t * 50.0f) * 55 * intensity);
+            Color jCol = {flash, flash, flash, 255};
+            DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, jCol);
+            DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, jCol);
+            // Arms flailing, slowing
+            float armJerk = sinf(t * 35.0f) * 70.0f * intensity;
+            rlPushMatrix(); rlTranslatef(0.52f, 0.3f, 0); rlRotatef(armJerk, 1, 0, 0);
+            DrawCube((Vector3){0, -0.2f, 0}, 0.22f, 0.8f, 0.22f, jCol); rlPopMatrix();
+            rlPushMatrix(); rlTranslatef(-0.52f, 0.3f, 0); rlRotatef(-armJerk*0.7f, 1, 0, 0);
+            DrawCube((Vector3){0, -0.2f, 0}, 0.22f, 0.8f, 0.22f, jCol); rlPopMatrix();
+            float legJerk = sinf(t * 45.0f) * 55.0f * intensity;
+            rlPushMatrix(); rlTranslatef(0.22f, -0.85f, 0); rlRotatef(legJerk, 1, 0, 0);
+            DrawCube((Vector3){0, -0.2f, 0}, 0.3f, 0.75f, 0.3f, jCol); rlPopMatrix();
+            rlPushMatrix(); rlTranslatef(-0.22f, -0.85f, 0); rlRotatef(-legJerk*0.6f, 1, 0, 0);
+            DrawCube((Vector3){0, -0.2f, 0}, 0.3f, 0.75f, 0.3f, jCol); rlPopMatrix();
+        } else if ((e->deathStyle == 0 && t < 2.0f) || (e->deathStyle == 1 && t < 2.0f)) {
+            // PHASE 2: FREEZE
+            float glow = (t - 0.8f) / 1.2f;
+            unsigned char gr = 255;
+            unsigned char gg = (unsigned char)(240 - glow * 100);
+            unsigned char gb = (unsigned char)(180 - glow * 130);
+            Color fCol = {gr, gg, gb, 255};
+            rlRotatef(4.0f, 1, 0, 0);
+            rlRotatef(2.0f, 0, 0, 1);
+            DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, fCol);
+            DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, fCol);
+            DrawCube((Vector3){0.52f, 0.1f, 0}, 0.22f, 0.8f, 0.22f, fCol);
+            DrawCube((Vector3){-0.52f, 0.12f, 0.08f}, 0.22f, 0.8f, 0.22f, fCol);
+            DrawCube((Vector3){0.22f, -0.9f, 0.08f}, 0.3f, 0.75f, 0.3f, fCol);
+            DrawCube((Vector3){-0.22f, -0.88f, -0.04f}, 0.3f, 0.75f, 0.3f, fCol);
+            // Energy crackle — slow, eerie
+            for (int c = 0; c < 6; c++) {
+                float ca = sinf(GetTime() * 8.0f + c * 2.5f);
+                Vector3 c1 = {ca * 0.5f, -0.6f + c * 0.35f, ca * 0.25f};
+                Vector3 c2 = {-ca * 0.35f, -0.4f + c * 0.35f, -ca * 0.3f};
+                unsigned char la = (unsigned char)(180 - glow * 60);
+                DrawLine3D(Vector3Add(pos, c1), Vector3Add(pos, c2), (Color){255, 255, 200, la});
+            }
+            // Faint hum glow around body
+            DrawSphereWires(pos, 1.2f + sinf(GetTime() * 3.0f) * 0.1f, 6, 6,
+                (Color){255, gg, gb, (unsigned char)(40 + glow * 30)});
+        } else if (e->deathStyle == 1 && t < 2.5f) {
+            // PHASE 2b: SWELL (15% only)
+            float swellT = (t - 2.0f) / 0.5f;
+            float swSc = 1.0f + swellT * 1.0f; // swell to 2x
+            rlScalef(swSc, swSc * 0.85f, swSc); // thinner vertically — stretched look
+            rlRotatef(4.0f, 1, 0, 0);
+            // Getting hotter — bright white/yellow
+            Color swCol = {255, (unsigned char)(255 - swellT * 60), (unsigned char)(200 - swellT * 120), 255};
+            DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, swCol);
+            DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, swCol);
+            DrawCube((Vector3){0.52f, 0.1f, 0}, 0.22f, 0.8f, 0.22f, swCol);
+            DrawCube((Vector3){-0.52f, 0.1f, 0}, 0.22f, 0.8f, 0.22f, swCol);
+            DrawCube((Vector3){0.22f, -0.9f, 0}, 0.3f, 0.75f, 0.3f, swCol);
+            DrawCube((Vector3){-0.22f, -0.9f, 0}, 0.3f, 0.75f, 0.3f, swCol);
+        } else if (e->deathStyle == 1 && t < 2.6f) {
+            // PHASE 2c: POP (15% only)
+            float popT = (t - 2.5f) / 0.1f;
+            DrawSphereEx(pos, 2.0f * (1.0f - popT), 5, 5,
+                (Color){255, 255, 220, (unsigned char)((1.0f - popT) * 250)});
+            // Draw body briefly at normal scale, charred
+            rlRotatef(4.0f, 1, 0, 0);
+            Color popCol = {200, 100, 50, 255};
+            DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, popCol);
+            DrawSphere((Vector3){0, 1.1f, 0}, 0.48f, popCol);
+        } else {
+            // PHASE 3: DISINTEGRATE
+            float startDis = (e->deathStyle == 1) ? 2.6f : 2.0f;
+            float disDur = (e->deathStyle == 1) ? 3.2f : 2.3f;
+            float disT = (t - startDis) / disDur;
+            if (disT > 1.0f) disT = 1.0f;
+            unsigned char da = (unsigned char)(255 * (1.0f - disT));
+            Color dCol = {255, (unsigned char)(160 * (1.0f - disT)),
+                         (unsigned char)(60 * (1.0f - disT)), da};
+            rlScalef(sc, sc, sc);
+            rlRotatef(4.0f, 1, 0, 0);
+            // Head — first to go
+            if (disT < 0.2f)
+                DrawSphere((Vector3){0, 1.1f, 0}, 0.48f * (1.0f - disT/0.2f), dCol);
+            // Arms — dissolve early
+            if (disT < 0.35f) {
+                float as = 1.0f - disT / 0.35f;
+                DrawCube((Vector3){0.52f, 0.1f, 0}, 0.22f*as, 0.8f*as, 0.22f*as, dCol);
+                DrawCube((Vector3){-0.52f, 0.1f, 0}, 0.22f*as, 0.8f*as, 0.22f*as, dCol);
+            }
+            // Legs — mid
+            if (disT < 0.55f) {
+                float ls = 1.0f - disT / 0.55f;
+                DrawCube((Vector3){0.22f, -0.9f, 0}, 0.3f*ls, 0.75f*ls, 0.3f*ls, dCol);
+                DrawCube((Vector3){-0.22f, -0.9f, 0}, 0.3f*ls, 0.75f*ls, 0.3f*ls, dCol);
+            }
+            // Torso — last to go
+            float ts = 1.0f - disT;
+            if (ts > 0) DrawCube((Vector3){0, 0, 0}, 0.9f*ts, 1.5f*ts, 0.55f*ts, dCol);
+        }
+        rlPopMatrix();
+
+        // Ash/ember particles throughout all phases
+        float particleT = t / 2.4f;
+        for (int p = 0; p < 10; p++) {
+            float pa = (float)p * 0.628f + t * 3.0f;
+            float pr = particleT * 3.5f + (float)p * 0.2f;
+            float py = particleT * 1.5f + sinf(pa * 2.0f) * 0.5f;
+            Vector3 pp = {pos.x + cosf(pa) * pr, pos.y + py, pos.z + sinf(pa) * pr};
+            float ps = 0.06f + (1.0f - particleT) * 0.08f;
+            DrawSphereEx(pp, ps, 3, 3, (Color){255, 200, 120, (unsigned char)((1.0f - particleT) * 160)});
+        }
+        // Blood mist
+        for (int b = 0; b < 6; b++) {
+            float ba = (float)b * 1.05f + t * 2.5f;
+            float br = particleT * 2.0f + (float)b * 0.15f;
+            float by = particleT * 0.8f + sinf(ba) * 0.3f - 0.3f;
+            DrawSphereEx((Vector3){pos.x + cosf(ba)*br, pos.y + by, pos.z + sinf(ba)*br},
+                0.05f, 3, 3, (Color){150, 12, 8, (unsigned char)((1.0f - particleT) * 140)});
+        }
+        // Initial flash
+        if (t < 0.15f) {
+            DrawSphereEx(pos, 2.0f * (1.0f - t / 0.15f), 4, 4,
+                (Color){255, 255, 240, (unsigned char)((1.0f - t / 0.15f) * 220)});
+        }
+        return;
+    }
+
     rlPushMatrix();
     rlTranslatef(pos.x, pos.y, pos.z);
     rlRotatef(e->facingAngle * RAD2DEG, 0, 1, 0);
-    if (e->deathAngle > 0) rlRotatef(e->deathAngle, 1, 0, 0);
+    // Ragdoll multi-axis tumble
+    if (e->state == ENEMY_DYING) {
+        rlRotatef(e->deathAngle, 1, 0, 0);
+        rlRotatef(e->deathAngle * 0.7f, 0, 0, 1);
+    }
 
     // === TORSO — layered for depth ===
     DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, suitBase);               // main body
@@ -501,14 +709,56 @@ static void DrawAstronautModel(EnemyManager *em, Enemy *e) {
 
     rlPopMatrix(); // root
 
-    // Health bar
-    if (e->state == ENEMY_ALIVE && e->health < e->maxHealth) {
-        float hp = e->health / e->maxHealth;
-        Vector3 bp = {pos.x, pos.y + 1.9f, pos.z};
-        DrawCube(bp, 0.9f, 0.07f, 0.02f, (Color){30, 30, 30, 220});
-        DrawCube((Vector3){bp.x - (0.9f*(1-hp))*0.5f, bp.y, bp.z+0.01f},
-            0.9f*hp, 0.06f, 0.02f,
-            (Color){(unsigned char)(255*(1-hp)), (unsigned char)(255*hp), 0, 255});
+    // Death particles
+    if (e->state == ENEMY_DYING) {
+        if (e->deathStyle == 0) {
+            // RAGDOLL: gas leak + blood spray from a limb
+            int limbSeed = (int)((size_t)e % 4);
+            Vector3 leakOff = {0, 0, 0};
+            switch (limbSeed) {
+                case 0: leakOff = (Vector3){0, 1.1f, 0}; break;
+                case 1: leakOff = (Vector3){0.5f, 0.3f, 0.1f}; break;
+                case 2: leakOff = (Vector3){-0.2f, -0.9f, 0}; break;
+                case 3: leakOff = (Vector3){0, 0.1f, -0.4f}; break;
+            }
+            for (int p = 0; p < 10; p++) {
+                float pt = GetTime() * 8.0f + (float)p * 1.2f + e->deathAngle * 0.1f;
+                float spread = (float)p * 0.18f + 0.1f;
+                float px = pos.x + leakOff.x + cosf(pt) * spread;
+                float py = pos.y + leakOff.y + sinf(pt * 0.7f) * 0.3f + (float)p * 0.15f;
+                float pz = pos.z + leakOff.z + sinf(pt) * spread;
+                DrawSphereEx((Vector3){px, py, pz}, 0.05f + (float)p * 0.025f, 3, 3,
+                    (Color){220, 220, 220, (unsigned char)(180 - p * 15)});
+            }
+            for (int b = 0; b < 8; b++) {
+                float bt = GetTime() * 6.0f + (float)b * 2.0f + e->deathAngle * 0.15f;
+                float bspread = (float)b * 0.12f + 0.05f;
+                DrawSphereEx((Vector3){
+                    pos.x + leakOff.x + cosf(bt+1)*bspread,
+                    pos.y + leakOff.y - (float)b * 0.1f,
+                    pos.z + leakOff.z + sinf(bt+1)*bspread},
+                    0.04f, 3, 3, (Color){180, 20, 20, (unsigned char)(200 - b * 20)});
+            }
+        } else {
+            // CRUMPLE: blood pool spreading on ground
+            float gH = WorldGetHeight(pos.x, pos.z) + 0.05f;
+            float poolTime = 4.0f - e->deathTimer; // time since death
+            float poolR = 0.3f + poolTime * 0.4f; // grows over time
+            if (poolR > 2.5f) poolR = 2.5f;
+            // Dark blood pool — flat cylinder on ground
+            DrawCylinder((Vector3){pos.x, gH, pos.z}, poolR, poolR * 1.1f, 0.02f, 8,
+                (Color){120, 8, 5, 200});
+            DrawCylinder((Vector3){pos.x, gH + 0.01f, pos.z}, poolR * 0.6f, poolR * 0.7f, 0.02f, 6,
+                (Color){160, 15, 10, 220});
+            // A few floating blood droplets
+            for (int b = 0; b < 3; b++) {
+                float bt = GetTime() * 3.0f + (float)b * 2.1f;
+                float bx = pos.x + cosf(bt) * poolR * 0.3f;
+                float bz = pos.z + sinf(bt) * poolR * 0.3f;
+                DrawSphereEx((Vector3){bx, gH + 0.1f + sinf(bt*2)*0.05f, bz},
+                    0.03f, 3, 3, (Color){160, 15, 10, 160});
+            }
+        }
     }
 }
 
@@ -545,7 +795,39 @@ void EnemyDamage(EnemyManager *em, int index, float damage) {
     Enemy *e = &em->enemies[index];
     e->health -= damage; e->hitFlash = 1;
     if (e->dodgeTimer <= 0) { e->strafeDir *= -1; e->dodgeTimer = 1; }
-    if (e->health <= 0) { e->state = ENEMY_DYING; e->deathTimer = 2; e->deathAngle = 0; }
+    if (e->health <= 0) {
+        e->state = ENEMY_DYING;
+        e->deathAngle = 0;
+        e->deathStyle = (rand() % 100 < 40) ? 1 : 0; // 40% crumple, 60% ragdoll
+        if (e->deathStyle == 0) {
+            // Pressurized suit blowout — wild spin + launch
+            e->deathTimer = 4.0f;
+            e->spinX = 120.0f + (float)(rand() % 300);
+            e->spinY = (float)(rand() % 200) - 100.0f;
+            float launchAngle = ((float)rand() / RAND_MAX) * 2.0f * PI;
+            float launchForce = 3.0f + ((float)rand() / RAND_MAX) * 5.0f;
+            e->ragdollVelX = cosf(launchAngle) * launchForce;
+            e->ragdollVelZ = sinf(launchAngle) * launchForce;
+            e->ragdollVelY = 2.0f + ((float)rand() / RAND_MAX) * 4.0f;
+        } else {
+            // Simple crumple — fall over, bleed
+            e->deathTimer = 5.0f;
+            e->spinX = 80.0f + (float)(rand() % 60); // slower fall
+            e->spinY = 0;
+            e->ragdollVelX = 0; e->ragdollVelZ = 0; e->ragdollVelY = 0;
+        }
+    }
+}
+
+void EnemyVaporize(EnemyManager *em, int index) {
+    if (index < 0 || index >= MAX_ENEMIES) return;
+    Enemy *e = &em->enemies[index];
+    e->state = ENEMY_VAPORIZING;
+    e->vaporizeTimer = 0;
+    e->vaporizeScale = 1.0f;
+    e->health = 0;
+    e->deathStyle = (rand() % 100 < 15) ? 1 : 0; // 15% pop, 85% normal
+    e->deathTimer = (e->deathStyle == 1) ? 6.0f : 4.5f;
 }
 
 int EnemyCountAlive(EnemyManager *em) {

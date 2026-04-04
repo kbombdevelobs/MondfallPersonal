@@ -7,7 +7,7 @@
 #define MAX_ENEMIES 50
 
 typedef enum { ENEMY_SOVIET, ENEMY_AMERICAN } EnemyType;
-typedef enum { ENEMY_ALIVE, ENEMY_DYING, ENEMY_DEAD } EnemyState;
+typedef enum { ENEMY_ALIVE, ENEMY_DYING, ENEMY_VAPORIZING, ENEMY_DEAD } EnemyState;
 typedef enum { ANIM_IDLE, ANIM_WALK, ANIM_SHOOT, ANIM_HIT, ANIM_DEATH } EnemyAnimState;
 typedef enum { AI_ADVANCE, AI_STRAFE, AI_SHOOT, AI_DODGE, AI_RETREAT } AIBehavior;
 
@@ -25,8 +25,17 @@ typedef struct {
     float facingAngle, walkCycle, shootAnim, hitFlash, deathAngle, muzzleFlash;
     float strafeDir, strafeTimer, dodgeTimer, dodgeCooldown;
     float behaviorTimer, burstShots, burstCooldown, preferredDist;
-    float vertVel;        // vertical velocity for jumping
-    float jumpTimer;      // cooldown between jumps
+    float vertVel;
+    float jumpTimer;
+    // Ragdoll death
+    float spinX, spinY, spinZ;   // angular velocity (degrees/sec)
+    float ragdollVelX, ragdollVelZ; // lateral launch velocity
+    float ragdollVelY;           // vertical launch
+    // Vaporize
+    float vaporizeTimer;
+    float vaporizeScale;
+    // Death style: 0 = ragdoll blowout, 1 = crumple + blood pool
+    int deathStyle;
 } Enemy;
 
 typedef struct {
@@ -47,6 +56,7 @@ void EnemySpawnAt(EnemyManager *em, EnemyType type, Vector3 pos);
 int EnemyCheckHit(EnemyManager *em, Ray ray, float maxDist, float *hitDist);
 int EnemyCheckSphereHit(EnemyManager *em, Vector3 center, float radius);
 void EnemyDamage(EnemyManager *em, int index, float damage);
+void EnemyVaporize(EnemyManager *em, int index);
 int EnemyCountAlive(EnemyManager *em);
 float EnemyCheckPlayerDamage(EnemyManager *em, Vector3 playerPos, float dt);
 

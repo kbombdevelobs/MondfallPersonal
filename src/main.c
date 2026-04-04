@@ -273,12 +273,8 @@ int main(void) {
                             {en->position.x+1.0f, en->position.y+2.0f, en->position.z+1.0f}};
                         RayCollision col = GetRayCollisionBox(beamRay, box);
                         if (col.hit && col.distance < 100.0f) {
-                            EnemyDamage(&enemies, ei, 999.0f);
-                            if (enemies.enemies[ei].state == ENEMY_DYING) {
-                                game.killCount++;
-                                PickupDrop(&pickups, enemies.enemies[ei].position, enemies.enemies[ei].type);
-                            }
-                            WeaponSpawnExplosion(&weapon, en->position, 4.0f);
+                            game.killCount++;
+                            EnemyVaporize(&enemies, ei); // no pickup — vaporized
                         }
                     }
                 }
