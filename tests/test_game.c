@@ -243,21 +243,21 @@ TEST(test_pickup_grab_in_range) {
     // Place a Soviet gun at origin
     pm.guns[0].active = true;
     pm.guns[0].position = (Vector3){0, 0, 0};
-    pm.guns[0].gunType = ENEMY_SOVIET;
+    pm.guns[0].weaponType = PICKUP_KOSMOS7;
     pm.guns[0].life = 10.0f;
 
     Vector3 playerPos = {1.0f, 0.0f, 0.0f}; // 1 unit away, within PICKUP_GRAB_RANGE (4)
     bool grabbed = PickupTryGrab(&pm, playerPos);
     ASSERT(grabbed);
     ASSERT(pm.hasPickup);
-    ASSERT(pm.pickupType == ENEMY_SOVIET);
+    ASSERT(pm.pickupType == PICKUP_KOSMOS7);
 }
 
 TEST(test_pickup_grab_out_of_range) {
     PickupManager pm = make_pickups();
     pm.guns[0].active = true;
     pm.guns[0].position = (Vector3){0, 0, 0};
-    pm.guns[0].gunType = ENEMY_SOVIET;
+    pm.guns[0].weaponType = PICKUP_KOSMOS7;
     pm.guns[0].life = 10.0f;
 
     Vector3 playerPos = {100.0f, 0.0f, 0.0f}; // way too far
@@ -270,7 +270,7 @@ TEST(test_pickup_soviet_stats) {
     PickupManager pm = make_pickups();
     pm.guns[0].active = true;
     pm.guns[0].position = (Vector3){0, 0, 0};
-    pm.guns[0].gunType = ENEMY_SOVIET;
+    pm.guns[0].weaponType = PICKUP_KOSMOS7;
     pm.guns[0].life = 10.0f;
     PickupTryGrab(&pm, (Vector3){0, 0, 0});
 
@@ -283,7 +283,7 @@ TEST(test_pickup_american_stats) {
     PickupManager pm = make_pickups();
     pm.guns[0].active = true;
     pm.guns[0].position = (Vector3){0, 0, 0};
-    pm.guns[0].gunType = ENEMY_AMERICAN;
+    pm.guns[0].weaponType = PICKUP_LIBERTY;
     pm.guns[0].life = 10.0f;
     PickupTryGrab(&pm, (Vector3){0, 0, 0});
 
@@ -295,7 +295,7 @@ TEST(test_pickup_american_stats) {
 TEST(test_pickup_fire_decrements_ammo) {
     PickupManager pm = make_pickups();
     pm.hasPickup = true;
-    pm.pickupType = ENEMY_SOVIET;
+    pm.pickupType = PICKUP_KOSMOS7;
     pm.pickupAmmo = 5;
     pm.pickupFireRate = 0.1f;
     pm.pickupTimer = 0; // ready to fire
@@ -308,7 +308,7 @@ TEST(test_pickup_fire_decrements_ammo) {
 TEST(test_pickup_fire_respects_cooldown) {
     PickupManager pm = make_pickups();
     pm.hasPickup = true;
-    pm.pickupType = ENEMY_SOVIET;
+    pm.pickupType = PICKUP_KOSMOS7;
     pm.pickupAmmo = 5;
     pm.pickupFireRate = 0.1f;
     pm.pickupTimer = 0.05f; // still cooling down
@@ -321,7 +321,7 @@ TEST(test_pickup_fire_respects_cooldown) {
 TEST(test_pickup_fire_empty) {
     PickupManager pm = make_pickups();
     pm.hasPickup = true;
-    pm.pickupType = ENEMY_SOVIET;
+    pm.pickupType = PICKUP_KOSMOS7;
     pm.pickupAmmo = 0;
     pm.pickupTimer = 0;
 
@@ -1412,6 +1412,175 @@ TEST(test_flee_forced_recovery_config) {
     ASSERT_GT(MORALE_FLEE_DURATION_MAX, MORALE_FLEE_DURATION_MIN);
 }
 
+// ============================================================================
+// NEW: Formation, Steering, Squad, Rank Weapons
+// ============================================================================
+
+TEST(test_formation_offset_single_enemy) {
+    // Single enemy should get zero offset
+    Vector3 off = FormationOffset(0, 1, ENEMY_SOVIET, RANK_TROOPER);
+    ASSERT_FLOAT_EQ(off.x, 0, 0.01f);
+    ASSERT_FLOAT_EQ(off.z, 0, 0.01f);
+}
+
+TEST(test_formation_offset_officer_rear) {
+    // Officers always go to rear
+    Vector3 off = FormationOffset(0, 5, ENEMY_SOVIET, RANK_OFFICER);
+    ASSERT_LT(off.z, 0); // behind
+    ASSERT_FLOAT_EQ(off.x, 0, 0.01f); // centered
+}
+
+TEST(test_formation_offset_nco_soviet_front) {
+    // Soviet NCO leads from front
+    Vector3 off = FormationOffset(0, 5, ENEMY_SOVIET, RANK_NCO);
+    ASSERT_GT(off.z, 0); // ahead
+}
+
+TEST(test_formation_offset_american_stagger) {
+    // American troopers should alternate sides
+    Vector3 off0 = FormationOffset(0, 4, ENEMY_AMERICAN, RANK_TROOPER);
+    Vector3 off1 = FormationOffset(1, 4, ENEMY_AMERICAN, RANK_TROOPER);
+    // Different sides
+    ASSERT(off0.x * off1.x < 0 || off0.x == 0 || off1.x == 0);
+}
+
+TEST(test_steering_component_on_spawn) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = EcsEnemySpawnRanked(w, ENEMY_SOVIET, RANK_TROOPER, (Vector3){0,0,0});
+    const EcSteering *steer = ecs_get(w, e, EcSteering);
+    ASSERT(steer != NULL);
+    ASSERT_FLOAT_EQ(steer->acceleration, AI_ACCEL_TROOPER, 0.01f);
+    ecs_fini(w);
+}
+
+TEST(test_steering_nco_slower_accel) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = EcsEnemySpawnRanked(w, ENEMY_SOVIET, RANK_NCO, (Vector3){0,0,0});
+    const EcSteering *steer = ecs_get(w, e, EcSteering);
+    ASSERT(steer != NULL);
+    ASSERT_FLOAT_EQ(steer->acceleration, AI_ACCEL_NCO, 0.01f);
+    ASSERT_LT(steer->acceleration, AI_ACCEL_TROOPER);
+    ecs_fini(w);
+}
+
+TEST(test_steering_officer_slowest_accel) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = EcsEnemySpawnRanked(w, ENEMY_SOVIET, RANK_OFFICER, (Vector3){0,0,0});
+    const EcSteering *steer = ecs_get(w, e, EcSteering);
+    ASSERT(steer != NULL);
+    ASSERT_FLOAT_EQ(steer->acceleration, AI_ACCEL_OFFICER, 0.01f);
+    ASSERT_LT(steer->acceleration, AI_ACCEL_NCO);
+    ecs_fini(w);
+}
+
+TEST(test_squad_component_on_spawn) {
+    ecs_world_t *w = make_test_ecs();
+    ecs_entity_t e = EcsEnemySpawnSquad(w, ENEMY_SOVIET, RANK_TROOPER, (Vector3){0,0,0}, 3);
+    const EcSquad *sq = ecs_get(w, e, EcSquad);
+    ASSERT(sq != NULL);
+    ASSERT(sq->squadId == 3);
+    ecs_fini(w);
+}
+
+TEST(test_pickup_type_from_rank_soviet) {
+    ASSERT(PickupTypeFromRank(ENEMY_SOVIET, RANK_TROOPER) == PICKUP_KOSMOS7);
+    ASSERT(PickupTypeFromRank(ENEMY_SOVIET, RANK_NCO) == PICKUP_KS23_MOLOT);
+    ASSERT(PickupTypeFromRank(ENEMY_SOVIET, RANK_OFFICER) == PICKUP_ZARYA_TK4);
+}
+
+TEST(test_pickup_type_from_rank_american) {
+    ASSERT(PickupTypeFromRank(ENEMY_AMERICAN, RANK_TROOPER) == PICKUP_LIBERTY);
+    ASSERT(PickupTypeFromRank(ENEMY_AMERICAN, RANK_NCO) == PICKUP_M8A1_STARHAWK);
+    ASSERT(PickupTypeFromRank(ENEMY_AMERICAN, RANK_OFFICER) == PICKUP_ARC9_LONGBOW);
+}
+
+TEST(test_pickup_molot_stats) {
+    PickupManager pm = make_pickups();
+    pm.guns[0].active = true;
+    pm.guns[0].position = (Vector3){0, 0, 0};
+    pm.guns[0].weaponType = PICKUP_KS23_MOLOT;
+    pm.guns[0].life = 10.0f;
+    PickupTryGrab(&pm, (Vector3){0, 0, 0});
+    ASSERT(pm.pickupAmmo == PICKUP_MOLOT_AMMO);
+    ASSERT_FLOAT_EQ(pm.pickupDamage, PICKUP_MOLOT_DAMAGE, 0.01f);
+}
+
+TEST(test_pickup_starhawk_stats) {
+    PickupManager pm = make_pickups();
+    pm.guns[0].active = true;
+    pm.guns[0].position = (Vector3){0, 0, 0};
+    pm.guns[0].weaponType = PICKUP_M8A1_STARHAWK;
+    pm.guns[0].life = 10.0f;
+    PickupTryGrab(&pm, (Vector3){0, 0, 0});
+    ASSERT(pm.pickupAmmo == PICKUP_STARHAWK_AMMO);
+    ASSERT_FLOAT_EQ(pm.pickupDamage, PICKUP_STARHAWK_DAMAGE, 0.01f);
+}
+
+TEST(test_pickup_zarya_stats) {
+    PickupManager pm = make_pickups();
+    pm.guns[0].active = true;
+    pm.guns[0].position = (Vector3){0, 0, 0};
+    pm.guns[0].weaponType = PICKUP_ZARYA_TK4;
+    pm.guns[0].life = 10.0f;
+    PickupTryGrab(&pm, (Vector3){0, 0, 0});
+    ASSERT(pm.pickupAmmo == PICKUP_ZARYA_AMMO);
+    ASSERT_FLOAT_EQ(pm.pickupDamage, PICKUP_ZARYA_DMG_MIN, 0.01f);
+}
+
+TEST(test_pickup_longbow_stats) {
+    PickupManager pm = make_pickups();
+    pm.guns[0].active = true;
+    pm.guns[0].position = (Vector3){0, 0, 0};
+    pm.guns[0].weaponType = PICKUP_ARC9_LONGBOW;
+    pm.guns[0].life = 10.0f;
+    PickupTryGrab(&pm, (Vector3){0, 0, 0});
+    ASSERT(pm.pickupAmmo == PICKUP_LONGBOW_AMMO);
+    ASSERT_FLOAT_EQ(pm.pickupDamage, PICKUP_LONGBOW_DAMAGE, 0.01f);
+}
+
+TEST(test_pickup_weapon_names) {
+    ASSERT(strcmp(PickupGetName(PICKUP_KOSMOS7), "KOSMOS-7 SMG") == 0);
+    ASSERT(strcmp(PickupGetName(PICKUP_LIBERTY), "LIBERTY BLASTER") == 0);
+    ASSERT(strcmp(PickupGetName(PICKUP_KS23_MOLOT), "KS-23 MOLOT") == 0);
+    ASSERT(strcmp(PickupGetName(PICKUP_M8A1_STARHAWK), "M8A1 STARHAWK") == 0);
+    ASSERT(strcmp(PickupGetName(PICKUP_ZARYA_TK4), "ZARYA TK-4") == 0);
+    ASSERT(strcmp(PickupGetName(PICKUP_ARC9_LONGBOW), "ARC-9 LONGBOW") == 0);
+}
+
+TEST(test_ai_movement_config_sanity) {
+    ASSERT_GT(AI_ACCEL_TROOPER, 0.0f);
+    ASSERT_GT(AI_ACCEL_NCO, 0.0f);
+    ASSERT_GT(AI_ACCEL_OFFICER, 0.0f);
+    ASSERT_GT(AI_ACCEL_TROOPER, AI_ACCEL_NCO);
+    ASSERT_GT(AI_ACCEL_NCO, AI_ACCEL_OFFICER);
+    ASSERT_GT(AI_SLOPE_THRESHOLD, 0.0f);
+    ASSERT_GT(AI_SLOPE_MIN_FACTOR, 0.0f);
+    ASSERT_LT(AI_SLOPE_MIN_FACTOR, 1.0f);
+}
+
+TEST(test_spatial_hash_config_sanity) {
+    ASSERT_GT(SPATIAL_CELL_SIZE, 0.0f);
+    ASSERT(SPATIAL_GRID_DIM > 0);
+    ASSERT(SPATIAL_CELL_CAP > 0);
+    ASSERT_GT(SQUAD_COHESION_BIAS, 0.0f);
+    ASSERT_GT(SQUAD_COHESION_RADIUS, 0.0f);
+}
+
+TEST(test_pickup_molot_config_sanity) {
+    ASSERT(PICKUP_MOLOT_AMMO > 0);
+    ASSERT(PICKUP_MOLOT_PELLETS > 0);
+    ASSERT_GT(PICKUP_MOLOT_DAMAGE, 0.0f);
+    ASSERT_GT(PICKUP_MOLOT_RANGE, 0.0f);
+    ASSERT_LT(PICKUP_MOLOT_RANGE, PICKUP_STARHAWK_RANGE); // shotgun shorter range
+}
+
+TEST(test_pickup_longbow_config_sanity) {
+    ASSERT(PICKUP_LONGBOW_AMMO > 0);
+    ASSERT(PICKUP_LONGBOW_PIERCE > 0);
+    ASSERT_GT(PICKUP_LONGBOW_DAMAGE, 0.0f);
+    ASSERT_GT(PICKUP_LONGBOW_RANGE, PICKUP_STARHAWK_RANGE); // longest range
+}
+
 int main(void) {
     printf("\n=== MONDFALL UNIT TESTS ===\n\n");
 
@@ -1603,6 +1772,29 @@ int main(void) {
     RUN(test_morale_flee_threshold);
     RUN(test_morale_natural_recovery);
     RUN(test_flee_forced_recovery_config);
+
+    printf("\n[Formation & Movement]\n");
+    RUN(test_formation_offset_single_enemy);
+    RUN(test_formation_offset_officer_rear);
+    RUN(test_formation_offset_nco_soviet_front);
+    RUN(test_formation_offset_american_stagger);
+    RUN(test_steering_component_on_spawn);
+    RUN(test_steering_nco_slower_accel);
+    RUN(test_steering_officer_slowest_accel);
+    RUN(test_squad_component_on_spawn);
+    RUN(test_ai_movement_config_sanity);
+    RUN(test_spatial_hash_config_sanity);
+
+    printf("\n[Rank Weapons]\n");
+    RUN(test_pickup_type_from_rank_soviet);
+    RUN(test_pickup_type_from_rank_american);
+    RUN(test_pickup_molot_stats);
+    RUN(test_pickup_starhawk_stats);
+    RUN(test_pickup_zarya_stats);
+    RUN(test_pickup_longbow_stats);
+    RUN(test_pickup_weapon_names);
+    RUN(test_pickup_molot_config_sanity);
+    RUN(test_pickup_longbow_config_sanity);
 
     printf("\n=== RESULTS: %d/%d passed", tests_passed, tests_run);
     if (tests_failed > 0) printf(", %d FAILED", tests_failed);

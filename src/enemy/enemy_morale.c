@@ -15,7 +15,6 @@ static void SysMoraleUpdate(ecs_iter_t *it) {
     float dt = it->delta_time;
 
     // Build a small list of alive leaders for proximity checks
-    // (officers and NCOs — typically very few per frame)
     ecs_world_t *world = it->world;
     Vector3 leaderPos[16];
     ecs_entity_t leaderEnt[16];
@@ -147,6 +146,10 @@ static void SysMoraleCheck(ecs_iter_t *it) {
 // ============================================================================
 // Registration
 // ============================================================================
+
+void EcsEnemyMoraleSystemsCleanup(void) {
+    // No cached queries to clean up — morale uses per-call queries
+}
 
 void EcsEnemyMoraleSystemsRegister(ecs_world_t *world) {
     ecs_system(world, {

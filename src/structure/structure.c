@@ -242,10 +242,15 @@ static void ResupplyWeapons(Weapon *weapon, PickupManager *pickups) {
     weapon->raketenMag = weapon->raketenMagSize;
     weapon->raketenReserve = RAKETEN_RESERVE;
     if (pickups->hasPickup) {
-        if (pickups->pickupType == ENEMY_SOVIET)
-            pickups->pickupAmmo = PICKUP_SOVIET_AMMO;
-        else
-            pickups->pickupAmmo = PICKUP_AMERICAN_AMMO;
+        switch (pickups->pickupType) {
+            case PICKUP_KOSMOS7:       pickups->pickupAmmo = PICKUP_SOVIET_AMMO; break;
+            case PICKUP_LIBERTY:       pickups->pickupAmmo = PICKUP_AMERICAN_AMMO; break;
+            case PICKUP_KS23_MOLOT:    pickups->pickupAmmo = PICKUP_MOLOT_AMMO; break;
+            case PICKUP_M8A1_STARHAWK: pickups->pickupAmmo = PICKUP_STARHAWK_AMMO; break;
+            case PICKUP_ZARYA_TK4:     pickups->pickupAmmo = PICKUP_ZARYA_AMMO; break;
+            case PICKUP_ARC9_LONGBOW:  pickups->pickupAmmo = PICKUP_LONGBOW_AMMO; break;
+            default: break;
+        }
     }
 }
 

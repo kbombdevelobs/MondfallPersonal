@@ -18,12 +18,36 @@ static void SysPhysics(ecs_iter_t *it) {
     float dt = it->delta_time;
 
     for (int i = 0; i < it->count; i++) {
+        // Momentum: lerp velocity toward desired velocity from steering
+        const EcSteering *steer = ecs_get(it->world, it->entities[i], EcSteering);
+        if (steer) {
+            float a = steer->acceleration * dt;
+            if (a > 1.0f) a = 1.0f;
+            vel[i].velocity.x += (steer->desiredVelocity.x - vel[i].velocity.x) * a;
+            vel[i].velocity.z += (steer->desiredVelocity.z - vel[i].velocity.z) * a;
+        }
+
         bool moving = Vector3Length(vel[i].velocity) > 0.01f;
 
         if (moving) {
             float spd = Vector3Length(vel[i].velocity);
             float newX = tr[i].position.x + vel[i].velocity.x * dt;
             float newZ = tr[i].position.z + vel[i].velocity.z * dt;
+
+            // Slope awareness: penalize speed on steep terrain
+            float currentH = WorldGetHeight(tr[i].position.x, tr[i].position.z);
+            float targetH = WorldGetHeight(newX, newZ);
+            float hDiff = fabsf(targetH - currentH);
+            float moveLen = spd * dt;
+            if (moveLen > 0.001f) {
+                float slope = hDiff / moveLen;
+                if (slope > AI_SLOPE_THRESHOLD) {
+                    float penalty = 1.0f - (slope - AI_SLOPE_THRESHOLD) * 2.0f;
+                    if (penalty < AI_SLOPE_MIN_FACTOR) penalty = AI_SLOPE_MIN_FACTOR;
+                    newX = tr[i].position.x + vel[i].velocity.x * dt * penalty;
+                    newZ = tr[i].position.z + vel[i].velocity.z * dt * penalty;
+                }
+            }
 
             // Structure collision -- slide around bases instead of walking through
             StructureManager *structs = StructureGetActive();

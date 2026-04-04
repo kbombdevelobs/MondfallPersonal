@@ -41,6 +41,7 @@ related_docs:
 | [docs/ecs-integration.md](docs/ecs-integration.md) | Flecs ECS adoption, components, systems, migration status | Working with ECS, adding components/systems, understanding legacy vs active code |
 | [docs/procedural-audio.md](docs/procedural-audio.md) | Sound generation, weapon sounds, Erika march, radio effects | Modifying sounds, adding new audio, tuning music |
 | [docs/testing.md](docs/testing.md) | Test strategy, running tests, adding tests, coverage | Adding tests, debugging test failures |
+| [docs/ai-movement-analysis.md](docs/ai-movement-analysis.md) | AI movement, bunching, pathfinding deep-dive + rank weapons | Improving AI behavior, adding new pickups, fixing bunching |
 
 ## Architecture Decision Records
 

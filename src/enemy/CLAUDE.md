@@ -24,7 +24,7 @@ Astronaut enemies (Soviet and American factions), AI behaviors, spawning, hit de
 | `enemy_components.c` | **Active** | Component registration with flecs via ECS_COMPONENT_DEFINE macros; creates Soviet and American prefab entities with default stats from config.h |
 | `enemy_systems.h` | **Active** | ECS system registration API and public functions: EcsEnemyDamage, EcsEnemyVaporize, EcsEnemyEviscerate, EcsEnemyCountAlive |
 | `enemy_systems.c` | **Active** | Central API: EcsEnemyDamage, EcsEnemyVaporize, EcsEnemyEviscerate, EcsEnemyCountAlive, EcsEnemySystemsCleanup, EcsEnemySystemsRegister. Delegates to sub-system files. |
-| `enemy_ai.h/c` | **Active** | AI systems: SysAITargeting, SysAIBehavior, SysCollisionAvoidance |
+| `enemy_ai.h/c` | **Active** | AI systems: SysAITargeting, SysAIBehavior, SysSpatialHashBuild, SysCollisionAvoidance (spatial hash O(N)), squad cohesion |
 | `enemy_physics.h/c` | **Active** | Physics + combat systems: SysPhysics, SysAttack |
 | `enemy_death_systems.h/c` | **Active** | Death systems: SysRagdollDeath, SysVaporizeDeath, SysEviscerateDeath, SysRadioTimer |
 | `enemy_spawn.h` | **Active** | Spawn API: EcsEnemySpawnAt, EcsEnemySpawnRanked, EcsEnemySpawnAroundPlayer |

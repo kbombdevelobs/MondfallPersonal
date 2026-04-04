@@ -8,9 +8,40 @@
 #include <stdlib.h>
 
 // ============================================================================
-// Stored query for collision avoidance nested iteration
+// Spatial hash for O(N) collision avoidance
 // ============================================================================
+typedef struct {
+    ecs_entity_t entities[SPATIAL_CELL_CAP];
+    Vector3 positions[SPATIAL_CELL_CAP];
+    EnemyRank ranks[SPATIAL_CELL_CAP];
+    int count;
+} SpatialCell;
+
+static SpatialCell g_spatialGrid[SPATIAL_GRID_DIM][SPATIAL_GRID_DIM];
+static float g_gridOriginX = 0, g_gridOriginZ = 0;
+
+static void SpatialGridClear(void) {
+    for (int x = 0; x < SPATIAL_GRID_DIM; x++)
+        for (int z = 0; z < SPATIAL_GRID_DIM; z++)
+            g_spatialGrid[x][z].count = 0;
+}
+
+static void SpatialGridInsert(ecs_entity_t e, Vector3 pos, EnemyRank rank) {
+    int cx = (int)((pos.x - g_gridOriginX) / SPATIAL_CELL_SIZE) + SPATIAL_GRID_DIM / 2;
+    int cz = (int)((pos.z - g_gridOriginZ) / SPATIAL_CELL_SIZE) + SPATIAL_GRID_DIM / 2;
+    if (cx < 0 || cx >= SPATIAL_GRID_DIM || cz < 0 || cz >= SPATIAL_GRID_DIM) return;
+    SpatialCell *cell = &g_spatialGrid[cx][cz];
+    if (cell->count < SPATIAL_CELL_CAP) {
+        cell->entities[cell->count] = e;
+        cell->positions[cell->count] = pos;
+        cell->ranks[cell->count] = rank;
+        cell->count++;
+    }
+}
+
+// Stored queries
 static ecs_query_t *g_aiAliveQuery = NULL;
+static ecs_query_t *g_squadQuery = NULL;
 
 // ============================================================================
 // SysAITargeting -- face toward player
@@ -47,6 +78,8 @@ static void SysAIBehavior(ecs_iter_t *it) {
     EcCombatStats *cs = ecs_field(it, EcCombatStats, 2);
     EcFaction *fac = ecs_field(it, EcFaction, 3);
     EcVelocity *vel = ecs_field(it, EcVelocity, 4);
+    EcSteering *steerArr = ecs_field(it, EcSteering, 5);
+    (void)vel; // velocity now set via steering
 
     const EcGameContext *ctx = ecs_singleton_get(it->world, EcGameContext);
     if (!ctx) return;
@@ -89,7 +122,10 @@ static void SysAIBehavior(ecs_iter_t *it) {
         if (ai[i].behavior == AI_FLEE) {
             moveDir = Vector3Scale(fwd, -1.0f); // away from player
             moving = true;
-            continue; // skip normal behavior logic
+            // Write to steering and skip normal behavior logic
+            float fleeSpd = cs[i].speed * MORALE_SPEED_PENALTY;
+            steerArr[i].desiredVelocity = (Vector3){ -fwd.x * fleeSpd, 0, -fwd.z * fleeSpd };
+            continue;
         }
 
         // Read rank for behavior modifications
@@ -242,56 +278,117 @@ static void SysAIBehavior(ecs_iter_t *it) {
             }
         }
 
-        // Store movement direction and speed in velocity for physics to apply
+        // Squad cohesion: troopers bias toward squad centroid
+        const EcSquad *squad = ecs_get(it->world, entity, EcSquad);
+        if (squad && squad->squadId >= 0 && rank == RANK_TROOPER && g_squadQuery) {
+            Vector3 centroid = {0, 0, 0};
+            int squadCount = 0;
+            ecs_iter_t sqit = ecs_query_iter(it->world, g_squadQuery);
+            while (ecs_query_next(&sqit)) {
+                EcTransform *sqtr = ecs_field(&sqit, EcTransform, 0);
+                EcSquad *sqsq = ecs_field(&sqit, EcSquad, 1);
+                for (int si = 0; si < sqit.count; si++) {
+                    if (sqsq[si].squadId == squad->squadId && sqit.entities[si] != entity) {
+                        centroid = Vector3Add(centroid, sqtr[si].position);
+                        squadCount++;
+                    }
+                }
+            }
+            if (squadCount > 0) {
+                centroid = Vector3Scale(centroid, 1.0f / (float)squadCount);
+                Vector3 toCentroid = Vector3Subtract(centroid, tr[i].position);
+                toCentroid.y = 0;
+                float centDist = Vector3Length(toCentroid);
+                if (centDist > 2.0f && centDist < SQUAD_COHESION_RADIUS) {
+                    Vector3 cohesionPull = Vector3Scale(Vector3Normalize(toCentroid), SQUAD_COHESION_BIAS);
+                    moveDir = Vector3Add(moveDir, cohesionPull);
+                }
+            }
+        }
+
+        // Store desired movement in steering component (physics will lerp)
         if (moving && Vector3Length(moveDir) > 0.01f) {
             moveDir = Vector3Normalize(moveDir);
             float spd = cs[i].speed * (ai[i].behavior == AI_DODGE ? 2.0f : 1.0f);
-            // Morale speed penalty for fleeing/broken units
             const EcMorale *mor = ecs_get(it->world, entity, EcMorale);
             if (mor && mor->morale < MORALE_FLEE_THRESHOLD) {
                 spd *= MORALE_SPEED_PENALTY;
             }
-            vel[i].velocity = (Vector3){ moveDir.x * spd, 0, moveDir.z * spd };
+            steerArr[i].desiredVelocity = (Vector3){ moveDir.x * spd, 0, moveDir.z * spd };
         } else {
-            vel[i].velocity = (Vector3){0, 0, 0};
+            steerArr[i].desiredVelocity = (Vector3){0, 0, 0};
         }
     }
 }
 
 // ============================================================================
-// SysCollisionAvoidance -- push apart overlapping enemies
+// SysSpatialHashBuild -- populate spatial grid each frame (O(N))
+// ============================================================================
+// Flag to clear grid once per frame before collision avoidance runs
+static bool g_gridBuiltThisFrame = false;
+
+static void SysSpatialHashBuild(ecs_iter_t *it) {
+    EcTransform *tr = ecs_field(it, EcTransform, 0);
+
+    // Center grid on player and clear on first batch
+    if (!g_gridBuiltThisFrame) {
+        const EcGameContext *ctx = ecs_singleton_get(it->world, EcGameContext);
+        if (ctx) { g_gridOriginX = ctx->playerPos.x; g_gridOriginZ = ctx->playerPos.z; }
+        SpatialGridClear();
+        g_gridBuiltThisFrame = true;
+    }
+
+    for (int i = 0; i < it->count; i++) {
+        const EcRank *rk = ecs_get(it->world, it->entities[i], EcRank);
+        EnemyRank rank = rk ? rk->rank : RANK_TROOPER;
+        SpatialGridInsert(it->entities[i], tr[i].position, rank);
+    }
+}
+
+// ============================================================================
+// SysCollisionAvoidance -- spatial hash O(N) push apart
 // ============================================================================
 static void SysCollisionAvoidance(ecs_iter_t *it) {
     EcTransform *tr = ecs_field(it, EcTransform, 0);
     EcVelocity *vel = ecs_field(it, EcVelocity, 1);
 
-    const EcGameContext *ctx = ecs_singleton_get(it->world, EcGameContext);
-    int collisionCap = (ctx && ctx->testMode) ? COLLISION_CAP : 0;
+    // Reset build flag for next frame
+    g_gridBuiltThisFrame = false;
+
     float separationRadius = 3.5f;
 
     for (int i = 0; i < it->count; i++) {
+        Vector3 pos = tr[i].position;
+        int cx = (int)((pos.x - g_gridOriginX) / SPATIAL_CELL_SIZE) + SPATIAL_GRID_DIM / 2;
+        int cz = (int)((pos.z - g_gridOriginZ) / SPATIAL_CELL_SIZE) + SPATIAL_GRID_DIM / 2;
+
         Vector3 pushAccum = {0, 0, 0};
         int neighbors = 0;
 
-        ecs_iter_t qit = ecs_query_iter(it->world, g_aiAliveQuery);
-        int checked = 0;
-        while (ecs_query_next(&qit)) {
-            EcTransform *otr = ecs_field(&qit, EcTransform, 0);
-            for (int j = 0; j < qit.count; j++) {
-                if (it->entities[i] == qit.entities[j]) continue;
-                Vector3 away = Vector3Subtract(tr[i].position, otr[j].position);
-                away.y = 0;
-                float len = Vector3Length(away);
-                if (len < separationRadius && len > 0.05f) {
-                    // Stronger push the closer they are
-                    float strength = (separationRadius - len) / separationRadius;
-                    Vector3 push = Vector3Scale(Vector3Normalize(away), strength * 4.0f);
-                    pushAccum = Vector3Add(pushAccum, push);
-                    neighbors++;
+        // Check 3x3 neighborhood
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                int nx = cx + dx, nz = cz + dz;
+                if (nx < 0 || nx >= SPATIAL_GRID_DIM || nz < 0 || nz >= SPATIAL_GRID_DIM) continue;
+                SpatialCell *cell = &g_spatialGrid[nx][nz];
+                for (int j = 0; j < cell->count; j++) {
+                    if (cell->entities[j] == it->entities[i]) continue;
+                    Vector3 away = Vector3Subtract(pos, cell->positions[j]);
+                    away.y = 0;
+                    float len = Vector3Length(away);
+                    if (len < separationRadius && len > 0.05f) {
+                        float strength = (separationRadius - len) / separationRadius;
+                        // Officers push harder — others give way
+                        float pushMult = 4.0f;
+                        const EcRank *myRank = ecs_get(it->world, it->entities[i], EcRank);
+                        if (myRank && myRank->rank == RANK_OFFICER) pushMult = 6.0f;
+                        else if (cell->ranks[j] == RANK_OFFICER) pushMult = 2.0f; // yield to officer
+                        Vector3 push = Vector3Scale(Vector3Normalize(away), strength * pushMult);
+                        pushAccum = Vector3Add(pushAccum, push);
+                        neighbors++;
+                    }
                 }
-                if (collisionCap > 0 && ++checked >= collisionCap) break;
             }
-            if (collisionCap > 0 && checked >= collisionCap) { ecs_iter_fini(&qit); break; }
         }
 
         if (neighbors > 0) {
@@ -305,10 +402,17 @@ static void SysCollisionAvoidance(ecs_iter_t *it) {
 // ============================================================================
 
 void EcsEnemyAISystemsRegister(ecs_world_t *world) {
-    // Create the alive query for collision avoidance
+    // Create stored queries
     g_aiAliveQuery = ecs_query(world, {
         .terms = {
             { .id = ecs_id(EcTransform) },
+            { .id = ecs_id(EcAlive) }
+        }
+    });
+    g_squadQuery = ecs_query(world, {
+        .terms = {
+            { .id = ecs_id(EcTransform) },
+            { .id = ecs_id(EcSquad) },
             { .id = ecs_id(EcAlive) }
         }
     });
@@ -339,9 +443,23 @@ void EcsEnemyAISystemsRegister(ecs_world_t *world) {
             { .id = ecs_id(EcCombatStats) },
             { .id = ecs_id(EcFaction) },
             { .id = ecs_id(EcVelocity) },
+            { .id = ecs_id(EcSteering) },
             { .id = ecs_id(EcAlive) }
         },
         .callback = SysAIBehavior
+    });
+
+    // SysSpatialHashBuild -- EcsPostUpdate (before collision avoidance)
+    ecs_system_init(world, &(ecs_system_desc_t){
+        .entity = ecs_entity(world, {
+            .name = "SysSpatialHashBuild",
+            .add = ecs_ids(ecs_dependson(EcsPostUpdate))
+        }),
+        .query.terms = {
+            { .id = ecs_id(EcTransform) },
+            { .id = ecs_id(EcAlive) }
+        },
+        .callback = SysSpatialHashBuild
     });
 
     // SysCollisionAvoidance -- EcsPostUpdate
@@ -363,5 +481,9 @@ void EcsEnemyAISystemsCleanup(void) {
     if (g_aiAliveQuery) {
         ecs_query_fini(g_aiAliveQuery);
         g_aiAliveQuery = NULL;
+    }
+    if (g_squadQuery) {
+        ecs_query_fini(g_squadQuery);
+        g_squadQuery = NULL;
     }
 }

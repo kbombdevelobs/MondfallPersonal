@@ -53,7 +53,7 @@ make clean
 
 ## Testing Rules
 - **Always run `make test` before committing.** All tests must pass.
-- Tests are in `tests/test_game.c` — ~143 tests covering config sanity, player physics, weapon logic, pickup system, enemy hit detection, world height, game state, ECS lifecycle, collision Y-axis, rank system, and morale system.
+- Tests are in `tests/test_game.c` — ~162 tests covering config sanity, player physics, weapon logic, pickup system, enemy hit detection, world height, game state, ECS lifecycle, collision Y-axis, rank system, morale system, formation spawning, steering/momentum, squad cohesion, and rank weapons.
 - Tests run without GPU/window — they exercise pure game logic only.
 - When adding new gameplay features, add corresponding tests.
 
@@ -121,7 +121,7 @@ Mondfall/
 │   ├── soviet_death_sounds/  — Soviet faction radio death sounds (mp3)
 │   ├── american_death_sounds/ — American faction radio death sounds (mp3)
 ├── tests/
-│   └── test_game.c     — ~127 unit tests (no GPU required)
+│   └── test_game.c     — ~162 unit tests (no GPU required)
 ├── Makefile
 └── .gitignore
 ```
@@ -166,8 +166,8 @@ Mondfall/
 
 ### Enemy System (Flecs ECS — see docs/FLECS.md)
 - **Architecture:** Flecs 4.1 Entity Component System — all enemies are entities with components
-- **Components:** EcTransform, EcVelocity, EcFaction, EcAlive, EcCombatStats, EcAIState, EcAnimation, EcRank, EcMorale + sparse death components
-- **Systems:** SysAITargeting, SysAIBehavior, SysCollisionAvoidance, SysPhysics, SysAttack, SysMoraleUpdate, SysMoraleCheck, SysRagdollDeath, SysVaporizeDeath, SysEviscerateDeath
+- **Components:** EcTransform, EcVelocity, EcFaction, EcAlive, EcCombatStats, EcAIState, EcAnimation, EcRank, EcMorale, EcSteering, EcSquad + sparse death components
+- **Systems:** SysAITargeting, SysAIBehavior, SysSpatialHashBuild, SysCollisionAvoidance, SysPhysics, SysAttack, SysMoraleUpdate, SysMoraleCheck, SysRagdollDeath, SysVaporizeDeath, SysEviscerateDeath
 - **Rank system:** Three tiers — Trooper (base), NCO (1.8x HP, ushanka/baseball cap), Officer (0.7x HP, peaked cap, holds back). Every lander guarantees 1 officer + 1 NCO.
 - **Morale system:** Officer/NCO death causes nearby troops to lose morale → flee (3-6s) → rally back. Natural recovery prevents permanent routs. HUD flashes "OFFIZIER ELIMINIERT!" on officer kill.
 - Two factions: Soviet (red uniforms, gold helmets) and American (navy blue, silver helmets)
@@ -191,8 +191,13 @@ Mondfall/
 - Cached `meshSphere`/`meshCube` for all particle effects — projectile glows, explosion fireballs, debris use `DrawMesh()` with pre-uploaded GPU geometry instead of regenerating each frame
 
 ### Pickup Weapons (pickup.c)
-- **KOSMOS-7 SMG (PPSh):** Fastest fire rate in game (0.05s), 35 damage, 3 spread tracers per shot, snappy recoil
-- **LIBERTY BLASTER:** One-shot vaporize kill, wide hitbox for forgiving aim, massive recoil kick, thick lingering rail beam, heavy rail-gun sound
+- **KOSMOS-7 SMG:** Trooper Soviet drop. Fastest fire rate (0.05s), 35 damage, 3 spread tracers, snappy recoil
+- **LIBERTY BLASTER:** Trooper American drop. One-shot vaporize kill, wide hitbox, massive recoil kick, thick rail beam
+- **KS-23 Molot:** NCO Soviet drop. Shotgun — 5 pellets x 60 damage, 12 shells, wide spread, devastating close range
+- **M8A1 Starhawk:** NCO American drop. Burst rifle — 3-round burst, 45 damage/round, 36 rounds, tight grouping
+- **Zarya TK-4:** Officer Soviet drop. Charged pistol — hold to charge (150-500 damage), 6 shots, pinpoint
+- **ARC-9 Longbow:** Officer American drop. Piercing beam — 200 damage per enemy, passes through up to 5, 4 shots
+- Each rank drops its unique weapon; pickup type determined by `PickupTypeFromRank(faction, rank)`
 - Pickup buffs only apply in player's hands — enemy weapon behavior unchanged
 
 ### Moon Base Structure System (structure/)

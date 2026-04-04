@@ -257,6 +257,21 @@ docs:
     last_updated: 2026-04-04
     last_reviewed: 2026-04-04
 
+  - title: AI Movement & Command Deep-Dive Analysis
+    path: docs/ai-movement-analysis.md
+    type: feature_doc
+    domain: enemy
+    status: Active
+    owner_area: Enemy
+    parent_doc: CLAUDE.md
+    related_docs:
+      - src/enemy/CLAUDE.md
+      - docs/combat-system.md
+      - docs/wave-system.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
   # Architecture Decision Records
   - title: Architecture Decision Records
     path: docs/decisions/README.md

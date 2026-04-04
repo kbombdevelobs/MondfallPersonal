@@ -157,14 +157,10 @@ void LanderManagerUpdate(LanderManager *lm, ecs_world_t *ecsWorld, float dt) {
                 l->shakeAmount *= 0.95f;
                 if (l->enemiesDeployed < l->enemiesTotal && l->timer > 0.5f) {
                     if (fmodf(l->timer, 0.4f) < dt) {
-                        // Spawn at ramp on the side AWAY from player
-                        // (lander.awayDir calculated at landing)
+                        // Spawn at ramp on the side AWAY from player with formation offset
                         Vector3 hatchPos = l->position;
-                        hatchPos.x += l->awayDirX * (3.0f + ((float)rand()/RAND_MAX) * 2.0f);
-                        hatchPos.z += l->awayDirZ * (3.0f + ((float)rand()/RAND_MAX) * 2.0f);
-                        hatchPos.x += ((float)rand()/RAND_MAX - 0.5f) * 1.0f;
-                        hatchPos.z += ((float)rand()/RAND_MAX - 0.5f) * 1.0f;
-                        hatchPos.y = WorldGetHeight(hatchPos.x, hatchPos.z) + 1.2f;
+                        hatchPos.x += l->awayDirX * 4.0f;
+                        hatchPos.z += l->awayDirZ * 4.0f;
                         // Assign rank — guarantee 1 officer + 1 NCO per lander
                         EnemyRank spawnRank = RANK_TROOPER;
                         int landerLeft = l->enemiesTotal - l->enemiesDeployed;
@@ -186,7 +182,19 @@ void LanderManagerUpdate(LanderManager *lm, ecs_world_t *ecsWorld, float dt) {
                             spawnRank = RANK_NCO;
                             l->ncosSpawned++;
                         }
-                        EcsEnemySpawnRanked(ecsWorld, l->factionType, spawnRank, hatchPos);
+                        // Apply formation offset rotated to face player
+                        Vector3 fmtOff = FormationOffset(l->enemiesDeployed, l->enemiesTotal,
+                                                          l->factionType, spawnRank);
+                        // Rotate offset so formation faces toward player (awayDir is from player)
+                        float fwdX = -l->awayDirX; // toward player
+                        float fwdZ = -l->awayDirZ;
+                        float rightX = -fwdZ; // perpendicular
+                        float rightZ = fwdX;
+                        hatchPos.x += rightX * fmtOff.x + fwdX * fmtOff.z;
+                        hatchPos.z += rightZ * fmtOff.x + fwdZ * fmtOff.z;
+                        hatchPos.y = WorldGetHeight(hatchPos.x, hatchPos.z) + 1.2f;
+
+                        EcsEnemySpawnSquad(ecsWorld, l->factionType, spawnRank, hatchPos, i);
                         l->enemiesDeployed++;
                     }
                 }
