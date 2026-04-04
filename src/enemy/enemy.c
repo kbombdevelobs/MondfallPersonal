@@ -310,26 +310,52 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
                 e->dodgeTimer = e->dodgeCooldown; e->behavior = AI_DODGE;
             }
         } else {
-            // AMERICAN: Tactical — try to find cover behind nearby rocks
-            // Check for rocks to hide behind
+            // AMERICAN: Tactical — cover behind rocks, flank around structures
             World *w = WorldGetActive();
+            StructureManager *amStructs = StructureGetActive();
             bool foundCover = false;
-            if (w && dist < e->attackRange * 1.2f && dist > 5.0f) {
-                // Search nearby chunks for a rock between us and player
+
+            // Check if a structure blocks the path to player — if so, flank
+            bool structBlocking = false;
+            int flankSign = e->strafeDir > 0 ? 1 : -1; // each enemy flanks a different way
+            if (amStructs) {
+                float collR = MOONBASE_EXTERIOR_RADIUS + 1.0f;
+                for (int si = 0; si < amStructs->count; si++) {
+                    Structure *st = &amStructs->structures[si];
+                    if (!st->active) continue;
+                    // Check if structure center is roughly between enemy and player
+                    Vector3 toStruct = {st->worldPos.x - e->position.x, 0, st->worldPos.z - e->position.z};
+                    Vector3 toP = {playerPos.x - e->position.x, 0, playerPos.z - e->position.z};
+                    float tsPLen = Vector3Length(toStruct);
+                    float tpLen = Vector3Length(toP);
+                    if (tsPLen < tpLen && tsPLen < collR * 3.0f) {
+                        float dot = (toStruct.x * toP.x + toStruct.z * toP.z) / (tsPLen * tpLen + 0.001f);
+                        if (dot > 0.5f) { // structure roughly in the way
+                            structBlocking = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (structBlocking) {
+                // Flank around the structure — rush wide to the side then re-engage
+                moveDir = Vector3Add(fwd, Vector3Scale(strafe, (float)flankSign * 1.8f));
+                moving = true; e->behavior = AI_ADVANCE;
+            } else if (w && dist < e->attackRange * 1.2f && dist > 5.0f) {
+                // Search nearby chunks for a rock to hide behind
                 for (int ci = 0; ci < w->chunkCount && !foundCover; ci++) {
                     if (!w->chunks[ci].generated) continue;
                     for (int ri = 0; ri < w->chunks[ci].rockCount && !foundCover; ri++) {
                         Rock *rock = &w->chunks[ci].rocks[ri];
                         float rockDist = Vector3Distance(e->position, rock->position);
                         if (rockDist > 3.0f && rockDist < 15.0f) {
-                            // Is the rock between us and the player?
                             Vector3 toRock = Vector3Subtract(rock->position, e->position);
                             toRock.y = 0;
                             Vector3 toP = Vector3Subtract(playerPos, e->position);
                             toP.y = 0;
                             float dot = toRock.x * toP.x + toRock.z * toP.z;
                             if (dot > 0) {
-                                // Move toward cover position (behind rock relative to player)
                                 Vector3 coverDir = Vector3Normalize(Vector3Subtract(rock->position, playerPos));
                                 Vector3 coverPos = Vector3Add(rock->position, Vector3Scale(coverDir, 2.5f));
                                 Vector3 toCover = Vector3Subtract(coverPos, e->position);
@@ -345,18 +371,14 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
                 }
             }
 
-            if (!foundCover) {
-                // No cover — default tactical behavior
+            if (!foundCover && !structBlocking) {
                 if (dist < e->preferredDist * 0.5f) {
-                    // Too close — retreat while strafing
                     moveDir = Vector3Add(Vector3Scale(fwd, -1), Vector3Scale(strafe, e->strafeDir * 0.7f));
                     moving = true; e->behavior = AI_RETREAT;
                 } else if (dist > e->preferredDist * 1.4f) {
-                    // Too far — advance cautiously with strafe
                     moveDir = Vector3Add(fwd, Vector3Scale(strafe, e->strafeDir * 0.4f));
                     moving = true; e->behavior = AI_ADVANCE;
                 } else {
-                    // Good range — strafe and peek
                     moveDir = Vector3Scale(strafe, e->strafeDir);
                     moving = true; e->behavior = AI_STRAFE;
                 }
@@ -386,12 +408,37 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
             float spd = e->speed * (e->behavior == AI_DODGE ? 2.0f : 1.0f);
             float newX = e->position.x + moveDir.x * spd * dt;
             float newZ = e->position.z + moveDir.z * spd * dt;
-            // Structure collision — push enemies around bases
+            // Structure collision — slide around bases instead of stopping
             StructureManager *structs = StructureGetActive();
-            if (!structs || !StructureCheckCollision(structs, (Vector3){newX, e->position.y, newZ}, 0.8f)) {
-                e->position.x = newX;
-                e->position.z = newZ;
+            if (structs && StructureCheckCollision(structs, (Vector3){newX, e->position.y, newZ}, 0.8f)) {
+                // Find which structure we're hitting and compute tangent slide
+                float collR = MOONBASE_EXTERIOR_RADIUS + 0.5f + 0.8f;
+                for (int si = 0; si < structs->count; si++) {
+                    Structure *st = &structs->structures[si];
+                    if (!st->active) continue;
+                    float sdx = newX - st->worldPos.x;
+                    float sdz = newZ - st->worldPos.z;
+                    if (sdx * sdx + sdz * sdz < collR * collR) {
+                        // Compute tangent: perpendicular to radial direction
+                        float radLen = sqrtf(sdx * sdx + sdz * sdz);
+                        if (radLen > 0.1f) {
+                            // Pick tangent direction that aligns with movement intent
+                            float tx = -sdz / radLen;  // tangent option 1
+                            float tz = sdx / radLen;
+                            float dot = tx * moveDir.x + tz * moveDir.z;
+                            if (dot < 0) { tx = -tx; tz = -tz; } // pick the direction we're trying to go
+                            // Slide along tangent + push outward slightly
+                            float pushX = sdx / radLen * 0.3f;
+                            float pushZ = sdz / radLen * 0.3f;
+                            newX = e->position.x + (tx * spd + pushX) * dt;
+                            newZ = e->position.z + (tz * spd + pushZ) * dt;
+                        }
+                        break;
+                    }
+                }
             }
+            e->position.x = newX;
+            e->position.z = newZ;
             e->walkCycle += dt * spd * 1.5f;
             e->animState = ANIM_WALK;
         } else {
