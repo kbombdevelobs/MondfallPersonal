@@ -1,10 +1,13 @@
 *.o
 mondfall
+mondfall-letztes-gefecht
 mondfall_dbg
 *.dSYM/
 .DS_Store
 sounds/march.wav
 Mondfall.app/
 mp3/
+dist/
+build/
 # Allow mp3s inside sounds (game sounds)
 !sounds/**/*.mp3

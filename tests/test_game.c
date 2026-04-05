@@ -1,4 +1,4 @@
-// Mondfall Unit Tests — no GPU/window required, exercises pure game logic
+// Mondfall: Letztes Gefecht — Unit Tests — no GPU/window required, exercises pure game logic
 // Run: make test
 
 #include <stdio.h>

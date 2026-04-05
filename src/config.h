@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 // ============================================================================
-// MONDFALL — Centralized Game Configuration
+// MONDFALL: LETZTES GEFECHT — Centralized Game Configuration
 // All tunable constants in one place. Tweak gameplay here, not in .c files.
 // ============================================================================
 

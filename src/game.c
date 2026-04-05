@@ -105,10 +105,15 @@ void GameDrawMenu(Game *game) {
     int titleW = MeasureText(title, titleSize);
     DrawText(title, (sw - titleW) / 2, sh / 5, titleSize, MENU_HIGHLIGHT);
 
-    const char *subtitle = "NAZIS ON THE MOON";
+    const char *subtitle = "LETZTES GEFECHT";
+    int subSize2 = S(28);
+    int subW2 = MeasureText(subtitle, subSize2);
+    DrawText(subtitle, (sw - subW2) / 2, sh / 5 + titleSize + S(5), subSize2, MENU_HIGHLIGHT);
+
+    const char *tagline = "NAZIS ON THE MOON";
     int subSize = S(30);
-    int subW = MeasureText(subtitle, subSize);
-    DrawText(subtitle, (sw - subW) / 2, sh / 5 + S(90), subSize, MENU_DIM);
+    int subW = MeasureText(tagline, subSize);
+    DrawText(tagline, (sw - subW) / 2, sh / 5 + titleSize + subSize2 + S(15), subSize, MENU_DIM);
 
     // Menu options
     const char *options[] = { "PLAY", "TEST MODE", "SETTINGS", "QUIT" };
