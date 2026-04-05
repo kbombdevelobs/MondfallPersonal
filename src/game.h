@@ -46,6 +46,7 @@ typedef struct {
     Difficulty difficulty;
     float damageScaler;     // multiplier on incoming player damage
     bool quitRequested;
+    bool testMode;            // true when running 200-enemy test harness
 
     // Intro lore screen
     bool introSeen;           // true after intro shown once (skip on restart)

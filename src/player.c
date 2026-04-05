@@ -1,5 +1,6 @@
 #include "player.h"
 #include "world.h"
+#include "structure/structure.h"
 #include <math.h>
 
 void PlayerInit(Player *player) {
@@ -105,30 +106,46 @@ void PlayerUpdate(Player *player, float dt) {
     float newZ = player->position.z + player->velocity.z * dt;
     player->position.y += player->velocity.y * dt;
 
-    // Boulder collision — push back if moving into a rock
-    if (!WorldCheckCollision(WorldGetActive(), (Vector3){newX, player->position.y, newZ}, COLLISION_RADIUS)) {
-        player->position.x = newX;
-        player->position.z = newZ;
-    } else {
-        // Try sliding along one axis
-        if (!WorldCheckCollision(WorldGetActive(), (Vector3){newX, player->position.y, player->position.z}, COLLISION_RADIUS)) {
+    // When inside a structure, skip exterior collision and terrain ground checks
+    StructureManager *structs = StructureGetActive();
+    bool insideStructure = structs && StructureIsPlayerInside(structs);
+
+    if (!insideStructure) {
+        // Boulder + structure collision — push back if moving into a rock or base
+        bool rockHit = WorldCheckCollision(WorldGetActive(), (Vector3){newX, player->position.y, newZ}, COLLISION_RADIUS);
+        bool structHit = StructureCheckCollision(structs, (Vector3){newX, player->position.y, newZ}, COLLISION_RADIUS);
+        if (!rockHit && !structHit) {
             player->position.x = newX;
-        } else {
-            player->velocity.x = 0;
-        }
-        if (!WorldCheckCollision(WorldGetActive(), (Vector3){player->position.x, player->position.y, newZ}, COLLISION_RADIUS)) {
             player->position.z = newZ;
         } else {
-            player->velocity.z = 0;
+            // Try sliding along one axis
+            bool xRock = WorldCheckCollision(WorldGetActive(), (Vector3){newX, player->position.y, player->position.z}, COLLISION_RADIUS);
+            bool xStruct = StructureCheckCollision(structs, (Vector3){newX, player->position.y, player->position.z}, COLLISION_RADIUS);
+            if (!xRock && !xStruct) {
+                player->position.x = newX;
+            } else {
+                player->velocity.x = 0;
+            }
+            bool zRock = WorldCheckCollision(WorldGetActive(), (Vector3){player->position.x, player->position.y, newZ}, COLLISION_RADIUS);
+            bool zStruct = StructureCheckCollision(structs, (Vector3){player->position.x, player->position.y, newZ}, COLLISION_RADIUS);
+            if (!zRock && !zStruct) {
+                player->position.z = newZ;
+            } else {
+                player->velocity.z = 0;
+            }
         }
-    }
 
-    // Ground collision (terrain height)
-    float groundH = WorldGetHeight(player->position.x, player->position.z) + PLAYER_HEIGHT;
-    if (player->position.y <= groundH) {
-        player->position.y = groundH;
-        player->velocity.y = 0.0f;
-        player->onGround = true;
+        // Ground collision (terrain height)
+        float groundH = WorldGetHeight(player->position.x, player->position.z) + PLAYER_HEIGHT;
+        if (player->position.y <= groundH) {
+            player->position.y = groundH;
+            player->velocity.y = 0.0f;
+            player->onGround = true;
+        }
+    } else {
+        // Inside structure — free movement, no world collision
+        player->position.x = newX;
+        player->position.z = newZ;
     }
 
     // Head bob

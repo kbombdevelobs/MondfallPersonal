@@ -4,7 +4,8 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "config.h"
-#include "enemy/enemy.h"
+#include "enemy/enemy_components.h"
+#include "flecs.h"
 
 typedef enum {
     LANDER_INACTIVE,
@@ -25,6 +26,9 @@ typedef struct {
     int enemiesTotal;
     EnemyType factionType;
     float awayDirX, awayDirZ; // direction away from player (for hatch)
+    int officersSpawned;       // officers spawned by this lander
+    int ncosSpawned;           // NCOs spawned by this lander
+    int wave;                  // wave number (for rank eligibility)
 } Lander;
 
 typedef struct {
@@ -34,12 +38,15 @@ typedef struct {
     Sound sndKlaxon;
     bool klaxonPlayed;
     bool soundLoaded;
+    int waveOfficersSpawned;  // wave-level officer count (guaranteed 1)
+    int waveNcosSpawned;      // wave-level NCO count (guaranteed 1)
+    int currentWave;          // current wave number
 } LanderManager;
 
 void LanderManagerInit(LanderManager *lm);
 void LanderManagerUnload(LanderManager *lm);
 void LanderSpawnWave(LanderManager *lm, Vector3 playerPos, int enemyCount, int wave);
-void LanderManagerUpdate(LanderManager *lm, EnemyManager *em, float dt);
+void LanderManagerUpdate(LanderManager *lm, ecs_world_t *ecsWorld, float dt);
 void LanderManagerDraw(LanderManager *lm, Vector3 playerPos);
 float LanderGetScreenShake(LanderManager *lm);
 bool LanderWaveActive(LanderManager *lm);

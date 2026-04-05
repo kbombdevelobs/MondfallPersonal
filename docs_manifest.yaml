@@ -1,0 +1,362 @@
+manifest_version: 1
+generated_on: 2026-04-04
+
+docs:
+  # Root documents
+  - title: "Mondfall — Nazis on the Moon FPS"
+    path: CLAUDE.md
+    type: root_claude
+    domain: repository
+    status: Active
+    owner_area: Core
+    parent_doc: null
+    related_docs:
+      - Index.md
+      - docs_manifest.yaml
+      - docs/ARCHITECTURE.md
+      - docs/documentation-standards.md
+    created: 2026-03-15
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: "Mondfall — Nazis on the Moon FPS (AGENTS Mirror)"
+    path: AGENTS.md
+    type: root_agents
+    domain: repository
+    status: Active
+    owner_area: Core
+    parent_doc: CLAUDE.md
+    related_docs:
+      - CLAUDE.md
+      - Index.md
+      - docs_manifest.yaml
+      - docs/ARCHITECTURE.md
+      - docs/documentation-standards.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: Mondfall Documentation Index
+    path: Index.md
+    type: index
+    domain: repository
+    status: Active
+    owner_area: Documentation
+    parent_doc: CLAUDE.md
+    related_docs:
+      - docs_manifest.yaml
+      - docs/documentation-standards.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: Documentation Manifest
+    path: docs_manifest.yaml
+    type: manifest
+    domain: docs
+    status: Active
+    owner_area: Documentation
+    parent_doc: CLAUDE.md
+    related_docs:
+      - Index.md
+      - docs/documentation-standards.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: Mondfall Architecture
+    path: docs/ARCHITECTURE.md
+    type: supporting_doc
+    domain: repository
+    status: Active
+    owner_area: Core
+    parent_doc: CLAUDE.md
+    related_docs:
+      - docs/rendering-pipeline.md
+      - docs/ecs-integration.md
+    created: 2026-03-15
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  # Documentation infrastructure
+  - title: Documentation Standards
+    path: docs/documentation-standards.md
+    type: standards
+    domain: docs
+    status: Active
+    owner_area: Documentation
+    parent_doc: CLAUDE.md
+    related_docs:
+      - Index.md
+      - docs_manifest.yaml
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: Document Template
+    path: docs/templates/doc-template.md
+    type: template
+    domain: docs
+    status: Active
+    owner_area: Documentation
+    parent_doc: docs/documentation-standards.md
+    related_docs: []
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: Feature Document Template
+    path: docs/templates/feature-template.md
+    type: template
+    domain: docs
+    status: Active
+    owner_area: Documentation
+    parent_doc: docs/documentation-standards.md
+    related_docs: []
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: ADR Template
+    path: docs/templates/adr-template.md
+    type: template
+    domain: docs
+    status: Active
+    owner_area: Documentation
+    parent_doc: docs/documentation-standards.md
+    related_docs: []
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  # Folder-level CLAUDE.md
+  - title: Enemy System
+    path: src/enemy/CLAUDE.md
+    type: folder_claude
+    domain: enemy
+    status: Active
+    owner_area: Enemy
+    parent_doc: CLAUDE.md
+    related_docs:
+      - docs/combat-system.md
+      - docs/wave-system.md
+      - docs/ecs-integration.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: Weapon System
+    path: src/weapon/CLAUDE.md
+    type: folder_claude
+    domain: weapon
+    status: Active
+    owner_area: Weapon
+    parent_doc: CLAUDE.md
+    related_docs:
+      - docs/combat-system.md
+      - docs/procedural-audio.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: World System
+    path: src/world/CLAUDE.md
+    type: folder_claude
+    domain: world
+    status: Active
+    owner_area: World
+    parent_doc: CLAUDE.md
+    related_docs:
+      - docs/rendering-pipeline.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  # Feature documentation
+  - title: Rendering Pipeline
+    path: docs/rendering-pipeline.md
+    type: feature_doc
+    domain: core
+    status: Active
+    owner_area: Core
+    parent_doc: CLAUDE.md
+    related_docs:
+      - src/world/CLAUDE.md
+      - docs/procedural-audio.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: Combat System
+    path: docs/combat-system.md
+    type: feature_doc
+    domain: core
+    status: Active
+    owner_area: Core
+    parent_doc: CLAUDE.md
+    related_docs:
+      - src/enemy/CLAUDE.md
+      - src/weapon/CLAUDE.md
+      - docs/ecs-integration.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: Wave System
+    path: docs/wave-system.md
+    type: feature_doc
+    domain: core
+    status: Active
+    owner_area: Core
+    parent_doc: CLAUDE.md
+    related_docs:
+      - src/enemy/CLAUDE.md
+      - docs/combat-system.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: ECS Integration
+    path: docs/ecs-integration.md
+    type: feature_doc
+    domain: core
+    status: Active
+    owner_area: Core
+    parent_doc: CLAUDE.md
+    related_docs:
+      - src/enemy/CLAUDE.md
+      - docs/combat-system.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: Procedural Audio
+    path: docs/procedural-audio.md
+    type: feature_doc
+    domain: core
+    status: Active
+    owner_area: Audio
+    parent_doc: CLAUDE.md
+    related_docs:
+      - src/weapon/CLAUDE.md
+      - docs/rendering-pipeline.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: Testing
+    path: docs/testing.md
+    type: feature_doc
+    domain: testing
+    status: Active
+    owner_area: Testing
+    parent_doc: CLAUDE.md
+    related_docs:
+      - CLAUDE.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: AI Movement & Command Deep-Dive Analysis
+    path: docs/ai-movement-analysis.md
+    type: feature_doc
+    domain: enemy
+    status: Active
+    owner_area: Enemy
+    parent_doc: CLAUDE.md
+    related_docs:
+      - src/enemy/CLAUDE.md
+      - docs/combat-system.md
+      - docs/wave-system.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  # Architecture Decision Records
+  - title: Architecture Decision Records
+    path: docs/decisions/README.md
+    type: decision_readme
+    domain: docs
+    status: Active
+    owner_area: Documentation
+    parent_doc: CLAUDE.md
+    related_docs: []
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: "ADR-001: C99 with raylib"
+    path: docs/decisions/ADR-001-c99-raylib.md
+    type: adr
+    domain: core
+    status: Accepted
+    owner_area: Core
+    parent_doc: docs/decisions/README.md
+    related_docs: []
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: "ADR-002: Fixed-Size Pools"
+    path: docs/decisions/ADR-002-fixed-size-pools.md
+    type: adr
+    domain: core
+    status: Accepted
+    owner_area: Core
+    parent_doc: docs/decisions/README.md
+    related_docs: []
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: "ADR-003: 500-Line File Split Rule"
+    path: docs/decisions/ADR-003-file-split-rule.md
+    type: adr
+    domain: docs
+    status: Accepted
+    owner_area: Documentation
+    parent_doc: docs/decisions/README.md
+    related_docs: []
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: "ADR-004: ECS with flecs"
+    path: docs/decisions/ADR-004-ecs-flecs.md
+    type: adr
+    domain: core
+    status: Accepted
+    owner_area: Core
+    parent_doc: docs/decisions/README.md
+    related_docs:
+      - docs/ecs-integration.md
+      - src/enemy/CLAUDE.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: "ADR-005: Procedural Assets"
+    path: docs/decisions/ADR-005-procedural-assets.md
+    type: adr
+    domain: core
+    status: Accepted
+    owner_area: Core
+    parent_doc: docs/decisions/README.md
+    related_docs:
+      - docs/procedural-audio.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: "ADR-006: Low-Res CRT Pipeline"
+    path: docs/decisions/ADR-006-lowres-crt-pipeline.md
+    type: adr
+    domain: core
+    status: Accepted
+    owner_area: Core
+    parent_doc: docs/decisions/README.md
+    related_docs:
+      - docs/rendering-pipeline.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04

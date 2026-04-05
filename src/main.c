@@ -6,12 +6,18 @@
 #include "world.h"
 #include "world/world_draw.h"
 #include "weapon.h"
-#include "enemy/enemy.h"
+#include "enemy/enemy_components.h"
+#include "enemy/enemy_systems.h"
+#include "enemy/enemy_spawn.h"
+#include "enemy/enemy_draw_ecs.h"
+#include "ecs_world.h"
+#include "combat_ecs.h"
 #include "hud.h"
 #include "audio.h"
 #include "lander.h"
 #include "pickup.h"
-#include "combat.h"
+#include "structure/structure.h"
+#include "structure/structure_draw.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -31,34 +37,38 @@ int main(void) {
     SetTextureFilter(target.texture, TEXTURE_FILTER_POINT); // nearest neighbor
 
     // CRT post-processing shader
-    Shader crtShader = LoadShader(0, "assets/crt.fs");
+    Shader crtShader = LoadShader(0, "resources/crt.fs");
     int timeLoc = GetShaderLocation(crtShader, "time");
 
     // HUD render texture + visor curve shader
     RenderTexture2D hudTarget = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-    Shader hudShader = LoadShader(0, "assets/hud.fs");
+    Shader hudShader = LoadShader(0, "resources/hud.fs");
 
     Game game;
     Player player;
     World world;
     Weapon weapon;
     memset(&weapon, 0, sizeof(weapon));
-    EnemyManager enemies;
-    memset(&enemies, 0, sizeof(enemies));
     GameAudio audio;
     memset(&audio, 0, sizeof(audio));
     LanderManager landers;
     memset(&landers, 0, sizeof(landers));
     PickupManager pickups;
     PickupManagerInit(&pickups);
+    StructureManager structures;
+    memset(&structures, 0, sizeof(structures));
+    float rankKillTimer = 0;
+    int rankKillType = 0;
 
     GameInit(&game);
     PlayerInit(&player);
 
-    CombatContext combat = {&player, &weapon, &enemies, &pickups, &game};
+    // ECS combat context (replaces old CombatContext)
+    ecs_world_t *ecsWorld = NULL;
+    EcsCombatContext ecsCombat = {&player, &weapon, &pickups, &game, NULL};
 
     IntroScript introScript;
-    IntroScriptLoad(&introScript, "assets/intro.txt");
+    IntroScriptLoad(&introScript, "resources/intro.txt");
 
     bool assetsLoaded = false;
     bool cursorLocked = false;
@@ -81,9 +91,29 @@ int main(void) {
 
             WorldInit(&world);
             WeaponInit(&weapon);
-            EnemyManagerInit(&enemies);
+
+            // Initialize Flecs ECS world
+            GameEcsInit();
+            ecsWorld = GameEcsGetWorld();
+            EcsEnemyComponentsRegister(ecsWorld);
+            EcsEnemySystemsRegister(ecsWorld);
+            EcsEnemyResourcesInit(ecsWorld);
+            ecsCombat.ecsWorld = ecsWorld;
+
+            // Set initial game context singleton
+            ecs_singleton_set(ecsWorld, EcGameContext, {
+                .playerPos = player.position,
+                .camera = player.camera,
+                .testMode = game.testMode,
+                .aiFrameCounter = 0,
+                .playerDamageAccum = 0,
+                .killCount = 0,
+                .rankKillType = 0
+            });
+
             GameAudioInit(&audio);
             LanderManagerInit(&landers);
+            StructureManagerInit(&structures);
             assetsLoaded = true;
             continue;
         }
@@ -95,7 +125,18 @@ int main(void) {
         player.mouseSensitivity = game.mouseSensitivity;
         GameAudioSetMusicVolume(&audio, game.musicVolume);
         WeaponSetSFXVolume(&weapon, game.sfxVolume);
-        EnemyManagerSetSFXVolume(&enemies, game.sfxVolume);
+        // SFX volume for ECS enemy resources
+        {
+            const EcEnemyResources *res = ecs_singleton_get(ecsWorld, EcEnemyResources);
+            if (res) {
+                SetSoundVolume(res->sndSovietFire, game.sfxVolume);
+                SetSoundVolume(res->sndAmericanFire, game.sfxVolume);
+                for (int i = 0; i < res->sovietDeathCount; i++)
+                    SetSoundVolume(res->sndSovietDeath[i], game.sfxVolume * AUDIO_DEATH_VOLUME);
+                for (int i = 0; i < res->americanDeathCount; i++)
+                    SetSoundVolume(res->sndAmericanDeath[i], game.sfxVolume * AUDIO_DEATH_VOLUME);
+            }
+        }
         LanderManagerSetSFXVolume(&landers, game.sfxVolume);
         PickupManagerSetSFXVolume(&pickups, game.sfxVolume);
 
@@ -121,6 +162,7 @@ int main(void) {
                 if (IsKeyPressed(KEY_ENTER)) {
                     switch (game.menuSelection) {
                         case 0: // Play
+                            game.testMode = false;
                             if (!game.introSeen) {
                                 // Show intro first
                                 game.state = STATE_INTRO;
@@ -138,19 +180,49 @@ int main(void) {
                                 PlayerInit(&player);
                                 player.mouseSensitivity = game.mouseSensitivity;
                                 WeaponInit(&weapon);
-                                EnemyManagerInit(&enemies);
+                                // Reset ECS world for new game
+                                GameEcsInit();
+                                ecsWorld = GameEcsGetWorld();
+                                EcsEnemyComponentsRegister(ecsWorld);
+                                EcsEnemySystemsRegister(ecsWorld);
+                                EcsEnemyResourcesInit(ecsWorld);
+                                ecsCombat.ecsWorld = ecsWorld;
                                 LanderManagerInit(&landers);
                                 PickupManagerInit(&pickups);
-                                combat = (CombatContext){&player, &weapon, &enemies, &pickups, &game};
+                                StructureManagerInit(&structures);
                                 if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
                             }
                             break;
-                        case 1: // Settings
+                        case 1: // Test Mode
+                            game.testMode = true;
+                            game.state = STATE_PLAYING;
+                            GameReset(&game);
+                            PlayerInit(&player);
+                            player.mouseSensitivity = game.mouseSensitivity;
+                            WeaponInit(&weapon);
+                            // Reset ECS world for test mode
+                            GameEcsInit();
+                            ecsWorld = GameEcsGetWorld();
+                            EcsEnemyComponentsRegister(ecsWorld);
+                            EcsEnemySystemsRegister(ecsWorld);
+                            EcsEnemyResourcesInit(ecsWorld);
+                            ecsCombat.ecsWorld = ecsWorld;
+                            LanderManagerInit(&landers);
+                            PickupManagerInit(&pickups);
+                            // Spawn 200 enemies in concentric rings
+                            for (int ei = 0; ei < TEST_MAX_ENEMIES; ei++) {
+                                EnemyType etype = (ei % 2 == 0) ? ENEMY_SOVIET : ENEMY_AMERICAN;
+                                float spawnR = 15.0f + (float)(ei / 10) * 5.0f;
+                                EcsEnemySpawnAroundPlayer(ecsWorld, etype, player.position, spawnR);
+                            }
+                            if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
+                            break;
+                        case 2: // Settings
                             game.settingsReturnState = STATE_MENU;
                             game.settingsSelection = 0;
                             game.state = STATE_SETTINGS;
                             break;
-                        case 2: // Quit
+                        case 3: // Quit
                             game.quitRequested = true;
                             break;
                     }
@@ -166,10 +238,15 @@ int main(void) {
                     PlayerInit(&player);
                     player.mouseSensitivity = game.mouseSensitivity;
                     WeaponInit(&weapon);
-                    EnemyManagerInit(&enemies);
+                    GameEcsInit();
+                    ecsWorld = GameEcsGetWorld();
+                    EcsEnemyComponentsRegister(ecsWorld);
+                    EcsEnemySystemsRegister(ecsWorld);
+                    EcsEnemyResourcesInit(ecsWorld);
+                    ecsCombat.ecsWorld = ecsWorld;
                     LanderManagerInit(&landers);
                     PickupManagerInit(&pickups);
-                    combat = (CombatContext){&player, &weapon, &enemies, &pickups, &game};
+                    StructureManagerInit(&structures);
                     if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
                 }
                 break;
@@ -197,72 +274,132 @@ int main(void) {
                     break;
                 }
 
-                // Update systems
-                PlayerUpdate(&player, dt);
-                GameUpdate(&game);
-                WeaponUpdate(&weapon, dt);
-                EnemyManagerUpdate(&enemies, player.position, dt);
-                WorldUpdate(&world, player.position);
-                LanderManagerUpdate(&landers, &enemies, dt);
-                PickupManagerUpdate(&pickups, player.position, dt);
+                bool insideStructure = StructureIsPlayerInside(&structures);
 
-                // E to pick up dropped weapon
-                if (IsKeyPressed(KEY_E)) {
-                    PickupTryGrab(&pickups, player.position);
+                // Update game context singleton for ECS systems
+                {
+                    EcGameContext *ctx = ecs_singleton_ensure(ecsWorld, EcGameContext);
+                    ctx->playerPos = player.position;
+                    ctx->camera = player.camera;
+                    ctx->testMode = game.testMode;
+                    ctx->playerDamageAccum = 0;
+                    ctx->killCount = 0;
+                    ctx->rankKillType = 0;
+                    ecs_singleton_modified(ecsWorld, EcGameContext);
                 }
 
-                // Heal over time — slow regen
+                // Player always updates (movement works inside and outside)
+                PlayerUpdate(&player, dt);
+
+                // Structure interaction (enter/exit/resupply) — always active
+                StructureManagerUpdate(&structures, &player, &weapon, &pickups);
+
+                // Re-sync camera after structure teleport/clamping may have moved player
+                {
+                    Vector3 fwd = PlayerGetForward(&player);
+                    player.camera.position = player.position;
+                    player.camera.position.y += player.headBob;
+                    player.camera.target = Vector3Add(player.camera.position, fwd);
+                }
+
+                // World chunks always update (for terrain height)
+                WorldUpdate(&world, player.position);
+
+                // Discover new structures in nearby chunks
+                StructureManagerCheckSpawns(&structures, player.position);
+
+                // --- SIMULATION FREEZE when inside structure ---
+                if (!insideStructure) {
+                    GameUpdate(&game);
+                    WeaponUpdate(&weapon, dt);
+
+                    // ECS progress — runs all AI, physics, attack, death systems
+                    ecs_progress(ecsWorld, dt);
+
+                    LanderManagerUpdate(&landers, ecsWorld, dt);
+                    PickupManagerUpdate(&pickups, player.position, dt);
+
+                    // E to pick up dropped weapon (only outside)
+                    if (IsKeyPressed(KEY_E)) {
+                        PickupTryGrab(&pickups, player.position);
+                    }
+
+                    // Screen shake — landers + weapon recoil
+                    float shake = LanderGetScreenShake(&landers);
+                    if (weapon.recoil > 0.1f) {
+                        float gunShake = 0;
+                        if (weapon.current == WEAPON_MOND_MP40) gunShake = weapon.recoil * MP40_SHAKE;
+                        else if (weapon.raketenFiring) gunShake = weapon.recoil * RAKETEN_SHAKE;
+                        else if (weapon.current == WEAPON_JACKHAMMER) gunShake = weapon.recoil * JACKHAMMER_SHAKE;
+                        shake += gunShake;
+                    }
+                    if (pickups.hasPickup && pickups.pickupRecoil > 0.1f) {
+                        shake += pickups.pickupRecoil * PICKUP_SHAKE;
+                    }
+                    if (shake > SHAKE_THRESHOLD) {
+                        player.camera.position.x += ((float)rand()/RAND_MAX - 0.5f) * shake * SHAKE_AMPLITUDE;
+                        player.camera.position.y += ((float)rand()/RAND_MAX - 0.5f) * shake * SHAKE_AMPLITUDE;
+                    }
+
+                    // Wave spawning via landers
+                    if (game.waveActive && game.enemiesSpawned == 0) {
+                        LanderSpawnWave(&landers, player.position, game.enemiesPerWave, game.wave);
+                        game.enemiesSpawned = game.enemiesPerWave;
+                    }
+
+                    // Check if wave is cleared (all landers done + all enemies dead)
+                    if (game.waveActive && !LanderWaveActive(&landers) && EcsEnemyCountAlive(ecsWorld) == 0 && game.enemiesSpawned > 0) {
+                        game.waveActive = false;
+                        game.enemiesRemaining = 0;
+                    }
+
+                    // Combat resolution (ECS-based)
+                    EcsCombatProcessPickupFire(&ecsCombat);
+                    EcsCombatProcessWeaponFire(&ecsCombat);
+                    EcsCombatProcessProjectiles(&ecsCombat);
+                    EcsCombatProcessBeam(&ecsCombat, dt);
+
+                    // Collect player damage from ECS attack system
+                    if (!game.testMode) {
+                        const EcGameContext *ctx = ecs_singleton_get(ecsWorld, EcGameContext);
+                        if (ctx && ctx->playerDamageAccum > 0) {
+                            PlayerTakeDamage(&player, ctx->playerDamageAccum * game.damageScaler);
+                        }
+                    }
+
+                    // Collect kill count and rank kill flash from ECS
+                    {
+                        const EcGameContext *ctx = ecs_singleton_get(ecsWorld, EcGameContext);
+                        if (ctx) {
+                            game.killCount += ctx->killCount;
+                            if (ctx->rankKillType > 0) {
+                                rankKillType = ctx->rankKillType;
+                                rankKillTimer = 2.0f;
+                            }
+                        }
+                    }
+
+                    // Decay rank kill timer
+                    if (rankKillTimer > 0) rankKillTimer -= dt;
+
+                    // Death check
+                    if (!game.testMode && PlayerIsDead(&player)) {
+                        game.state = STATE_GAME_OVER;
+                        game.menuSelection = 0;
+                        EnableCursor();
+                        cursorLocked = false;
+                    }
+                }
+
+                // Heal over time — works inside and outside
                 if (player.health < player.maxHealth) {
                     player.health += HEALTH_REGEN_RATE * dt;
                     if (player.health > player.maxHealth) player.health = player.maxHealth;
                 }
 
-                // Screen shake — landers + weapon recoil
-                float shake = LanderGetScreenShake(&landers);
-                if (weapon.recoil > 0.1f) {
-                    float gunShake = 0;
-                    if (weapon.current == WEAPON_MOND_MP40) gunShake = weapon.recoil * MP40_SHAKE;
-                    else if (weapon.raketenFiring) gunShake = weapon.recoil * RAKETEN_SHAKE;
-                    else if (weapon.current == WEAPON_JACKHAMMER) gunShake = weapon.recoil * JACKHAMMER_SHAKE;
-                    shake += gunShake;
-                }
-                if (pickups.hasPickup && pickups.pickupRecoil > 0.1f) {
-                    shake += pickups.pickupRecoil * PICKUP_SHAKE;
-                }
-                if (shake > SHAKE_THRESHOLD) {
-                    player.camera.position.x += ((float)rand()/RAND_MAX - 0.5f) * shake * SHAKE_AMPLITUDE;
-                    player.camera.position.y += ((float)rand()/RAND_MAX - 0.5f) * shake * SHAKE_AMPLITUDE;
-                }
-
                 // Weapon bob sync
                 weapon.weaponBobTimer = player.headBobTimer;
 
-                // Wave spawning via landers
-                if (game.waveActive && game.enemiesSpawned == 0) {
-                    LanderSpawnWave(&landers, player.position, game.enemiesPerWave, game.wave);
-                    game.enemiesSpawned = game.enemiesPerWave;
-                }
-
-                // Check if wave is cleared (all landers done + all enemies dead)
-                if (game.waveActive && !LanderWaveActive(&landers) && EnemyCountAlive(&enemies) == 0 && game.enemiesSpawned > 0) {
-                    game.waveActive = false;
-                    game.enemiesRemaining = 0;
-                }
-
-                // Combat resolution
-                CombatProcessPickupFire(&combat);
-                CombatProcessWeaponFire(&combat);
-                CombatProcessProjectiles(&combat);
-                CombatProcessBeam(&combat, dt);
-                CombatProcessEnemyDamage(&combat, dt);
-
-                // Death check
-                if (PlayerIsDead(&player)) {
-                    game.state = STATE_GAME_OVER;
-                    game.menuSelection = 0; // reset game over selection
-                    EnableCursor();
-                    cursorLocked = false;
-                }
                 break;
             }
 
@@ -306,10 +443,23 @@ int main(void) {
                     PlayerInit(&player);
                     player.mouseSensitivity = game.mouseSensitivity;
                     WeaponInit(&weapon);
-                    EnemyManagerInit(&enemies);
+                    GameEcsInit();
+                    ecsWorld = GameEcsGetWorld();
+                    EcsEnemyComponentsRegister(ecsWorld);
+                    EcsEnemySystemsRegister(ecsWorld);
+                    EcsEnemyResourcesInit(ecsWorld);
+                    ecsCombat.ecsWorld = ecsWorld;
                     LanderManagerInit(&landers);
                     PickupManagerInit(&pickups);
-                    combat = (CombatContext){&player, &weapon, &enemies, &pickups, &game};
+                    StructureManagerInit(&structures);
+                    // If restarting test mode, re-spawn enemies
+                    if (game.testMode) {
+                        for (int ei = 0; ei < TEST_MAX_ENEMIES; ei++) {
+                            EnemyType etype = (ei % 2 == 0) ? ENEMY_SOVIET : ENEMY_AMERICAN;
+                            float spawnR = 15.0f + (float)(ei / 10) * 5.0f;
+                            EcsEnemySpawnAroundPlayer(ecsWorld, etype, player.position, spawnR);
+                        }
+                    }
                     DisableCursor();
                     cursorLocked = true;
                 } else if (game.menuSelection == -2) {
@@ -333,12 +483,20 @@ int main(void) {
             ClearBackground(BLACK);
 
             BeginMode3D(player.camera);
-                WorldDrawSky(&world, player.camera);
-                WorldDraw(&world, player.position, player.camera);
-                EnemyManagerDraw(&enemies);
-                LanderManagerDraw(&landers, player.position);
-                PickupManagerDraw(&pickups);
-                WeaponDrawWorld(&weapon);
+                if (StructureIsPlayerInside(&structures)) {
+                    // Interior rendering — only the room
+                    StructureManagerDrawInterior(&structures);
+                } else {
+                    // Normal world rendering
+                    WorldDrawSky(&world, player.camera);
+                    WorldDraw(&world, player.position, player.camera);
+                    StructureManagerDraw(&structures, player.position);
+                    // ECS enemy rendering
+                    EcsEnemyManagerDraw(ecsWorld, player.camera, game.testMode);
+                    LanderManagerDraw(&landers, player.position);
+                    PickupManagerDraw(&pickups);
+                    WeaponDrawWorld(&weapon);
+                }
                 if (game.state == STATE_PLAYING || game.state == STATE_PAUSED ||
                     (game.state == STATE_SETTINGS && game.settingsReturnState == STATE_PAUSED)) {
                     if (pickups.hasPickup)
@@ -380,12 +538,26 @@ int main(void) {
             // HUD — render to texture, then draw with visor curve
             if (game.state == STATE_PLAYING || game.state == STATE_PAUSED ||
                 (game.state == STATE_SETTINGS && game.settingsReturnState == STATE_PAUSED)) {
+                // Get radio transmission timer from ECS
+                float radioTimer = 0;
+                const EcEnemyResources *res = ecs_singleton_get(ecsWorld, EcEnemyResources);
+                if (res) radioTimer = res->radioTransmissionTimer;
+
                 BeginTextureMode(hudTarget);
                 ClearBackground(BLANK);
                 HudDraw(&player, &weapon, &game, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawPickup(&pickups, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawLanderArrows(&landers, player.camera, hudTarget.texture.width, hudTarget.texture.height);
-                HudDrawRadioTransmission(enemies.radioTransmissionTimer, hudTarget.texture.width, hudTarget.texture.height);
+                HudDrawRadioTransmission(radioTimer, hudTarget.texture.width, hudTarget.texture.height);
+                HudDrawRankKill(rankKillTimer, rankKillType, hudTarget.texture.width, hudTarget.texture.height);
+                {
+                    int resLeft = 0;
+                    if (structures.insideIndex >= 0)
+                        resLeft = structures.structures[structures.insideIndex].resuppliesLeft;
+                    HudDrawStructurePrompt(StructureGetPrompt(&structures), resLeft,
+                        StructureGetEmptyMessageTimer(&structures),
+                        hudTarget.texture.width, hudTarget.texture.height);
+                }
                 EndTextureMode();
 
                 BeginShaderMode(hudShader);
@@ -415,10 +587,13 @@ int main(void) {
     }
 
     WeaponUnload(&weapon);
-    EnemyManagerUnload(&enemies);
+    EcsEnemySystemsCleanup();
+    EcsEnemyResourcesUnload(ecsWorld);
+    GameEcsFini();
     WorldUnload(&world);
     GameAudioUnload(&audio);
     LanderManagerUnload(&landers);
+    StructureManagerUnload(&structures);
     UnloadShader(crtShader);
     UnloadShader(hudShader);
     UnloadRenderTexture(target);

@@ -1,4 +1,5 @@
 #include "hud.h"
+#include "structure/structure.h"
 #include <stdio.h>
 #include <math.h>
 
@@ -48,15 +49,23 @@ void HudDrawPickup(PickupManager *pm, int sw, int sh) {
     int ph = sh / 22;
 
     DrawRectangle(px, py, pw, ph, (Color){0, 0, 0, 180});
+    // Soviet-faction weapons are red-tinted, American are blue-tinted
+    bool isSoviet = (pm->pickupType == PICKUP_KOSMOS7 || pm->pickupType == PICKUP_KS23_MOLOT || pm->pickupType == PICKUP_ZARYA_TK4);
     DrawRectangleLines(px, py, pw, ph,
-        (pm->pickupType == ENEMY_SOVIET) ? (Color){255, 80, 40, 200} : (Color){80, 160, 255, 200});
+        isSoviet ? (Color){255, 80, 40, 200} : (Color){80, 160, 255, 200});
 
-    const char *name = (pm->pickupType == ENEMY_SOVIET) ? "KOSMOS-7 SMG" : "LIBERTY BLASTER";
+    const char *name = PickupGetName(pm->pickupType);
     char txt[64];
     snprintf(txt, sizeof(txt), "%s  [%d]", name, pm->pickupAmmo);
     int fs = ph * 2 / 3;
     int tw = MeasureText(txt, fs);
-    Color tc = (pm->pickupType == ENEMY_SOVIET) ? (Color){255, 120, 60, 255} : (Color){100, 180, 255, 255};
+    Color tc = isSoviet ? (Color){255, 120, 60, 255} : (Color){100, 180, 255, 255};
+    // Show charge indicator for Zarya TK-4
+    if (pm->pickupType == PICKUP_ZARYA_TK4 && pm->charging) {
+        float ratio = pm->chargeTime / PICKUP_ZARYA_CHARGE_TIME;
+        if (ratio > 1.0f) ratio = 1.0f;
+        DrawRectangle(px + 2, py + ph - 4, (int)((pw - 4) * ratio), 3, (Color){255, 80, 30, 255});
+    }
     DrawText(txt, cx - tw / 2, py + ph / 2 - fs / 2, fs, tc);
     (void)barInset;
 }
@@ -226,4 +235,82 @@ void HudDrawRadioTransmission(float timer, int sw, int sh) {
     const char *ftr = "RECEIVED";
     int fw = MeasureText(ftr, ffs);
     DrawText(ftr, boxX + boxW / 2 - fw / 2, boxY + boxH - ffs - smPad, ffs, (Color){180, 180, 170, a});
+}
+
+void HudDrawRankKill(float timer, int rankType, int sw, int sh) {
+    if (timer <= 0 || rankType <= 0) return;
+    int cx = sw / 2;
+    float alpha = (timer > 0.5f) ? 1.0f : timer / 0.5f;
+    unsigned char a = (unsigned char)(alpha * 255);
+
+    const char *text = (rankType == 2) ? "OFFIZIER ELIMINIERT!" : "UNTEROFFIZIER ELIMINIERT!";
+    int fs = sh / 14;
+    int tw = MeasureText(text, fs);
+    int ty = sh / 3;
+
+    DrawRectangle(cx - tw / 2 - sh / 30, ty - sh / 60, tw + sh / 15, fs + sh / 30, (Color){0, 0, 0, (unsigned char)(alpha * 180)});
+    Color col = (rankType == 2) ? (Color){255, 215, 0, a} : (Color){255, 200, 80, a};
+    DrawText(text, cx - tw / 2, ty, fs, col);
+}
+
+void HudDrawStructurePrompt(StructurePrompt prompt, int resuppliesLeft, float emptyTimer, int sw, int sh) {
+    int cx = sw / 2;
+    int cy = sh / 2;
+
+    // "MEIN GOTT!" message — drawn on top of everything when triggered
+    if (emptyTimer > 0) {
+        const char *line1 = "MEIN GOTT!";
+        const char *line2 = "THE CUPBOARD IS BARE, KAMERAD!";
+        int fs1 = sh / 12;
+        int fs2 = sh / 18;
+        int tw1 = MeasureText(line1, fs1);
+        int tw2 = MeasureText(line2, fs2);
+        int boxW = (tw1 > tw2 ? tw1 : tw2) + sh / 15;
+        int boxH = fs1 + fs2 + sh / 12;
+        int boxX = cx - boxW / 2;
+        int boxY = cy - boxH / 2 - sh / 10;
+
+        float fade = (emptyTimer > 2.5f) ? 1.0f : emptyTimer / 2.5f;
+        unsigned char a = (unsigned char)(fade * 255);
+
+        DrawRectangle(boxX, boxY, boxW, boxH, (Color){60, 10, 5, (unsigned char)(fade * 200)});
+        DrawRectangleLines(boxX, boxY, boxW, boxH, (Color){200, 50, 30, a});
+
+        float shake = sinf((float)GetTime() * 25.0f) * 2.0f * fade;
+        DrawText(line1, cx - tw1 / 2 + (int)shake, boxY + sh / 30, fs1, (Color){255, 60, 30, a});
+        DrawText(line2, cx - tw2 / 2, boxY + sh / 30 + fs1 + sh / 40, fs2, (Color){255, 200, 50, a});
+    }
+
+    if (prompt == PROMPT_NONE) return;
+
+    const char *text = NULL;
+    Color col = {0, 220, 120, 220};
+
+    switch (prompt) {
+        case PROMPT_ENTER:    text = "PRESS [E] TO ENTER BASE"; break;
+        case PROMPT_EXIT:     text = "PRESS [E] TO EXIT BASE"; break;
+        case PROMPT_RESUPPLY: {
+            // Show remaining count
+            static char resupplyBuf[64];
+            snprintf(resupplyBuf, sizeof(resupplyBuf), "PRESS [E] TO RESUPPLY [%d]", resuppliesLeft);
+            text = resupplyBuf;
+            col = (Color){80, 255, 120, 240};
+            break;
+        }
+        case PROMPT_EMPTY:
+            text = "VERSORGUNG ERSCHOEPFT";
+            col = (Color){200, 60, 40, 220};
+            break;
+        default: return;
+    }
+
+    int fs = sh / 20;
+    int tw = MeasureText(text, fs);
+
+    int pad = sh / 40;
+    DrawRectangle(cx - tw / 2 - pad, cy + sh / 6 - pad / 2, tw + pad * 2, fs + pad, (Color){0, 0, 0, 160});
+
+    float pulse = 0.7f + 0.3f * sinf((float)GetTime() * 4.0f);
+    Color drawCol = {(unsigned char)(col.r * pulse), (unsigned char)(col.g * pulse), col.b, col.a};
+    DrawText(text, cx - tw / 2, cy + sh / 6, fs, drawCol);
 }

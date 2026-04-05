@@ -9,9 +9,14 @@
 
 @STYLE TITLE
 THE YEAR IS 67 AB 
+
+@PAUSE 0.5
 (After Bormann)
 
-@PAUSE 1.5
+
+
+@PAUSE 0.5
+@CLEAR
 
 They have come.
 
@@ -26,6 +31,7 @@ that these . . .  them . . .
 they tore Europa asunder.
 
 @PAUSE 1.5
+@CLEAR
 
 Now the old enemies circle above,
 descending in chariots of fire and steel.

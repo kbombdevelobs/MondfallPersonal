@@ -1,13 +1,18 @@
 #include "enemy.h"
 #include "enemy_draw.h"
 #include "world.h"
+#include "structure/structure.h"
 #include "sound_gen.h"
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
 
-void EnemyManagerInit(EnemyManager *em) {
+void EnemyManagerInit(EnemyManager *em, int capacity) {
+    // Free previous allocation if any
+    if (em->enemies) { free(em->enemies); em->enemies = NULL; }
     memset(em, 0, sizeof(EnemyManager));
+    em->capacity = capacity;
+    em->enemies = (Enemy *)calloc(capacity, sizeof(Enemy));
     em->spawnRate = 1.0f;
 
     em->mdlVisor = LoadModelFromMesh(GenMeshSphere(0.28f, 6, 6));
@@ -41,8 +46,8 @@ void EnemyManagerInit(EnemyManager *em) {
     // Load Soviet death sounds — degrade to scratchy radio quality
     em->sovietDeathCount = 0;
     const char *deathFiles[] = {
-        "assets/soviet_death_sounds/Echoes of the Frozen Front.mp3",
-        "assets/soviet_death_sounds/Last Echo of the Soviet Front The Final Net.mp3",
+        "sounds/soviet_death_sounds/Echoes of the Frozen Front.mp3",
+        "sounds/soviet_death_sounds/Last Echo of the Soviet Front The Final Net.mp3",
     };
     for (int df = 0; df < 2; df++) {
         if (!FileExists(deathFiles[df])) continue;
@@ -59,8 +64,8 @@ void EnemyManagerInit(EnemyManager *em) {
     // Load American death sounds — same radio degradation
     em->americanDeathCount = 0;
     const char *amDeathFiles[] = {
-        "assets/american_death_sounds/Darn Bastard's Final Stand.mp3",
-        "assets/american_death_sounds/The Last Yeehaw of the Lone Star Son (1).mp3",
+        "sounds/american_death_sounds/Darn Bastard's Final Stand.mp3",
+        "sounds/american_death_sounds/The Last Yeehaw of the Lone Star Son (1).mp3",
     };
     for (int df = 0; df < 2; df++) {
         if (!FileExists(amDeathFiles[df])) continue;
@@ -78,6 +83,7 @@ void EnemyManagerInit(EnemyManager *em) {
 }
 
 void EnemyManagerUnload(EnemyManager *em) {
+    if (em->enemies) { free(em->enemies); em->enemies = NULL; }
     if (!em->modelsLoaded) return;
     UnloadModel(em->mdlVisor);
     UnloadModel(em->mdlArm);
@@ -113,7 +119,7 @@ static void EnemyInit(Enemy *e, EnemyType type, Vector3 pos) {
 }
 
 void EnemySpawnAroundPlayer(EnemyManager *em, EnemyType type, Vector3 playerPos, float spawnRadius) {
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    for (int i = 0; i < em->capacity; i++) {
         if (em->enemies[i].active) continue;
         float angle = ((float)rand() / RAND_MAX) * 2.0f * PI;
         float dist = spawnRadius + ((float)rand() / RAND_MAX) * 20.0f;
@@ -126,7 +132,7 @@ void EnemySpawnAroundPlayer(EnemyManager *em, EnemyType type, Vector3 playerPos,
 }
 
 void EnemySpawnAt(EnemyManager *em, EnemyType type, Vector3 pos) {
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    for (int i = 0; i < em->capacity; i++) {
         if (em->enemies[i].active) continue;
         EnemyInit(&em->enemies[i], type, pos);
         em->count++;
@@ -134,11 +140,13 @@ void EnemySpawnAt(EnemyManager *em, EnemyType type, Vector3 pos) {
     }
 }
 
-static bool TooCloseToOthers(EnemyManager *em, int idx, float minDist) {
+static bool TooCloseToOthers(EnemyManager *em, int idx, float minDist, int maxChecks) {
     Enemy *me = &em->enemies[idx];
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    int checked = 0;
+    for (int i = 0; i < em->capacity; i++) {
         if (i == idx || !em->enemies[i].active || em->enemies[i].state != ENEMY_ALIVE) continue;
         if (Vector3Distance(me->position, em->enemies[i].position) < minDist) return true;
+        if (maxChecks > 0 && ++checked >= maxChecks) break;
     }
     return false;
 }
@@ -149,7 +157,10 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
     // Reset death play counter when no enemies alive (wave cleared)
     if (EnemyCountAlive(em) == 0) { em->sovietDeathPlays = 0; em->americanDeathPlays = 0; }
 
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    em->aiFrameCounter++;
+    int collisionCap = em->testMode ? COLLISION_CAP : 0;
+
+    for (int i = 0; i < em->capacity; i++) {
         Enemy *e = &em->enemies[i];
         if (!e->active) continue;
 
@@ -292,14 +303,50 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
         Vector3 moveDir = {0};
         bool moving = false;
 
-        if (e->type == ENEMY_SOVIET) {
-            // SOVIET: Charge as a spread — run at player with wide strafe to form a line
-            if (dist > 4.0f) {
-                // Sprint toward player with wide spread
+        // Staggered AI: in test mode, only run full AI for 1/N enemies per frame
+        bool doFullAI = true;
+        if (em->testMode) {
+            doFullAI = (i % AI_STAGGER_DIVISOR) == (em->aiFrameCounter % AI_STAGGER_DIVISOR);
+            // Distance-simplified AI: far enemies always just advance
+            if (dist > LOD1_DISTANCE) {
+                doFullAI = false;
+            }
+        }
+
+        if (!doFullAI) {
+            // Simplified: walk toward player
+            moveDir = fwd;
+            moving = true;
+            e->behavior = AI_ADVANCE;
+        } else if (e->type == ENEMY_SOVIET) {
+            // SOVIET: Charge as a spread — run at player with wide strafe
+            // Check if a structure blocks the direct charge path
+            bool sovStructBlock = false;
+            StructureManager *sovStructs = StructureGetActive();
+            if (sovStructs && dist > 6.0f) {
+                float collR = MOONBASE_EXTERIOR_RADIUS + 1.0f;
+                for (int si = 0; si < sovStructs->count; si++) {
+                    Structure *st = &sovStructs->structures[si];
+                    if (!st->active) continue;
+                    Vector3 toS = {st->worldPos.x - e->position.x, 0, st->worldPos.z - e->position.z};
+                    Vector3 toP = {playerPos.x - e->position.x, 0, playerPos.z - e->position.z};
+                    float tsLen = sqrtf(toS.x * toS.x + toS.z * toS.z);
+                    float tpLen = sqrtf(toP.x * toP.x + toP.z * toP.z);
+                    if (tsLen < tpLen && tsLen < collR * 3.0f) {
+                        float dot = (toS.x * toP.x + toS.z * toP.z) / (tsLen * tpLen + 0.001f);
+                        if (dot > 0.5f) { sovStructBlock = true; break; }
+                    }
+                }
+            }
+
+            if (sovStructBlock) {
+                // Rush wide around — heavy strafe to split around the base
+                moveDir = Vector3Add(fwd, Vector3Scale(strafe, e->strafeDir * 2.0f));
+                moving = true; e->behavior = AI_ADVANCE;
+            } else if (dist > 4.0f) {
                 moveDir = Vector3Add(fwd, Vector3Scale(strafe, e->strafeDir * 0.6f));
                 moving = true; e->behavior = AI_ADVANCE;
             } else {
-                // In melee range — circle strafe fast
                 moveDir = Vector3Add(Vector3Scale(strafe, e->strafeDir * 1.5f), Vector3Scale(fwd, 0.2f));
                 moving = true; e->behavior = AI_STRAFE;
             }
@@ -309,26 +356,52 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
                 e->dodgeTimer = e->dodgeCooldown; e->behavior = AI_DODGE;
             }
         } else {
-            // AMERICAN: Tactical — try to find cover behind nearby rocks
-            // Check for rocks to hide behind
+            // AMERICAN: Tactical — cover behind rocks, flank around structures
             World *w = WorldGetActive();
+            StructureManager *amStructs = StructureGetActive();
             bool foundCover = false;
-            if (w && dist < e->attackRange * 1.2f && dist > 5.0f) {
-                // Search nearby chunks for a rock between us and player
+
+            // Check if a structure blocks the path to player — if so, flank
+            bool structBlocking = false;
+            int flankSign = e->strafeDir > 0 ? 1 : -1; // each enemy flanks a different way
+            if (amStructs) {
+                float collR = MOONBASE_EXTERIOR_RADIUS + 1.0f;
+                for (int si = 0; si < amStructs->count; si++) {
+                    Structure *st = &amStructs->structures[si];
+                    if (!st->active) continue;
+                    // Check if structure center is roughly between enemy and player
+                    Vector3 toStruct = {st->worldPos.x - e->position.x, 0, st->worldPos.z - e->position.z};
+                    Vector3 toP = {playerPos.x - e->position.x, 0, playerPos.z - e->position.z};
+                    float tsPLen = Vector3Length(toStruct);
+                    float tpLen = Vector3Length(toP);
+                    if (tsPLen < tpLen && tsPLen < collR * 3.0f) {
+                        float dot = (toStruct.x * toP.x + toStruct.z * toP.z) / (tsPLen * tpLen + 0.001f);
+                        if (dot > 0.5f) { // structure roughly in the way
+                            structBlocking = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (structBlocking) {
+                // Flank around the structure — rush wide to the side then re-engage
+                moveDir = Vector3Add(fwd, Vector3Scale(strafe, (float)flankSign * 1.8f));
+                moving = true; e->behavior = AI_ADVANCE;
+            } else if (w && dist < e->attackRange * 1.2f && dist > 5.0f) {
+                // Search nearby chunks for a rock to hide behind
                 for (int ci = 0; ci < w->chunkCount && !foundCover; ci++) {
                     if (!w->chunks[ci].generated) continue;
                     for (int ri = 0; ri < w->chunks[ci].rockCount && !foundCover; ri++) {
                         Rock *rock = &w->chunks[ci].rocks[ri];
                         float rockDist = Vector3Distance(e->position, rock->position);
                         if (rockDist > 3.0f && rockDist < 15.0f) {
-                            // Is the rock between us and the player?
                             Vector3 toRock = Vector3Subtract(rock->position, e->position);
                             toRock.y = 0;
                             Vector3 toP = Vector3Subtract(playerPos, e->position);
                             toP.y = 0;
                             float dot = toRock.x * toP.x + toRock.z * toP.z;
                             if (dot > 0) {
-                                // Move toward cover position (behind rock relative to player)
                                 Vector3 coverDir = Vector3Normalize(Vector3Subtract(rock->position, playerPos));
                                 Vector3 coverPos = Vector3Add(rock->position, Vector3Scale(coverDir, 2.5f));
                                 Vector3 toCover = Vector3Subtract(coverPos, e->position);
@@ -344,18 +417,14 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
                 }
             }
 
-            if (!foundCover) {
-                // No cover — default tactical behavior
+            if (!foundCover && !structBlocking) {
                 if (dist < e->preferredDist * 0.5f) {
-                    // Too close — retreat while strafing
                     moveDir = Vector3Add(Vector3Scale(fwd, -1), Vector3Scale(strafe, e->strafeDir * 0.7f));
                     moving = true; e->behavior = AI_RETREAT;
                 } else if (dist > e->preferredDist * 1.4f) {
-                    // Too far — advance cautiously with strafe
                     moveDir = Vector3Add(fwd, Vector3Scale(strafe, e->strafeDir * 0.4f));
                     moving = true; e->behavior = AI_ADVANCE;
                 } else {
-                    // Good range — strafe and peek
                     moveDir = Vector3Scale(strafe, e->strafeDir);
                     moving = true; e->behavior = AI_STRAFE;
                 }
@@ -368,8 +437,8 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
             }
         }
 
-        if (TooCloseToOthers(em, i, 2.5f)) {
-            for (int j = 0; j < MAX_ENEMIES; j++) {
+        if (TooCloseToOthers(em, i, 2.5f, collisionCap)) {
+            for (int j = 0; j < em->capacity; j++) {
                 if (j == i || !em->enemies[j].active) continue;
                 Vector3 away = Vector3Subtract(e->position, em->enemies[j].position);
                 away.y = 0;
@@ -383,8 +452,39 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
         if (moving && Vector3Length(moveDir) > 0.01f) {
             moveDir = Vector3Normalize(moveDir);
             float spd = e->speed * (e->behavior == AI_DODGE ? 2.0f : 1.0f);
-            e->position.x += moveDir.x * spd * dt;
-            e->position.z += moveDir.z * spd * dt;
+            float newX = e->position.x + moveDir.x * spd * dt;
+            float newZ = e->position.z + moveDir.z * spd * dt;
+            // Structure collision — slide around bases instead of stopping
+            StructureManager *structs = StructureGetActive();
+            if (structs && StructureCheckCollision(structs, (Vector3){newX, e->position.y, newZ}, 0.8f)) {
+                // Find which structure we're hitting and compute tangent slide
+                float collR = MOONBASE_EXTERIOR_RADIUS + 0.5f + 0.8f;
+                for (int si = 0; si < structs->count; si++) {
+                    Structure *st = &structs->structures[si];
+                    if (!st->active) continue;
+                    float sdx = newX - st->worldPos.x;
+                    float sdz = newZ - st->worldPos.z;
+                    if (sdx * sdx + sdz * sdz < collR * collR) {
+                        // Compute tangent: perpendicular to radial direction
+                        float radLen = sqrtf(sdx * sdx + sdz * sdz);
+                        if (radLen > 0.1f) {
+                            // Pick tangent direction that aligns with movement intent
+                            float tx = -sdz / radLen;  // tangent option 1
+                            float tz = sdx / radLen;
+                            float dot = tx * moveDir.x + tz * moveDir.z;
+                            if (dot < 0) { tx = -tx; tz = -tz; } // pick the direction we're trying to go
+                            // Slide along tangent + push outward slightly
+                            float pushX = sdx / radLen * 0.3f;
+                            float pushZ = sdz / radLen * 0.3f;
+                            newX = e->position.x + (tx * spd + pushX) * dt;
+                            newZ = e->position.z + (tz * spd + pushZ) * dt;
+                        }
+                        break;
+                    }
+                }
+            }
+            e->position.x = newX;
+            e->position.z = newZ;
             e->walkCycle += dt * spd * 1.5f;
             e->animState = ANIM_WALK;
         } else {
@@ -421,7 +521,7 @@ void EnemyManagerUpdate(EnemyManager *em, Vector3 playerPos, float dt) {
 float EnemyCheckPlayerDamage(EnemyManager *em, Vector3 playerPos, float dt) {
     (void)dt;
     float total = 0;
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    for (int i = 0; i < em->capacity; i++) {
         Enemy *e = &em->enemies[i];
         if (!e->active || e->state != ENEMY_ALIVE) continue;
         float dist = Vector3Length(Vector3Subtract(playerPos, e->position));
@@ -446,13 +546,55 @@ float EnemyCheckPlayerDamage(EnemyManager *em, Vector3 playerPos, float dt) {
 
 
 void EnemyManagerDraw(EnemyManager *em) {
-    for (int i = 0; i < MAX_ENEMIES; i++)
+    for (int i = 0; i < em->capacity; i++)
         if (em->enemies[i].active) DrawAstronautModel(em, &em->enemies[i]);
+}
+
+void EnemyManagerDrawWithLOD(EnemyManager *em, Camera3D camera) {
+    // Build view-projection matrix for frustum culling
+    Matrix view = GetCameraMatrix(camera);
+    Matrix proj = MatrixPerspective(camera.fovy * DEG2RAD,
+        (float)GetScreenWidth() / (float)GetScreenHeight(), 0.1f, 1000.0f);
+    Matrix vp = MatrixMultiply(view, proj);
+
+    for (int i = 0; i < em->capacity; i++) {
+        if (!em->enemies[i].active) continue;
+        Enemy *e = &em->enemies[i];
+        Vector3 pos = e->position;
+
+        // Distance culling
+        float dist = Vector3Distance(pos, camera.position);
+        if (dist > CULL_DISTANCE) continue;
+
+        // Frustum culling: transform to clip space
+        float cx = vp.m0*pos.x + vp.m4*pos.y + vp.m8*pos.z + vp.m12;
+        float cy = vp.m1*pos.x + vp.m5*pos.y + vp.m9*pos.z + vp.m13;
+        float cw = vp.m3*pos.x + vp.m7*pos.y + vp.m11*pos.z + vp.m15;
+        float cz = vp.m2*pos.x + vp.m6*pos.y + vp.m10*pos.z + vp.m14;
+
+        if (cw > 0) {
+            float margin = 3.0f; // generous world-space margin
+            if (cx < -cw - margin || cx > cw + margin ||
+                cy < -cw - margin || cy > cw + margin ||
+                cz < 0) {
+                continue;
+            }
+        }
+
+        // LOD dispatch
+        if (dist < LOD1_DISTANCE) {
+            DrawAstronautModel(em, e);
+        } else if (dist < LOD2_DISTANCE) {
+            DrawAstronautLOD1(e);
+        } else {
+            DrawAstronautLOD2(e);
+        }
+    }
 }
 
 int EnemyCheckHit(EnemyManager *em, Ray ray, float maxDist, float *hitDist) {
     int closest = -1; float cd = maxDist;
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    for (int i = 0; i < em->capacity; i++) {
         Enemy *e = &em->enemies[i];
         if (!e->active || e->state != ENEMY_ALIVE) continue;
         BoundingBox box = {{e->position.x-0.5f, e->position.y-1.2f, e->position.z-0.5f},
@@ -465,7 +607,7 @@ int EnemyCheckHit(EnemyManager *em, Ray ray, float maxDist, float *hitDist) {
 }
 
 int EnemyCheckSphereHit(EnemyManager *em, Vector3 center, float radius) {
-    for (int i = 0; i < MAX_ENEMIES; i++) {
+    for (int i = 0; i < em->capacity; i++) {
         Enemy *e = &em->enemies[i];
         if (!e->active || e->state != ENEMY_ALIVE) continue;
         if (Vector3Distance(center, e->position) < radius + 0.8f) return i;
@@ -474,7 +616,7 @@ int EnemyCheckSphereHit(EnemyManager *em, Vector3 center, float radius) {
 }
 
 void EnemyDamage(EnemyManager *em, int index, float damage) {
-    if (index < 0 || index >= MAX_ENEMIES) return;
+    if (index < 0 || index >= em->capacity) return;
     Enemy *e = &em->enemies[index];
     e->health -= damage; e->hitFlash = 1;
     if (e->dodgeTimer <= 0) { e->strafeDir *= -1; e->dodgeTimer = 1; }
@@ -523,7 +665,7 @@ void EnemyDamage(EnemyManager *em, int index, float damage) {
 }
 
 void EnemyVaporize(EnemyManager *em, int index) {
-    if (index < 0 || index >= MAX_ENEMIES) return;
+    if (index < 0 || index >= em->capacity) return;
     Enemy *e = &em->enemies[index];
     e->state = ENEMY_VAPORIZING;
     e->vaporizeTimer = 0;
@@ -555,7 +697,7 @@ void EnemyVaporize(EnemyManager *em, int index) {
 }
 
 void EnemyEviscerate(EnemyManager *em, int index, Vector3 hitDir) {
-    if (index < 0 || index >= MAX_ENEMIES) return;
+    if (index < 0 || index >= em->capacity) return;
     Enemy *e = &em->enemies[index];
     e->state = ENEMY_EVISCERATING;
     e->evisTimer = 0;
@@ -604,7 +746,7 @@ void EnemyEviscerate(EnemyManager *em, int index, Vector3 hitDir) {
 
 int EnemyCountAlive(EnemyManager *em) {
     int c = 0;
-    for (int i = 0; i < MAX_ENEMIES; i++)
+    for (int i = 0; i < em->capacity; i++)
         if (em->enemies[i].active && em->enemies[i].state == ENEMY_ALIVE) c++;
     return c;
 }
