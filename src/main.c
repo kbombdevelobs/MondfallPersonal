@@ -294,6 +294,14 @@ int main(void) {
                 // Structure interaction (enter/exit/resupply) — always active
                 StructureManagerUpdate(&structures, &player, &weapon, &pickups);
 
+                // Re-sync camera after structure teleport/clamping may have moved player
+                {
+                    Vector3 fwd = PlayerGetForward(&player);
+                    player.camera.position = player.position;
+                    player.camera.position.y += player.headBob;
+                    player.camera.target = Vector3Add(player.camera.position, fwd);
+                }
+
                 // World chunks always update (for terrain height)
                 WorldUpdate(&world, player.position);
 
