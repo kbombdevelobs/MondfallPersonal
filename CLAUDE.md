@@ -97,7 +97,7 @@ Mondfall/
 │   │   ├── world_noise.h/c — Perlin gradient noise, ValueNoise, WorldGetHeight()
 │   │   ├── world_draw.h/c  — Sky rendering, chunk drawing, frustum culling
 │   │   └── CLAUDE.md
-│   ├── structure/       — Moon base structures (see src/structure/README.md)
+│   ├── structure/       — Moon base structures (see src/structure/CLAUDE.md)
 │   │   ├── structure.h/c    — Structure manager, enter/exit teleport, resupply, collision
 │   │   ├── structure_draw.h  — Draw API (StructureManagerDraw, StructureManagerDrawInterior)
 │   │   ├── structure_draw_exterior.c — Geodesic dome, cylinder shaft, airlock corridors
@@ -213,7 +213,7 @@ Mondfall/
 - **Multi-door**: Enter/exit through any of the 3 doors. Exit places player outside the door they walked through.
 - **HUD Prompts**: "PRESS [E] TO ENTER BASE", "PRESS [E] TO EXIT BASE", "PRESS [E] TO RESUPPLY [N]", "VERSORGUNG ERSCHOEPFT" — pulsing text at screen center.
 - **Visual Indicators**: Door lights green (stocked) / red (expended). Cabinet panel green glow / dead red. Visible from distance.
-- **Adding structures**: New `StructureType` enum + unique `interiorY` offset. Teleport, collision, freeze, spawning, and AI flanking all work automatically. See `src/structure/README.md`.
+- **Adding structures**: New `StructureType` enum + unique `interiorY` offset. Teleport, collision, freeze, spawning, and AI flanking all work automatically. See `src/structure/CLAUDE.md`.
 
 ### Settings System (game.c)
 - Mouse sensitivity: stored in `Game.mouseSensitivity`, synced to `Player.mouseSensitivity` each frame
