@@ -3,8 +3,8 @@ title: Mondfall Architecture
 status: Active
 owner_area: Core
 created: 2026-03-15
-last_updated: 2026-04-04
-last_reviewed: 2026-04-04
+last_updated: 2026-04-05
+last_reviewed: 2026-04-05
 parent_doc: CLAUDE.md
 related_docs:
   - docs/rendering-pipeline.md
@@ -33,7 +33,7 @@ main.c (game loop)
   |     |-- StructureManagerUpdate (structure.c) moon base teleport, resupply
   |     |-- EcsCombat*          (combat_ecs.c) hit detection, damage, kills
   |
-  |-- Render Phase (3-layer pipeline)
+  |-- Render Phase (4-layer pipeline)
         |-- Layer 1: 3D scene -> 640x360 RenderTexture
         |     |-- WorldDrawSky / WorldDraw
         |     |-- EcsEnemyManagerDraw (enemy_draw_ecs.c)
@@ -41,9 +41,15 @@ main.c (game loop)
         |     |-- PickupManagerDraw / WeaponDrawWorld
         |     |-- WeaponDrawFirst / PickupDrawFirstPerson
         |
+        |-- Layer 1b: Führerauge -> 320x240 RenderTexture (15° FOV, when RMB held)
+        |     |-- Same 3D scene, narrow FOV
+        |     |-- fuehrerauge.fs shader (old-timey TV: scanlines, pixelation, flicker)
+        |
         |-- Layer 2: CRT shader post-process -> window
         |
         |-- Layer 3: HUD -> separate RenderTexture -> visor curve shader
+        |     |-- Dieselpunk brass/amber aesthetic (gauges, tickers, art deco framing)
+        |     |-- Führerauge viewport composited as trapezoid with brass frame
 ```
 
 ## Module Dependency Graph
@@ -75,7 +81,7 @@ ecs_world.c  (global ECS world lifecycle: init, get, fini, cleanup)
 hud.h  <-- player.h, weapon.h, game.h, pickup.h, lander.h
     |
     v
-hud.c  (draws all UI elements)
+hud.c  (dieselpunk brass/amber HUD: analog gauges, tickers, Führerauge viewport)
 ```
 
 ## Key Design Patterns
@@ -112,11 +118,13 @@ world pointer through every function.
 ## Rendering Pipeline
 
 1. **3D Scene** renders to a 640x360 `RenderTexture2D` (low-res for pixel art look)
-2. **CRT Shader** (`resources/crt.fs`) post-processes with scanlines, phosphor mask, bloom, chromatic aberration, fish-eye distortion, film grain, and breath fog
-3. Scaled to window with **nearest-neighbor filtering** (crispy pixels)
-4. **HUD** renders to a separate full-resolution `RenderTexture2D`
-5. **Visor Shader** (`resources/hud.fs`) curves the HUD overlay
-6. **Menu/Pause/Settings/Intro/Game Over** screens drawn at full window resolution on top, using `S(px)` DPI-aware scaling
+2. **Führerauge Pass** (when RMB held): second 3D render at 320x240 into separate `RenderTexture2D` with 15° FOV, post-processed by `resources/fuehrerauge.fs` (fishbowl distortion, scanlines, interlace, phosphor, 120x90 pixelation, flicker, grain); receives `time` uniform for animated effects
+3. **CRT Shader** (`resources/crt.fs`) post-processes main scene with scanlines, phosphor mask, bloom, chromatic aberration, fish-eye distortion, film grain, and breath fog
+4. Scaled to window with **nearest-neighbor filtering** (crispy pixels)
+5. **HUD** renders to a separate full-resolution `RenderTexture2D` — dieselpunk brass/amber aesthetic with analog gauge dials, mechanical ticker readouts, art deco framing with 45° corner cuts, iron cross decorations, and eagle emblem
+6. **Führerauge Viewport** composited onto HUD as upside-down trapezoid with brass/riveted frame, targeting reticle, and "FUEHRERAUGE" label; ~0.33s deploy/retract animation
+7. **Visor Shader** (`resources/hud.fs`) curves the HUD overlay
+8. **Menu/Pause/Settings/Intro/Game Over** screens drawn at full window resolution on top, using `S(px)` DPI-aware scaling
 
 ## Wave System Flow
 

@@ -228,22 +228,43 @@
 #define AUDIO_MARCH_VOLUME   0.3f
 
 // --- Colors (as initializer lists, use with (Color){...}) ---
-#define COLOR_CROSSHAIR      {0, 255, 200, 230}
+#define COLOR_CROSSHAIR      {200, 180, 130, 200}
 #define COLOR_SOVIET_RED     {255, 50, 30, 220}
 #define COLOR_AMERICAN_BLUE  {60, 140, 255, 220}
 #define COLOR_METAL_GRAY     {45, 48, 55, 255}
 #define COLOR_METAL_DARK     {30, 32, 38, 255}
-#define COLOR_HUD_ACCENT     {0, 200, 180, 100}
-#define COLOR_HUD_CYAN       {0, 255, 220, 255}
-#define COLOR_HUD_RELOAD     {0, 220, 255, 240}
+#define COLOR_HUD_ACCENT     {160, 130, 60, 100}
+#define COLOR_HUD_CYAN       {200, 180, 130, 255}
+#define COLOR_HUD_RELOAD     {205, 170, 80, 240}
 #define COLOR_ALERT_RED      {255, 50, 30, 255}
 #define COLOR_ALERT_YELLOW   {255, 200, 50, 255}
 #define COLOR_HEALTH_GREEN   {50, 220, 50, 255}
 #define COLOR_HEALTH_YELLOW  {220, 220, 50, 255}
 #define COLOR_HEALTH_RED     {220, 50, 50, 255}
-#define COLOR_DAMAGE_FLASH   {220, 0, 0}
+#define COLOR_DAMAGE_FLASH   {200, 30, 10}
 #define COLOR_BEAM_SOVIET    {255, 80, 40, 180}
 #define COLOR_BEAM_AMERICAN  {80, 160, 255, 180}
+
+// --- Retro Dieselpunk HUD Colors ---
+#define COLOR_BRASS          {205, 170, 80, 255}
+#define COLOR_BRASS_DIM      {160, 130, 60, 200}
+#define COLOR_BRASS_BRIGHT   {240, 200, 100, 255}
+#define COLOR_COPPER         {180, 100, 50, 255}
+#define COLOR_DARK_METAL     {35, 32, 28, 230}
+#define COLOR_RIVET          {120, 110, 90, 255}
+#define COLOR_GAUGE_BG       {20, 18, 15, 220}
+#define COLOR_GAUGE_NEEDLE   {220, 60, 30, 255}
+#define COLOR_GAUGE_MARK     {180, 160, 120, 180}
+#define COLOR_HUD_TEXT       {200, 180, 130, 255}
+
+// --- Fuehrerauge (Leader Eye Targeting Computer) ---
+#define FUEHRERAUGE_FOV          15.0f
+#define FUEHRERAUGE_ANIM_SPEED   3.0f
+#define FUEHRERAUGE_WIDTH_FRAC   0.35f
+#define FUEHRERAUGE_HEIGHT_FRAC  0.40f
+#define FUEHRERAUGE_RENDER_W     320
+#define FUEHRERAUGE_RENDER_H     240
+#define FUEHRERAUGE_FRAME_THICK  6.0f
 
 // --- Screen Shake ---
 #define SHAKE_THRESHOLD      0.05f

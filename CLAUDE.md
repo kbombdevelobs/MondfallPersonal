@@ -3,8 +3,8 @@ title: "Mondfall — Nazis on the Moon FPS"
 status: Active
 owner_area: Core
 created: 2026-03-15
-last_updated: 2026-04-04
-last_reviewed: 2026-04-04
+last_updated: 2026-04-05
+last_reviewed: 2026-04-05
 parent_doc: null
 related_docs:
   - Index.md
@@ -106,7 +106,7 @@ Mondfall/
 │   │   └── README.md
 │   ├── lander.c/h      — Moon lander wave system with descent, deployment, self-destruct
 │   ├── pickup.c/h      — Dropped enemy weapons (KOSMOS-7 SMG, LIBERTY BLASTER)
-│   ├── hud.c/h         — Health, ammo, wave counter, reload bar, ACHTUNG alert, radio transmission
+│   ├── hud.c/h         — Dieselpunk brass/amber HUD: analog gauges, ticker readouts, Führerauge targeting computer
 │   ├── audio.c/h       — Erika march music (synthesized from MIDI), radio static overlay
 │   ├── game.c/h        — Game state, menus (main/settings/pause/game over), wave management
 │   ├── game_intro.c    — Intro lore screen: script loading, tile-reveal, draw
@@ -114,6 +114,7 @@ Mondfall/
 │   ├── sound_gen.c/h   — Procedural audio waveform generation utilities
 ├── resources/
 │   ├── crt.fs          — Main CRT post-processing fragment shader (GLSL 330)
+│   ├── fuehrerauge.fs  — Führerauge old-timey TV fragment shader (scanlines, interlace, phosphor, pixelation)
 │   ├── hud.fs          — HUD visor curve fragment shader
 │   ├── intro.txt       — Intro lore text (directives: @STYLE, @PAUSE, @CLEAR)
 ├── sounds/
@@ -130,11 +131,13 @@ Mondfall/
 
 ### Rendering Pipeline
 1. 3D scene renders to a 640x360 `RenderTexture2D` (low-res target)
-2. CRT shader (`resources/crt.fs`) post-processes with: Gaussian scanlines, Trinitron phosphor mask, bloom, chromatic aberration, fishbowl distortion, film grain, breath fog, ghost reflection
-3. Scaled up to window with nearest-neighbor filtering
-4. HUD renders to separate `RenderTexture2D`, curved via `resources/hud.fs` visor shader
-5. HUD render texture recreated on window resize to keep elements positioned correctly
-6. Menu/pause/settings/game-over screens drawn at full window resolution with DPI-aware scaling
+2. **Führerauge pass** (when active): second 3D render at 320x240 to a separate `RenderTexture2D` with 15° FOV, post-processed by `resources/fuehrerauge.fs` (fishbowl distortion, scanlines, interlace, phosphor, 120x90 pixelation, flicker, grain)
+3. CRT shader (`resources/crt.fs`) post-processes main scene with: Gaussian scanlines, Trinitron phosphor mask, bloom, chromatic aberration, fishbowl distortion, film grain, breath fog, ghost reflection
+4. Scaled up to window with nearest-neighbor filtering
+5. HUD renders to separate `RenderTexture2D`, curved via `resources/hud.fs` visor shader — dieselpunk brass/amber aesthetic with analog gauges, ticker readouts, art deco framing, iron crosses, and eagle emblem
+6. Führerauge viewport composited onto HUD as upside-down trapezoid with brass/riveted frame, targeting reticle, and "FUEHRERAUGE" label
+7. HUD render texture recreated on window resize to keep elements positioned correctly
+8. Menu/pause/settings/game-over screens drawn at full window resolution with DPI-aware scaling
 
 ### Performance Optimizations
 - **Cached particle meshes:** Unit sphere and unit cube meshes generated once in `WeaponInit()`, reused via `DrawMesh()` with transform matrices for all projectiles, explosions, and beam glows — eliminates ~200 per-frame mesh regenerations
@@ -222,6 +225,29 @@ Mondfall/
 - Screen scale: 1x–4x (640x360 to 2560x1440), applied via `SetWindowSize()` on change
 - All UI elements use `S(px)` macro scaling relative to `WINDOW_H` (menus) or `RENDER_H` (HUD) to stay proportional at any resolution
 
+### HUD (hud.c/h)
+- **Dieselpunk aesthetic**: brass/amber/copper color palette replacing the original cyan/modern look
+- **Crosshair**: cyan cross+circle (original), hides when Führerauge is active
+- **Health**: analog semicircular gauge dial with needle, tick marks, and color zones (green/yellow/red)
+- **Top/bottom bars**: art deco framing with 45-degree corner cuts, brass borders, decorative rivets
+- **Wave/Kills**: mechanical ticker boxes with brass borders
+- **Ammo**: ticker-style readout with dark inset panel
+- **Reload**: circular gauge with sweeping needle
+- **Radio transmission**: brass borders and amber waveform
+- **Decorations**: iron crosses flanking bars, spread-wing eagle emblem above bottom bar
+- **Config colors**: COLOR_BRASS, COLOR_BRASS_DIM, COLOR_BRASS_BRIGHT, COLOR_COPPER, COLOR_DARK_METAL, COLOR_RIVET, COLOR_GAUGE_BG, COLOR_GAUGE_NEEDLE, COLOR_GAUGE_MARK, COLOR_HUD_TEXT
+
+### Führerauge Targeting Computer (hud.c, player.c, main.c)
+- **Activation**: hold right mouse button; ~0.33s smooth deploy/retract animation
+- **Visual**: swings in on a pivoting metal arm from upper-right of helmet (optometrist phoropter style)
+- **Viewport**: upside-down trapezoid frame showing 5x zoomed view (15° FOV vs 75° normal)
+- **Shader** (`resources/fuehrerauge.fs`): old-timey TV effect — fishbowl distortion, scanlines, interlace, phosphor, 120x90 pixelation, flicker, grain
+- **Frame**: brass/riveted with copper accents, "FUEHRERAUGE" label
+- **Reticle**: brass cross + range circle drawn on zoomed view
+- **Rendering**: second 3D render pass at 320x240 resolution into separate `RenderTexture2D`
+- **Player fields**: `fuehreraugeActive` (bool), `fuehreraugeAnim` (0.0-1.0 deploy progress)
+- Main crosshair disappears when Führerauge is active
+
 ### Sound
 - All sounds procedurally generated from waveforms (no files needed for core game)
 - Erika march synthesized from MIDI note data with brass square waves + drums + radio static
@@ -245,6 +271,7 @@ Mondfall/
 | Enter | Select menu option |
 | Up/Down or W/S | Navigate menus |
 | I | Toggle intro skip (main menu only) |
+| Right Mouse Button (hold) | Führerauge targeting computer (5x zoom) |
 | Left/Right or A/D | Adjust settings |
 
 ## Key Constants
@@ -257,6 +284,9 @@ Mondfall/
 - `PLAYER_HEIGHT` — 1.8 units
 - `MOON_GRAVITY` — 1.62 m/s²
 - `RENDER_W/H` — 640x360 (internal render resolution)
+- `FUEHRERAUGE_RENDER_W/H` — 320x240 (Führerauge render resolution)
+- `FUEHRERAUGE_FOV` — 15° (zoomed FOV)
+- `FUEHRERAUGE_ANIM_SPEED` — deploy/retract animation speed
 - `WINDOW_W/H` — 960x540 (default window size, used as UI scale reference)
 
 ## Adding Content
@@ -280,7 +310,7 @@ Edit `resources/intro.txt` — no recompile needed, it's loaded at startup. One 
 The intro plays once on first PLAY from main menu (tile-by-tile cipher reveal). SPACE/ENTER skips. I key on menu toggles show/skip. Restarts from game over bypass it.
 
 ### Shaders
-`resources/crt.fs` is the main post-processing shader — edit and reload (no recompile needed, it's loaded at runtime). `resources/hud.fs` curves the HUD overlay.
+`resources/crt.fs` is the main post-processing shader — edit and reload (no recompile needed, it's loaded at runtime). `resources/hud.fs` curves the HUD overlay. `resources/fuehrerauge.fs` applies the old-timey TV effect to the Führerauge targeting computer viewport (scanlines, interlace, phosphor, pixelation, flicker, grain); receives a `time` uniform for animated effects.
 
 ## Documentation System
 

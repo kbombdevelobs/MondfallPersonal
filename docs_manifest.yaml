@@ -1,5 +1,5 @@
 manifest_version: 1
-generated_on: 2026-04-04
+generated_on: 2026-04-05
 
 docs:
   # Root documents
@@ -16,8 +16,8 @@ docs:
       - docs/ARCHITECTURE.md
       - docs/documentation-standards.md
     created: 2026-03-15
-    last_updated: 2026-04-04
-    last_reviewed: 2026-04-04
+    last_updated: 2026-04-05
+    last_reviewed: 2026-04-05
 
   - title: "Mondfall — Nazis on the Moon FPS (AGENTS Mirror)"
     path: AGENTS.md
@@ -75,8 +75,8 @@ docs:
       - docs/rendering-pipeline.md
       - docs/ecs-integration.md
     created: 2026-03-15
-    last_updated: 2026-04-04
-    last_reviewed: 2026-04-04
+    last_updated: 2026-04-05
+    last_reviewed: 2026-04-05
 
   # Documentation infrastructure
   - title: Documentation Standards

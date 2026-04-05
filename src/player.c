@@ -15,6 +15,8 @@ void PlayerInit(Player *player) {
     player->headBob = 0.0f;
     player->headBobTimer = 0.0f;
     player->mouseSensitivity = MOUSE_SENSITIVITY;
+    player->fuehreraugeActive = false;
+    player->fuehreraugeAnim = 0.0f;
 
     player->camera.position = player->position;
     player->camera.target = (Vector3){0.0f, PLAYER_HEIGHT, -1.0f};
@@ -39,6 +41,16 @@ void PlayerUpdate(Player *player, float dt) {
 
     if (player->pitch > PITCH_LIMIT) player->pitch = PITCH_LIMIT;
     if (player->pitch < -PITCH_LIMIT) player->pitch = -PITCH_LIMIT;
+
+    // Fuehrerauge (Leader Eye) activation
+    player->fuehreraugeActive = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
+    if (player->fuehreraugeActive) {
+        player->fuehreraugeAnim += FUEHRERAUGE_ANIM_SPEED * dt;
+        if (player->fuehreraugeAnim > 1.0f) player->fuehreraugeAnim = 1.0f;
+    } else {
+        player->fuehreraugeAnim -= FUEHRERAUGE_ANIM_SPEED * dt;
+        if (player->fuehreraugeAnim < 0.0f) player->fuehreraugeAnim = 0.0f;
+    }
 
     // Lunge timer — blocks WASD while active
     if (player->lungeTimer > 0) {

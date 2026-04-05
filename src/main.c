@@ -44,6 +44,12 @@ int main(void) {
     RenderTexture2D hudTarget = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
     Shader hudShader = LoadShader(0, "resources/hud.fs");
 
+    // Fuehrerauge (Leader Eye) zoom render target + fishbowl shader
+    RenderTexture2D feTarget = LoadRenderTexture(FUEHRERAUGE_RENDER_W, FUEHRERAUGE_RENDER_H);
+    SetTextureFilter(feTarget.texture, TEXTURE_FILTER_POINT);
+    Shader feShader = LoadShader(0, "resources/fuehrerauge.fs");
+    int feTimeLoc = GetShaderLocation(feShader, "time");
+
     Game game;
     Player player;
     World world;
@@ -506,6 +512,29 @@ int main(void) {
                 }
             EndMode3D();
             EndTextureMode();
+
+            // Fuehrerauge zoom render pass (second 3D render at narrow FOV)
+            if (player.fuehreraugeAnim > 0.0f) {
+                Camera3D zoomCam = player.camera;
+                zoomCam.fovy = FUEHRERAUGE_FOV;
+
+                BeginTextureMode(feTarget);
+                ClearBackground(BLACK);
+                BeginMode3D(zoomCam);
+                    if (StructureIsPlayerInside(&structures)) {
+                        StructureManagerDrawInterior(&structures);
+                    } else {
+                        WorldDrawSky(&world, zoomCam);
+                        WorldDraw(&world, player.position, zoomCam);
+                        StructureManagerDraw(&structures, player.position);
+                        EcsEnemyManagerDraw(ecsWorld, zoomCam, game.testMode);
+                        LanderManagerDraw(&landers, player.position);
+                        PickupManagerDraw(&pickups);
+                        WeaponDrawWorld(&weapon);
+                    }
+                EndMode3D();
+                EndTextureMode();
+            }
         }
 
         // ---- DRAW TO WINDOW ----
@@ -515,6 +544,7 @@ int main(void) {
         // Update shader time uniform
         float timeVal = (float)GetTime();
         SetShaderValue(crtShader, timeLoc, &timeVal, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(feShader, feTimeLoc, &timeVal, SHADER_UNIFORM_FLOAT);
 
         if (renderGameplay) {
             float scale = fminf(
@@ -545,6 +575,12 @@ int main(void) {
 
                 BeginTextureMode(hudTarget);
                 ClearBackground(BLANK);
+                // Fuehrerauge drawn first so announcements layer on top
+                if (player.fuehreraugeAnim > 0.0f) {
+                    HudDrawFuehrerauge(feTarget.texture, feShader,
+                        player.fuehreraugeAnim,
+                        hudTarget.texture.width, hudTarget.texture.height);
+                }
                 HudDraw(&player, &weapon, &game, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawPickup(&pickups, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawLanderArrows(&landers, player.camera, hudTarget.texture.width, hudTarget.texture.height);
@@ -596,8 +632,10 @@ int main(void) {
     StructureManagerUnload(&structures);
     UnloadShader(crtShader);
     UnloadShader(hudShader);
+    UnloadShader(feShader);
     UnloadRenderTexture(target);
     UnloadRenderTexture(hudTarget);
+    UnloadRenderTexture(feTarget);
     CloseAudioDevice();
     CloseWindow();
     return 0;
