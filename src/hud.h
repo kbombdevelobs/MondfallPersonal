@@ -8,6 +8,7 @@
 #include "pickup.h"
 #include "lander.h"
 #include "structure/structure.h"
+#include "hud/hud_fuehrerauge.h"
 
 void HudDraw(Player *player, Weapon *weapon, Game *game, int screenW, int screenH);
 void HudDrawPickup(PickupManager *pm, int sw, int sh);
@@ -15,6 +16,5 @@ void HudDrawLanderArrows(LanderManager *lm, Camera3D camera, int sw, int sh);
 void HudDrawRadioTransmission(float timer, int sw, int sh);
 void HudDrawStructurePrompt(StructurePrompt prompt, int resuppliesLeft, float emptyTimer, int sw, int sh);
 void HudDrawRankKill(float timer, int rankType, int sw, int sh);
-void HudDrawFuehrerauge(Texture2D zoomTex, Shader fishbowlShader, float animProgress, int sw, int sh);
 
 #endif
