@@ -19,6 +19,8 @@ typedef struct {
     float headBobTimer;
     float mouseSensitivity;
     float lungeTimer;           // > 0 means lunge is active, WASD locked out
+    bool fuehreraugeActive;     // RMB currently held
+    float fuehreraugeAnim;      // 0.0 = retracted, 1.0 = fully deployed
 } Player;
 
 void PlayerInit(Player *player);
