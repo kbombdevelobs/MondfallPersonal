@@ -6,26 +6,26 @@
 // INTERIOR COLOR PALETTE (furniture subset)
 // ============================================================================
 
-#define INT_FLOOR_WOOD  (Color){65, 45, 30, 255}
-#define INT_CARPET_RED  (Color){120, 25, 20, 255}
-#define INT_CARPET_GOLD (Color){160, 130, 50, 255}
-#define INT_COUCH_LEATH (Color){55, 30, 18, 255}
-#define INT_COUCH_CUSH  (Color){70, 38, 22, 255}
-#define INT_COUCH_ARM   (Color){48, 26, 15, 255}
-#define INT_TABLE_WOOD  (Color){60, 42, 28, 255}
-#define INT_TABLE_TOP   (Color){50, 35, 22, 255}
-#define INT_BAR_WOOD    (Color){55, 38, 25, 255}
-#define INT_BAR_TOP     (Color){45, 32, 20, 255}
-#define INT_BAR_BRASS   (Color){170, 140, 60, 255}
-#define INT_BOTTLE_GRN  (Color){30, 80, 40, 200}
-#define INT_BOTTLE_AMB  (Color){140, 90, 30, 200}
-#define INT_BOTTLE_CLR  (Color){180, 180, 190, 160}
-#define INT_GLASS       (Color){200, 200, 210, 100}
-#define INT_IRON_CROSS  (Color){30, 30, 30, 255}
-#define INT_FLAG_RED    (Color){180, 30, 25, 255}
-#define INT_FLAG_WHITE  (Color){200, 200, 195, 255}
-#define INT_UNIFORM_GRN (Color){50, 60, 45, 255}
-#define INT_UNIFORM_GRY (Color){80, 80, 75, 255}
+#define INT_FLOOR_WOOD  (Color){130, 95, 65, 255}
+#define INT_CARPET_RED  (Color){200, 55, 40, 255}
+#define INT_CARPET_GOLD (Color){240, 200, 90, 255}
+#define INT_COUCH_LEATH (Color){115, 70, 40, 255}
+#define INT_COUCH_CUSH  (Color){135, 85, 50, 255}
+#define INT_COUCH_ARM   (Color){100, 60, 35, 255}
+#define INT_TABLE_WOOD  (Color){120, 90, 60, 255}
+#define INT_TABLE_TOP   (Color){105, 78, 50, 255}
+#define INT_BAR_WOOD    (Color){115, 82, 55, 255}
+#define INT_BAR_TOP     (Color){95, 70, 45, 255}
+#define INT_BAR_BRASS   (Color){230, 200, 100, 255}
+#define INT_BOTTLE_GRN  (Color){60, 150, 80, 220}
+#define INT_BOTTLE_AMB  (Color){210, 150, 60, 220}
+#define INT_BOTTLE_CLR  (Color){220, 220, 230, 180}
+#define INT_GLASS       (Color){230, 230, 240, 130}
+#define INT_IRON_CROSS  (Color){60, 60, 60, 255}
+#define INT_FLAG_RED    (Color){230, 55, 40, 255}
+#define INT_FLAG_WHITE  (Color){240, 240, 235, 255}
+#define INT_UNIFORM_GRN (Color){100, 120, 90, 255}
+#define INT_UNIFORM_GRY (Color){140, 140, 130, 255}
 
 // Exterior colors needed for pipes
 #define EXT_ANTENNA     (Color){120, 118, 112, 255}

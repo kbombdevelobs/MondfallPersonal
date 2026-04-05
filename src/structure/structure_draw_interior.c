@@ -4,40 +4,40 @@
 #include <math.h>
 
 // ============================================================================
-// INTERIOR COLOR PALETTE
+// INTERIOR COLOR PALETTE — brightened to survive CRT shader darkening
 // ============================================================================
 
-#define INT_FLOOR_WOOD  (Color){65, 45, 30, 255}
-#define INT_FLOOR_DARK  (Color){50, 35, 22, 255}
-#define INT_FLOOR_PLANK (Color){55, 38, 25, 255}
-#define INT_CARPET_RED  (Color){120, 25, 20, 255}
-#define INT_CARPET_DARK (Color){90, 18, 15, 255}
-#define INT_CARPET_GOLD (Color){160, 130, 50, 255}
-#define INT_WALL_CREAM  (Color){140, 128, 105, 255}
-#define INT_WALL_LOWER  (Color){70, 55, 40, 255}
-#define INT_WALL_TRIM   (Color){110, 85, 55, 255}
-#define INT_WALL_MOULD  (Color){95, 72, 45, 255}
-#define INT_CEILING     (Color){120, 110, 95, 255}
-#define INT_CEILING_DK  (Color){100, 90, 78, 255}
-#define INT_BEAM        (Color){60, 48, 35, 255}
-#define INT_CHANDELIER  (Color){180, 160, 80, 255}
-#define INT_LIGHT_WARM  (Color){255, 230, 170, 120}
-#define INT_IRON_CROSS  (Color){30, 30, 30, 255}
-#define INT_PORTRAIT_FR (Color){130, 100, 50, 255}
-#define INT_PORTRAIT_BG (Color){60, 55, 45, 255}
-#define INT_SKIN        (Color){190, 160, 130, 255}
-#define INT_SKIN_DK     (Color){150, 120, 90, 255}
-#define INT_UNIFORM_GRN (Color){50, 60, 45, 255}
-#define INT_UNIFORM_GRY (Color){80, 80, 75, 255}
-#define INT_HAIR_DARK   (Color){40, 35, 30, 255}
-#define INT_HAIR_GREY   (Color){120, 115, 110, 255}
-#define INT_FLAG_RED    (Color){180, 30, 25, 255}
-#define INT_FLAG_WHITE  (Color){200, 200, 195, 255}
-#define INT_CLOSET_BODY (Color){45, 55, 45, 255}
-#define INT_CLOSET_DOOR (Color){50, 65, 50, 255}
-#define INT_CLOSET_GLOW (Color){30, 200, 80, 200}
-#define INT_DOOR_FRAME  (Color){60, 48, 35, 255}
-#define INT_BAR_BRASS   (Color){170, 140, 60, 255}
+#define INT_FLOOR_WOOD  (Color){130, 95, 65, 255}
+#define INT_FLOOR_DARK  (Color){100, 75, 50, 255}
+#define INT_FLOOR_PLANK (Color){110, 80, 55, 255}
+#define INT_CARPET_RED  (Color){200, 55, 40, 255}
+#define INT_CARPET_DARK (Color){160, 40, 30, 255}
+#define INT_CARPET_GOLD (Color){240, 200, 90, 255}
+#define INT_WALL_CREAM  (Color){220, 205, 175, 255}
+#define INT_WALL_LOWER  (Color){140, 115, 85, 255}
+#define INT_WALL_TRIM   (Color){180, 145, 100, 255}
+#define INT_WALL_MOULD  (Color){165, 130, 85, 255}
+#define INT_CEILING     (Color){195, 185, 165, 255}
+#define INT_CEILING_DK  (Color){170, 158, 140, 255}
+#define INT_BEAM        (Color){120, 100, 75, 255}
+#define INT_CHANDELIER  (Color){240, 220, 130, 255}
+#define INT_LIGHT_WARM  (Color){255, 240, 190, 180}
+#define INT_IRON_CROSS  (Color){60, 60, 60, 255}
+#define INT_PORTRAIT_FR (Color){200, 165, 95, 255}
+#define INT_PORTRAIT_BG (Color){110, 100, 85, 255}
+#define INT_SKIN        (Color){235, 210, 180, 255}
+#define INT_SKIN_DK     (Color){200, 170, 140, 255}
+#define INT_UNIFORM_GRN (Color){100, 120, 90, 255}
+#define INT_UNIFORM_GRY (Color){140, 140, 130, 255}
+#define INT_HAIR_DARK   (Color){75, 65, 55, 255}
+#define INT_HAIR_GREY   (Color){180, 175, 170, 255}
+#define INT_FLAG_RED    (Color){230, 55, 40, 255}
+#define INT_FLAG_WHITE  (Color){240, 240, 235, 255}
+#define INT_CLOSET_BODY (Color){90, 110, 90, 255}
+#define INT_CLOSET_DOOR (Color){100, 125, 100, 255}
+#define INT_CLOSET_GLOW (Color){50, 240, 110, 220}
+#define INT_DOOR_FRAME  (Color){120, 100, 75, 255}
+#define INT_BAR_BRASS   (Color){230, 200, 100, 255}
 
 // Exterior colors used by doors and closet
 #define EXT_DOOR_DARK   (Color){12, 12, 16, 255}
@@ -377,6 +377,17 @@ static void DrawResupplyCloset(float y, float flashTimer, bool expended) {
     DrawCube((Vector3){0, closetY + 1.95f, closetZ - 0.45f}, 1.4f, 0.2f, 0.04f, EXT_CONCRETE_DK);
 }
 
+static void DrawInteriorAmbientLight(float y) {
+    // Warm ambient light pools — simulates chandelier and wall sconces illuminating the room
+    DrawCube((Vector3){0, y + 0.03f, 0}, 8.0f, 0.01f, 8.0f, (Color){255, 235, 180, 80});
+    float halfW = MOONBASE_INTERIOR_W * 0.5f;
+    float halfD = MOONBASE_INTERIOR_D * 0.5f;
+    DrawCube((Vector3){halfW - 1.0f, y + 0.03f, 0}, 3.0f, 0.01f, 6.0f, (Color){255, 225, 160, 50});
+    DrawCube((Vector3){-halfW + 1.0f, y + 0.03f, 0}, 3.0f, 0.01f, 6.0f, (Color){255, 225, 160, 50});
+    DrawCube((Vector3){0, y + 2.5f, halfD - 0.12f}, 6.0f, 3.0f, 0.01f, (Color){255, 230, 170, 35});
+    DrawCube((Vector3){0, y + 2.5f, -halfD + 0.12f}, 6.0f, 3.0f, 0.01f, (Color){255, 230, 170, 25});
+}
+
 void StructureManagerDrawInterior(StructureManager *sm) {
     if (sm->insideIndex < 0) return;
     Structure *s = &sm->structures[sm->insideIndex];
@@ -384,6 +395,7 @@ void StructureManagerDrawInterior(StructureManager *sm) {
 
     DrawInteriorFloor(y);
     DrawInteriorWalls(y);
+    DrawInteriorAmbientLight(y);
     DrawInteriorCeiling(y);
     DrawInteriorDoors(y);
     DrawPortraits(y);
