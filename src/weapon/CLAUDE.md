@@ -3,8 +3,8 @@ title: Weapon System
 status: Active
 owner_area: Weapon
 created: 2026-04-04
-last_updated: 2026-04-04
-last_reviewed: 2026-04-04
+last_updated: 2026-04-10
+last_reviewed: 2026-04-10
 parent_doc: CLAUDE.md
 related_docs:
   - docs/combat-system.md
@@ -85,4 +85,13 @@ Pickup weapon stats and rendering are handled through the same weapon system; pi
 - All weapon stats are configured in `WeaponInit()` in `src/weapon.c`. Viewmodel geometry is in `WeaponDrawFirst()` in `weapon_draw.c`.
 - The cached mesh pattern (meshSphere/meshCube generated once in WeaponInit, reused via DrawMesh with transform matrices) eliminates ~200 per-frame mesh regenerations. Do not replace with per-frame GenMesh calls.
 - When adding a new weapon: add its WeaponType enum value in weapon.h, configure stats in WeaponInit, add fire logic in WeaponFire, add viewmodel in WeaponDrawFirst, and generate a procedural sound in weapon_sound.c.
-- Pickup weapons (KOSMOS-7, LIBERTY BLASTER) are defined in `src/pickup.c/h` but render through the same weapon draw pipeline.
+- Pickup weapons (KOSMOS-7, LIBERTY BLASTER, KS-23 Molot, M8A1 Starhawk, Zarya TK-4, ARC-9 Longbow) are defined in `src/pickup.c/h` but render through the same weapon draw pipeline.
+
+## Weapon Model System
+
+| File | Purpose |
+|------|---------|
+| `weapon_model.h` | WeaponModelSet struct: playerWeapons[WEAPON_COUNT], pickupWeapons[PICKUP_TYPE_COUNT], loaded flags, available flag |
+| `weapon_model.c` | Load .glb models from `resources/models/weapons/`. Graceful fallback if files missing. WeaponModelsLoad/Unload/Get |
+
+Model files: `mond_mp40.glb`, `raketenfaust.glb`, `jackhammer.glb`, `kosmos7.glb`, `liberty.glb`, `ks23_molot.glb`, `m8a1_starhawk.glb`, `zarya_tk4.glb`, `arc9_longbow.glb`. Rendered with 180-degree Y rotation for Blender export convention, 1.6-1.8x scale.
