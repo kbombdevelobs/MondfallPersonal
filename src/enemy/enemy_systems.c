@@ -92,7 +92,7 @@ void EcsEnemyDamage(ecs_world_t *world, ecs_entity_t entity, float damage) {
         ecs_remove(world, entity, EcAlive);
         ecs_add(world, entity, EcDying);
 
-        anim->deathAngle = 0;
+        anim->deathAngle = ((float)rand() / RAND_MAX - 0.5f) * 20.0f;  // random initial bias
         int deathStyle = (rand() % 100 < 40) ? 1 : 0;
 
         if (deathStyle == 0) {
@@ -105,7 +105,7 @@ void EcsEnemyDamage(ecs_world_t *world, ecs_entity_t entity, float damage) {
                 .ragdollVelX = cosf(launchAngle) * launchForce,
                 .ragdollVelZ = sinf(launchAngle) * launchForce,
                 .ragdollVelY = 2.0f + ((float)rand() / RAND_MAX) * 4.0f,
-                .deathTimer = 10.0f,
+                .deathTimer = DEATH_BODY_PERSIST_TIME,
                 .deathStyle = 0
             });
         } else {
@@ -114,7 +114,7 @@ void EcsEnemyDamage(ecs_world_t *world, ecs_entity_t entity, float damage) {
                 .spinY = (float)(rand() % 60) - 30.0f,          // slight yaw
                 .spinZ = (float)(rand() % 40) - 20.0f,          // slight lateral
                 .ragdollVelX = 0, .ragdollVelZ = 0, .ragdollVelY = 0,
-                .deathTimer = 12.0f,
+                .deathTimer = DEATH_BODY_PERSIST_TIME,
                 .deathStyle = 1
             });
         }
@@ -242,7 +242,15 @@ void EcsEnemyDecapitate(ecs_world_t *world, ecs_entity_t entity, Vector3 hitDir)
 
     // Ragdoll launch — matches normal ragdoll blowout force
     float driftAngle = ((float)rand() / RAND_MAX) * 2.0f * PI;
-    float driftForce = 3.0f + ((float)rand() / RAND_MAX) * 5.0f;
+    float driftForce = 2.0f + ((float)rand() / RAND_MAX) * 6.0f;  // wider range
+    // Random topple direction
+    float toppleX = ((float)rand() / RAND_MAX - 0.5f) * 100.0f;  // random pitch spin
+    float toppleZ = ((float)rand() / RAND_MAX - 0.5f) * 60.0f;   // random roll
+
+    // Random initial death angle bias so bodies don't all start upright
+    EcAnimation *decapAnim = ecs_ensure(world, entity, EcAnimation);
+    if (decapAnim) decapAnim->deathAngle = ((float)rand() / RAND_MAX - 0.5f) * 30.0f;
+
     ecs_set(world, entity, EcDecapitateDeath, {
         .timer = 0,
         .bloodTimer = 0,
@@ -252,9 +260,10 @@ void EcsEnemyDecapitate(ecs_world_t *world, ecs_entity_t entity, Vector3 hitDir)
             sinf(driftAngle) * driftForce
         },
         .driftVelY = 2.0f + ((float)rand() / RAND_MAX) * 4.0f,
-        .spinX = 150.0f + (float)(rand() % 200),   // roll: 150-350 deg/s
-        .spinY = (float)(rand() % 200) - 100.0f,    // yaw:  -100 to +100 deg/s
-        .deathTimer = 10.0f,
+        .spinX = 150.0f + (float)(rand() % 200) + toppleX,  // roll with random topple
+        .spinY = (float)(rand() % 200) - 100.0f,             // yaw:  -100 to +100 deg/s
+        .spinZ = toppleZ,                                     // per-enemy random roll
+        .deathTimer = DEATH_BODY_PERSIST_TIME,
         .hitDir = hitDir
     });
 

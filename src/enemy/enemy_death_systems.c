@@ -180,6 +180,7 @@ static void SysDecapitateDeath(ecs_iter_t *it) {
         // Decay spin
         dd[i].spinX *= (1.0f - 0.3f * dt);
         dd[i].spinY *= (1.0f - 0.3f * dt);
+        dd[i].spinZ *= (1.0f - 0.3f * dt);
 
         // Apply drift velocity
         tr[i].position.x += dd[i].driftVel.x * dt;
@@ -210,6 +211,143 @@ static void SysDecapitateDeath(ecs_iter_t *it) {
 
         if (dd[i].deathTimer <= 0) {
             ecs_delete(it->world, it->entities[i]);
+        }
+    }
+}
+
+// ============================================================================
+// SysDeadBodyCleanup -- enforce MAX_DEAD_BODIES limit by removing oldest
+// ============================================================================
+static ecs_query_t *g_ragdollQuery = NULL;
+static ecs_query_t *g_vaporizeQuery = NULL;
+static ecs_query_t *g_evisQuery = NULL;
+static ecs_query_t *g_decapQuery = NULL;
+
+static void SysDeadBodyCleanup(ecs_iter_t *it) {
+    ecs_world_t *world = it->world;
+
+    // Count all dead bodies and track the oldest (lowest deathTimer)
+    int totalDead = 0;
+    ecs_entity_t oldestEntity = 0;
+    float oldestTimer = 999999.0f;
+
+    // Check ragdoll deaths
+    if (g_ragdollQuery) {
+        ecs_iter_t rit = ecs_query_iter(world, g_ragdollQuery);
+        while (ecs_query_next(&rit)) {
+            EcRagdollDeath *rd = ecs_field(&rit, EcRagdollDeath, 0);
+            for (int i = 0; i < rit.count; i++) {
+                totalDead++;
+                if (rd[i].deathTimer < oldestTimer) {
+                    oldestTimer = rd[i].deathTimer;
+                    oldestEntity = rit.entities[i];
+                }
+            }
+        }
+    }
+
+    // Check vaporize deaths
+    if (g_vaporizeQuery) {
+        ecs_iter_t vit = ecs_query_iter(world, g_vaporizeQuery);
+        while (ecs_query_next(&vit)) {
+            EcVaporizeDeath *vd = ecs_field(&vit, EcVaporizeDeath, 0);
+            for (int i = 0; i < vit.count; i++) {
+                totalDead++;
+                if (vd[i].deathTimer < oldestTimer) {
+                    oldestTimer = vd[i].deathTimer;
+                    oldestEntity = vit.entities[i];
+                }
+            }
+        }
+    }
+
+    // Check eviscerate deaths
+    if (g_evisQuery) {
+        ecs_iter_t eit = ecs_query_iter(world, g_evisQuery);
+        while (ecs_query_next(&eit)) {
+            EcEviscerateDeath *ed = ecs_field(&eit, EcEviscerateDeath, 0);
+            for (int i = 0; i < eit.count; i++) {
+                totalDead++;
+                if (ed[i].deathTimer < oldestTimer) {
+                    oldestTimer = ed[i].deathTimer;
+                    oldestEntity = eit.entities[i];
+                }
+            }
+        }
+    }
+
+    // Check decapitate deaths
+    if (g_decapQuery) {
+        ecs_iter_t dit = ecs_query_iter(world, g_decapQuery);
+        while (ecs_query_next(&dit)) {
+            EcDecapitateDeath *dd = ecs_field(&dit, EcDecapitateDeath, 0);
+            for (int i = 0; i < dit.count; i++) {
+                totalDead++;
+                if (dd[i].deathTimer < oldestTimer) {
+                    oldestTimer = dd[i].deathTimer;
+                    oldestEntity = dit.entities[i];
+                }
+            }
+        }
+    }
+
+    // Force-delete oldest bodies when over the limit
+    while (totalDead > MAX_DEAD_BODIES && oldestEntity != 0) {
+        if (ecs_is_alive(world, oldestEntity)) {
+            ecs_delete(world, oldestEntity);
+        }
+        totalDead--;
+        // Find next oldest for subsequent deletions
+        oldestEntity = 0;
+        oldestTimer = 999999.0f;
+
+        if (g_ragdollQuery) {
+            ecs_iter_t rit = ecs_query_iter(world, g_ragdollQuery);
+            while (ecs_query_next(&rit)) {
+                EcRagdollDeath *rd = ecs_field(&rit, EcRagdollDeath, 0);
+                for (int i = 0; i < rit.count; i++) {
+                    if (rd[i].deathTimer < oldestTimer) {
+                        oldestTimer = rd[i].deathTimer;
+                        oldestEntity = rit.entities[i];
+                    }
+                }
+            }
+        }
+        if (g_decapQuery) {
+            ecs_iter_t dit = ecs_query_iter(world, g_decapQuery);
+            while (ecs_query_next(&dit)) {
+                EcDecapitateDeath *dd = ecs_field(&dit, EcDecapitateDeath, 0);
+                for (int i = 0; i < dit.count; i++) {
+                    if (dd[i].deathTimer < oldestTimer) {
+                        oldestTimer = dd[i].deathTimer;
+                        oldestEntity = dit.entities[i];
+                    }
+                }
+            }
+        }
+        if (g_vaporizeQuery) {
+            ecs_iter_t vit = ecs_query_iter(world, g_vaporizeQuery);
+            while (ecs_query_next(&vit)) {
+                EcVaporizeDeath *vd = ecs_field(&vit, EcVaporizeDeath, 0);
+                for (int i = 0; i < vit.count; i++) {
+                    if (vd[i].deathTimer < oldestTimer) {
+                        oldestTimer = vd[i].deathTimer;
+                        oldestEntity = vit.entities[i];
+                    }
+                }
+            }
+        }
+        if (g_evisQuery) {
+            ecs_iter_t eit = ecs_query_iter(world, g_evisQuery);
+            while (ecs_query_next(&eit)) {
+                EcEviscerateDeath *ed = ecs_field(&eit, EcEviscerateDeath, 0);
+                for (int i = 0; i < eit.count; i++) {
+                    if (ed[i].deathTimer < oldestTimer) {
+                        oldestTimer = ed[i].deathTimer;
+                        oldestEntity = eit.entities[i];
+                    }
+                }
+            }
         }
     }
 }
@@ -303,5 +441,31 @@ void EcsEnemyDeathSystemsRegister(ecs_world_t *world) {
             { .id = ecs_id(EcEnemyResources), .src.id = ecs_id(EcEnemyResources) }
         },
         .callback = SysRadioTimer
+    });
+
+    // Create queries for dead body cleanup
+    g_ragdollQuery = ecs_query(world, {
+        .terms = {{ .id = ecs_id(EcRagdollDeath) }}
+    });
+    g_vaporizeQuery = ecs_query(world, {
+        .terms = {{ .id = ecs_id(EcVaporizeDeath) }}
+    });
+    g_evisQuery = ecs_query(world, {
+        .terms = {{ .id = ecs_id(EcEviscerateDeath) }}
+    });
+    g_decapQuery = ecs_query(world, {
+        .terms = {{ .id = ecs_id(EcDecapitateDeath) }}
+    });
+
+    // SysDeadBodyCleanup -- EcsPostUpdate (runs after death systems)
+    ecs_system_init(world, &(ecs_system_desc_t){
+        .entity = ecs_entity(world, {
+            .name = "SysDeadBodyCleanup",
+            .add = ecs_ids(ecs_dependson(EcsPostUpdate))
+        }),
+        .query.terms = {
+            { .id = ecs_id(EcEnemyResources), .src.id = ecs_id(EcEnemyResources) }
+        },
+        .callback = SysDeadBodyCleanup
     });
 }

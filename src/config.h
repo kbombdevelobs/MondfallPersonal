@@ -95,6 +95,10 @@
 #define RELOAD_DURATION      1.5f
 #define BEAM_TRAIL_LIFE      0.1f
 
+// --- Death / Body Persistence ---
+#define DEATH_BODY_PERSIST_TIME  20.0f  // bodies stay 20 seconds (was 10-12)
+#define MAX_DEAD_BODIES          30     // max concurrent dead bodies before cleanup
+
 // --- Enemy: Limits ---
 #define MAX_ENEMIES 50
 #define TEST_MAX_ENEMIES    200
@@ -132,12 +136,12 @@
 #define ENEMY_MUZZLE_DECAY    8.0f
 
 // --- World ---
-#define CHUNK_SIZE           60.0f
-#define RENDER_CHUNKS        5
+#define CHUNK_SIZE           80.0f
+#define RENDER_CHUNKS        7
 #define MESH_RES             12
 #define MAX_CHUNK_CRATERS    5
 #define MAX_CHUNK_ROCKS      10
-#define MAX_CHUNKS_PER_FRAME 3
+#define MAX_CHUNKS_PER_FRAME 5
 #define MAX_STARS            300
 #define MAX_CACHED_CHUNKS    (RENDER_CHUNKS * RENDER_CHUNKS)
 

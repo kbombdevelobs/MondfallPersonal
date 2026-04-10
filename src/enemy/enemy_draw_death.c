@@ -355,7 +355,7 @@ void DrawAstronautRagdoll(Enemy *e) {
     Vector3 pos = e->position;
 
     if (e->deathStyle == 0) {
-        float elapsed = 10.0f - e->deathTimer;
+        float elapsed = DEATH_BODY_PERSIST_TIME - e->deathTimer;
         // Suit breach point — deterministic per enemy
         int limbSeed = (int)((size_t)e % 4);
         Vector3 leakOff = {0, 0, 0};
@@ -634,7 +634,7 @@ void DrawAstronautDecapitate(Enemy *e) {
     rlTranslatef(pos.x, pos.y, pos.z);
     rlRotatef(e->facingAngle * RAD2DEG, 0, 1, 0);
     rlRotatef(e->deathAngle, 1, 0, 0);
-    rlRotatef(e->deathAngle * 0.3f, 0, 0, 1);
+    rlRotatef(e->spinX * 0.02f + e->spinZ * 0.5f, 0, 0, 1);  // per-enemy random topple
     rlRotatef(e->spinZ * 0.5f, 0, 1, 0);
 
     Color suitCol = {fc.suitBase.r, fc.suitBase.g, fc.suitBase.b, alpha};
@@ -769,8 +769,9 @@ void DrawAstronautDecapitateSkeletal(Enemy *e, EnemyManager *em) {
             rlPushMatrix();
             rlTranslatef(pos.x, pos.y, pos.z);
             rlRotatef(e->facingAngle * RAD2DEG, 0, 1, 0);
-            /* Gentle topple */
-            rlRotatef(e->deathAngle * 0.3f, 1, 0, 0);
+            /* Per-enemy random topple direction using spinX/spinZ */
+            rlRotatef(e->deathAngle * 0.3f + e->spinX * 0.01f, 1, 0, 0);
+            rlRotatef(e->spinZ * 0.4f, 0, 0, 1);
             rlRotatef(180.0f, 0, 1, 0);
 
             DrawModel(am->model, (Vector3){0, 0, 0}, 1.0f, (Color){alpha,alpha,alpha,alpha});

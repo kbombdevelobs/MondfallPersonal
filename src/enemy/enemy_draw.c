@@ -3,6 +3,7 @@
 #include "enemy_bodydef.h"
 #include "enemy_model_loader.h"
 #include "enemy_model_bones.h"
+#include "config.h"
 #include "world.h"
 #include "rlgl.h"
 #include <math.h>
@@ -79,10 +80,10 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
                     rlRotatef(cosf(s * 1.3f) * f * 10.0f, 0, 1, 0);
                 }
 
-                /* Dying: apply death rotation */
+                /* Dying: apply death rotation with per-enemy random topple */
                 if (e->state == ENEMY_DYING) {
                     rlRotatef(e->deathAngle, 1, 0, 0);
-                    rlRotatef(e->deathAngle * 0.3f, 0, 0, 1);
+                    rlRotatef(e->spinX * 0.02f + e->spinZ * 0.5f, 0, 0, 1);
                     rlRotatef(e->spinZ * 0.5f, 0, 1, 0);
                 }
 
@@ -171,10 +172,10 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
         }
     }
 
-    /* Dying rotation */
+    /* Dying rotation with per-enemy random topple */
     if (e->state == ENEMY_DYING) {
         rlRotatef(e->deathAngle, 1, 0, 0);
-        rlRotatef(e->deathAngle * 0.3f, 0, 0, 1);
+        rlRotatef(e->spinX * 0.02f + e->spinZ * 0.5f, 0, 0, 1);
         rlRotatef(e->spinZ * 0.5f, 0, 1, 0);
     }
 
@@ -206,13 +207,15 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
 
     /* === RIGHT ARM + GUN IN HAND === */
     {
+        float armSwingR = 0;  // track arm swing for elbow bend
         rlPushMatrix();
         rlTranslatef(bd->armPivot.x, bd->armPivot.y, bd->armPivot.z);
         if (useSprings && ls) {
+            armSwingR = ls->armSwingR.angle;
             rlRotatef(ls->armSwingR.angle, 1, 0, 0);
             rlRotatef(ls->armSpreadR.angle, 0, 0, 1);
         } else if (e->state == ENEMY_DYING) {
-            float elapsed = (e->deathStyle == 0 ? 10.0f : 12.0f) - e->deathTimer;
+            float elapsed = DEATH_BODY_PERSIST_TIME - e->deathTimer;
             if (elapsed < 0) elapsed = 0;
             float t_ = (float)GetTime();
             float ks_ = e->facingAngle * 2.31f;
@@ -222,6 +225,7 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             float flailSpread = cosf(t_ * 3.0f + ks_) * 20.0f * flailFade;
             float limpSwing = 5.0f + seed1 * 10.0f;
             float limpSpread = 25.0f + seed1 * 20.0f;
+            armSwingR = limpSwing + flailSwing;
             rlRotatef(limpSwing + flailSwing, 1, 0, 0);
             rlRotatef(limpSpread + flailSpread, 0, 0, 1);
         } else {
@@ -235,10 +239,41 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             float bPitch = ap->armBasePitch + gun->restPitchOffset;
             float sw = (bPitch - nA*wd + e->shootAnim*22.0f)*(1.0f-kd_) + rA*kd_;
             float sp_ = ap->armBaseSpread*(1.0f-kd_) + rS*kd_;
+            armSwingR = sw;
             rlRotatef(sw, 1, 0, 0);
             rlRotatef(sp_, 0, 0, 1);
         }
-        DrawPartGroup(&bd->armParts, pal, models, hf, fac);
+
+        /* Upper arm — draw arm model only (part 0) */
+        {
+            Color armCol = BodyColorResolve(pal, bd->armParts.parts[0].color,
+                bd->armParts.parts[0].fixedColor, bd->armParts.parts[0].dim);
+            if (hf > 0) armCol = FlashColor(armCol, hf);
+            if (models && bd->armParts.parts[0].modelId >= 0)
+                DrawModel(models[bd->armParts.parts[0].modelId],
+                    bd->armParts.parts[0].pos, 1.0f, armCol);
+        }
+
+        /* Forearm with elbow bend */
+        {
+            Color suitCol = BodyColorResolve(pal, COL_SUIT, (Color){0,0,0,0}, false);
+            if (hf > 0) suitCol = FlashColor(suitCol, hf);
+            Color gloveCol = BodyColorResolve(pal, COL_GLOVE, (Color){0,0,0,0}, false);
+            if (hf > 0) gloveCol = FlashColor(gloveCol, hf);
+
+            rlPushMatrix();
+            rlTranslatef(0, -0.4f, 0);  // elbow position
+            float elbowBend = 0;
+            if (alive) {
+                // Elbow bends more when arm swings back, straightens when forward
+                elbowBend = (armSwingR < 0) ? armSwingR * 0.6f : armSwingR * 0.2f;
+                elbowBend -= e->shootAnim * 15.0f;  // forearm raises when shooting
+            }
+            rlRotatef(elbowBend, 1, 0, 0);
+            DrawCube((Vector3){0, -0.15f, 0}, 0.20f, 0.3f, 0.20f, suitCol);  // forearm
+            DrawCube((Vector3){0, -0.32f, 0}, 0.24f, 0.16f, 0.24f, gloveCol); // glove
+            rlPopMatrix();
+        }
 
         /* Gun held in right hand */
         {
@@ -263,13 +298,15 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
 
     /* === LEFT ARM (converges toward gun when shooting) === */
     {
+        float armSwingL = 0;  // track arm swing for elbow bend
         rlPushMatrix();
         rlTranslatef(-bd->armPivot.x, bd->armPivot.y, bd->armPivot.z);
         if (useSprings && ls) {
+            armSwingL = ls->armSwingL.angle;
             rlRotatef(ls->armSwingL.angle, 1, 0, 0);
             rlRotatef(ls->armSpreadL.angle, 0, 0, 1);
         } else if (e->state == ENEMY_DYING) {
-            float elapsed = (e->deathStyle == 0 ? 10.0f : 12.0f) - e->deathTimer;
+            float elapsed = DEATH_BODY_PERSIST_TIME - e->deathTimer;
             if (elapsed < 0) elapsed = 0;
             float t_ = (float)GetTime();
             float ks_ = e->facingAngle * 2.31f;
@@ -279,6 +316,7 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             float flailSpread = cosf(t_ * 2.8f + ks_ * 1.7f) * 20.0f * flailFade;
             float limpSwing = 8.0f + seed1 * 10.0f;
             float limpSpread = -(25.0f + seed1 * 20.0f);
+            armSwingL = limpSwing + flailSwing;
             rlRotatef(limpSwing + flailSwing, 1, 0, 0);
             rlRotatef(limpSpread + flailSpread, 0, 0, 1);
         } else {
@@ -292,10 +330,41 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             float bPitch = ap->armBasePitch + gun->restPitchOffset;
             float sw = (bPitch + nA*wd + e->shootAnim*18.0f)*(1.0f-kd_) + rA*kd_;
             float sp_ = (-ap->armBaseSpread*(1.0f-e->shootAnim*0.5f) + e->shootAnim*(-5.0f))*(1.0f-kd_) + rS*kd_;
+            armSwingL = sw;
             rlRotatef(sw, 1, 0, 0);
             rlRotatef(sp_, 0, 0, 1);
         }
-        DrawPartGroup(&bd->armParts, pal, models, hf, fac);
+
+        /* Upper arm — draw arm model only (part 0) */
+        {
+            Color armCol = BodyColorResolve(pal, bd->armParts.parts[0].color,
+                bd->armParts.parts[0].fixedColor, bd->armParts.parts[0].dim);
+            if (hf > 0) armCol = FlashColor(armCol, hf);
+            if (models && bd->armParts.parts[0].modelId >= 0)
+                DrawModel(models[bd->armParts.parts[0].modelId],
+                    bd->armParts.parts[0].pos, 1.0f, armCol);
+        }
+
+        /* Forearm with elbow bend */
+        {
+            Color suitCol = BodyColorResolve(pal, COL_SUIT, (Color){0,0,0,0}, false);
+            if (hf > 0) suitCol = FlashColor(suitCol, hf);
+            Color gloveCol = BodyColorResolve(pal, COL_GLOVE, (Color){0,0,0,0}, false);
+            if (hf > 0) gloveCol = FlashColor(gloveCol, hf);
+
+            rlPushMatrix();
+            rlTranslatef(0, -0.4f, 0);  // elbow position
+            float elbowBend = 0;
+            if (alive) {
+                elbowBend = (armSwingL < 0) ? armSwingL * 0.6f : armSwingL * 0.2f;
+                elbowBend -= e->shootAnim * 15.0f;
+            }
+            rlRotatef(elbowBend, 1, 0, 0);
+            DrawCube((Vector3){0, -0.15f, 0}, 0.20f, 0.3f, 0.20f, suitCol);  // forearm
+            DrawCube((Vector3){0, -0.32f, 0}, 0.24f, 0.16f, 0.24f, gloveCol); // glove
+            rlPopMatrix();
+        }
+
         rlPopMatrix();
     }
 

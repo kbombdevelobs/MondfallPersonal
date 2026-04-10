@@ -642,9 +642,9 @@ TEST(test_collision_no_world) {
 }
 
 TEST(test_collision_empty_world) {
-    World w;
-    memset(&w, 0, sizeof(w));
-    bool hit = WorldCheckCollision(&w, (Vector3){0,0,0}, 1.0f);
+    World *w = calloc(1, sizeof(World));
+    bool hit = WorldCheckCollision(w, (Vector3){0,0,0}, 1.0f);
+    free(w);
     ASSERT(!hit);
 }
 
@@ -1241,29 +1241,28 @@ TEST(test_structure_collision_blocks_enemy_radius) {
 
 TEST(test_rock_collision_blocks_at_ground) {
     // A rock at ground level should block a player at ground level
-    World w;
-    memset(&w, 0, sizeof(w));
-    w.chunkCount = 1;
-    w.chunks[0].generated = true;
-    w.chunks[0].rockCount = 1;
-    w.chunks[0].rocks[0] = (Rock){ .position = {10, 2, 10}, .size = {3, 4, 3} };
-    // Player at Y=PLAYER_HEIGHT (feet at ground), XZ overlapping rock
-    bool hit = WorldCheckCollision(&w, (Vector3){10, PLAYER_HEIGHT, 10}, 0.4f);
+    static World test_world; // static to avoid stack issues with large World struct
+    memset(&test_world, 0, sizeof(test_world));
+    test_world.chunkCount = 1;
+    test_world.chunks[0].generated = true;
+    test_world.chunks[0].rockCount = 1;
+    test_world.chunks[0].rocks[0] = (Rock){ .position = {10, 2, 10}, .size = {3, 4, 3} };
+    bool hit = WorldCheckCollision(&test_world, (Vector3){10, PLAYER_HEIGHT, 10}, 0.4f);
     ASSERT(hit);
 }
 
 TEST(test_rock_collision_passes_above) {
     // Player above rock top should not collide
-    World w;
-    memset(&w, 0, sizeof(w));
-    w.chunkCount = 1;
-    w.chunks[0].generated = true;
-    w.chunks[0].rockCount = 1;
-    w.chunks[0].rocks[0] = (Rock){ .position = {10, 2, 10}, .size = {3, 4, 3} };
+    World *w = calloc(1, sizeof(World));
+    w->chunkCount = 1;
+    w->chunks[0].generated = true;
+    w->chunks[0].rockCount = 1;
+    w->chunks[0].rocks[0] = (Rock){ .position = {10, 2, 10}, .size = {3, 4, 3} };
     // Rock top = 2 + 4*0.5 = 4.0, player feet at Y - PLAYER_HEIGHT
     // Player at Y = 4.0 + PLAYER_HEIGHT + 1.0 = well above rock
     float aboveRock = 4.0f + PLAYER_HEIGHT + 1.0f;
-    bool hit = WorldCheckCollision(&w, (Vector3){10, aboveRock, 10}, 0.4f);
+    bool hit = WorldCheckCollision(w, (Vector3){10, aboveRock, 10}, 0.4f);
+    free(w);
     ASSERT(!hit);
 }
 

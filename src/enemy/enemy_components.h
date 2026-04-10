@@ -172,6 +172,7 @@ typedef struct {
     Vector3 driftVel;      // listless drift velocity (tangent plane)
     float driftVelY;       // radial drift velocity
     float spinX, spinY;    // roll and yaw spin rates (deg/s)
+    float spinZ;           // random roll spin for per-enemy topple direction
     float deathTimer;      // countdown to entity deletion
     Vector3 hitDir;        // direction the killing shot came from
 } EcDecapitateDeath;

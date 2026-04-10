@@ -188,6 +188,7 @@ static void FillTempEnemy(ecs_world_t *world, ecs_entity_t entity,
             out->deathTimer = dd->deathTimer;
             out->spinX = dd->spinX;
             out->spinY = dd->spinY;
+            out->spinZ = dd->spinZ;
         }
     } else if (ecs_has(world, entity, EcDying)) {
         out->state = ENEMY_DYING;

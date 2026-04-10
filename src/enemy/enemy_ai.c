@@ -233,6 +233,16 @@ static void SysAIBehavior(ecs_iter_t *it) {
                 // No cover found — run straight away from player
                 steerArr[i].desiredVelocity = (Vector3){ -fwd.x * fleeSpd, 0, -fwd.z * fleeSpd };
             }
+
+            // Face the direction of movement when fleeing (not toward player)
+            if (Vector3Length(steerArr[i].desiredVelocity) > 0.5f) {
+                float fleeYaw = atan2f(steerArr[i].desiredVelocity.x,
+                                       steerArr[i].desiredVelocity.z);
+                float yawDiff = fleeYaw - tr[i].facingAngle;
+                while (yawDiff > PI) yawDiff -= 2.0f * PI;
+                while (yawDiff < -PI) yawDiff += 2.0f * PI;
+                tr[i].facingAngle += yawDiff * fminf(AI_TURN_SPEED * dt, 1.0f);
+            }
             continue;
         }
 
