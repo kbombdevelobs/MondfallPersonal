@@ -1,4 +1,5 @@
 #include "structure_draw.h"
+#include "structure_model.h"
 #include "world.h"
 #include "rlgl.h"
 #include <math.h>
@@ -261,12 +262,17 @@ static void DrawMoonBaseExterior(Structure *s) {
 }
 
 void StructureManagerDraw(StructureManager *sm, Vector3 playerPos) {
+    StructureModelSet *models = StructureModelsGet();
     for (int i = 0; i < sm->count; i++) {
         Structure *s = &sm->structures[i];
         if (!s->active) continue;
         float dx = playerPos.x - s->worldPos.x;
         float dz = playerPos.z - s->worldPos.z;
         if (dx * dx + dz * dz > 200.0f * 200.0f) continue;
-        DrawMoonBaseExterior(s);
+
+        // Try loaded .glb model first; fall back to procedural if unavailable
+        if (!StructureModelDrawExterior(models, s->worldPos)) {
+            DrawMoonBaseExterior(s);
+        }
     }
 }

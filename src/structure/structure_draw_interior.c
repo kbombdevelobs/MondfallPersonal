@@ -1,4 +1,5 @@
 #include "structure_draw.h"
+#include "structure_model.h"
 #include "structure_draw_furniture.h"
 #include "rlgl.h"
 #include <math.h>
@@ -475,6 +476,19 @@ void StructureManagerDrawInterior(StructureManager *sm) {
     Structure *s = &sm->structures[sm->insideIndex];
     float y = s->interiorY;
 
+    // Try loaded .glb model first; fall back to procedural if unavailable
+    StructureModelSet *models = StructureModelsGet();
+    if (StructureModelDrawInterior(models, y)) {
+        // Model drawn — still draw dynamic elements that change at runtime:
+        // resupply closet (state-dependent glow/expended), He-3 tank (animated),
+        // and ambient light (time-based flicker)
+        DrawResupplyCloset(y, sm->resupplyFlashTimer, s->resuppliesLeft <= 0);
+        DrawHe3FishbowlTank(y, s->he3RefillsLeft <= 0);
+        DrawInteriorAmbientLight(y);
+        return;
+    }
+
+    // Procedural fallback
     DrawInteriorFloor(y);
     DrawInteriorWalls(y);
     DrawInteriorAmbientLight(y);

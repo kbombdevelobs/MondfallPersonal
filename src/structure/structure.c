@@ -1,4 +1,5 @@
 #include "structure.h"
+#include "structure_model.h"
 #include "world.h"
 #include <math.h>
 #include <string.h>
@@ -85,6 +86,9 @@ void StructureManagerInit(StructureManager *sm) {
     sm->insideIndex = -1;
     sm->enteredDoor = 0;
 
+    // Load .glb structure models (graceful fallback if files missing)
+    StructureModelsLoad(StructureModelsGet());
+
     // Guaranteed base near spawn
     InitStructureAtPos(&sm->structures[0], 30.0f, 30.0f, STRUCTURE_INTERIOR_Y);
     sm->count = 1;
@@ -135,6 +139,7 @@ void StructureManagerCheckSpawns(StructureManager *sm, Vector3 playerPos) {
 
 void StructureManagerUnload(StructureManager *sm) {
     (void)sm;
+    StructureModelsUnload(StructureModelsGet());
 }
 
 bool StructureIsPlayerInside(StructureManager *sm) {
