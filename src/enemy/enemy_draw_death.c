@@ -419,12 +419,67 @@ void DrawAstronautRagdoll(Enemy *e) {
                     (Color){140, 8, 4, (unsigned char)(160 * bloodFade)});
             }
         }
+
+        // === RAGDOLL BLOOD POOL (after body settles) — same terrain-conforming system ===
+        if (elapsed > 3.0f) {
+            float poolTime = elapsed - 3.0f;
+            float poolR = 0.15f + poolTime * 0.06f;   // slow spread
+            if (poolR > 2.5f) poolR = 2.5f;
+            int segs = 12;
+            int rings = 4;
+            float pcx = pos.x, pcz = pos.z;
+            for (int ring = rings - 1; ring >= 0; ring--) {
+                float outerFrac = (float)(ring + 1) / (float)rings;
+                float innerFrac = (float)ring / (float)rings;
+                float outerR = poolR * outerFrac;
+                float innerR = poolR * innerFrac;
+                float colorT = (float)ring / (float)(rings - 1);
+                unsigned char cr = (unsigned char)(25 + colorT * 45);   // very dark
+                unsigned char cg = (unsigned char)(1 + colorT * 4);
+                unsigned char cb = (unsigned char)(1 + colorT * 3);
+                unsigned char ca = (unsigned char)(230 - colorT * 90);  // very opaque
+                for (int s = 0; s < segs; s++) {
+                    float a0 = (float)s / segs * 2.0f * PI;
+                    float a1 = (float)(s + 1) / segs * 2.0f * PI;
+                    float j0 = 1.0f + sinf(a0 * 3.0f + e->facingAngle * 7.13f) * 0.15f * outerFrac;
+                    float j1 = 1.0f + sinf(a1 * 3.0f + e->facingAngle * 7.13f) * 0.15f * outerFrac;
+                    float ox0 = pcx + cosf(a0)*outerR*j0, oz0 = pcz + sinf(a0)*outerR*j0;
+                    float ox1 = pcx + cosf(a1)*outerR*j1, oz1 = pcz + sinf(a1)*outerR*j1;
+                    float ix0 = pcx + cosf(a0)*innerR*j0, iz0 = pcz + sinf(a0)*innerR*j0;
+                    float ix1 = pcx + cosf(a1)*innerR*j1, iz1 = pcz + sinf(a1)*innerR*j1;
+                    float oh0=WorldGetHeight(ox0,oz0)+0.04f, oh1=WorldGetHeight(ox1,oz1)+0.04f;
+                    float ih0=WorldGetHeight(ix0,iz0)+0.04f+(float)ring*0.005f;
+                    float ih1=WorldGetHeight(ix1,iz1)+0.04f+(float)ring*0.005f;
+                    Color rc = {cr, cg, cb, ca};
+                    DrawTriangle3D((Vector3){ix0,ih0,iz0},(Vector3){ox1,oh1,oz1},(Vector3){ox0,oh0,oz0},rc);
+                    DrawTriangle3D((Vector3){ix0,ih0,iz0},(Vector3){ix1,ih1,iz1},(Vector3){ox1,oh1,oz1},rc);
+                }
+            }
+            // Occasional blood spurts from the body
+            float t_ = (float)GetTime();
+            float spurtSeed = e->facingAngle * 11.37f;
+            float spurtPhase = sinf(t_ * 0.8f + spurtSeed);
+            if (spurtPhase > 0.7f) {
+                float spurtStr = (spurtPhase - 0.7f) / 0.3f;
+                for (int sp = 0; sp < 6; sp++) {
+                    float sa = (float)sp / 6.0f * PI * 2.0f + t_ * 2.0f;
+                    float sr = 0.1f + spurtStr * 0.3f;
+                    float sy = 0.1f + spurtStr * 0.5f - (float)sp * 0.05f;
+                    float sx = pcx + cosf(sa) * sr;
+                    float sz = pcz + sinf(sa) * sr;
+                    float sGH = WorldGetHeight(sx, sz) + 0.08f;
+                    if (pos.y + sy < sGH) sy = sGH - pos.y;
+                    DrawSphereEx((Vector3){sx, pos.y + sy, sz}, 0.04f * spurtStr, 3, 3,
+                        (Color){200, 15, 5, (unsigned char)(200 * spurtStr)});
+                }
+            }
+        }
     } else {
         float elapsed = DEATH_BODY_PERSIST_TIME - e->deathTimer;
         float poolTime = elapsed - 0.5f;
         if (poolTime < 0) poolTime = 0;
-        float poolR = 0.3f + poolTime * 0.25f;
-        if (poolR > 3.5f) poolR = 3.5f;
+        float poolR = 0.2f + poolTime * 0.08f;   // slow spread
+        if (poolR > 3.0f) poolR = 3.0f;
 
         int segs = 14;
         int rings = 5;  // concentric rings for gradient
@@ -441,10 +496,10 @@ void DrawAstronautRagdoll(Enemy *e) {
             // Gradient: center is darkest/most opaque, edges are lighter/transparent
             // Also add slight per-ring irregularity from facing angle seed
             float colorT = (float)ring / (float)(rings - 1);  // 0=center, 1=edge
-            unsigned char cr = (unsigned char)(60 + colorT * 80);    // 60→140
-            unsigned char cg = (unsigned char)(3 + colorT * 8);      // 3→11
-            unsigned char cb = (unsigned char)(2 + colorT * 6);      // 2→8
-            unsigned char ca = (unsigned char)(220 - colorT * 120);  // 220→100
+            unsigned char cr = (unsigned char)(25 + colorT * 45);    // 25→70 (very dark)
+            unsigned char cg = (unsigned char)(1 + colorT * 4);      // 1→5
+            unsigned char cb = (unsigned char)(1 + colorT * 3);      // 1→4
+            unsigned char ca = (unsigned char)(240 - colorT * 90);   // 240→150 (very opaque)
 
             for (int s = 0; s < segs; s++) {
                 float a0 = (float)s / segs * 2.0f * PI;
@@ -504,6 +559,7 @@ void DrawAstronautRagdoll(Enemy *e) {
             }
         }
 
+        // Bubbles in pool
         for (int b = 0; b < 4; b++) {
             float bt = GetTime() * 3.0f + (float)b * 1.6f;
             float bx = cx + cosf(bt) * poolR * 0.35f;
@@ -511,7 +567,29 @@ void DrawAstronautRagdoll(Enemy *e) {
             float bH = WorldGetHeight(bx, bz) + 0.12f;
             float bubble = sinf(bt * 2.0f) * 0.03f;
             DrawSphereEx((Vector3){bx, bH + bubble, bz},
-                0.035f, 3, 3, (Color){160, 15, 10, 160});
+                0.035f, 3, 3, (Color){40, 5, 3, 160});
+        }
+
+        // Occasional blood spurts from crumpled body
+        {
+            float t_ = (float)GetTime();
+            float spurtSeed = e->facingAngle * 9.73f;
+            float spurtPhase = sinf(t_ * 0.6f + spurtSeed);
+            if (spurtPhase > 0.75f && elapsed < 30.0f) {
+                float spurtStr = (spurtPhase - 0.75f) / 0.25f;
+                for (int sp = 0; sp < 5; sp++) {
+                    float sa = (float)sp / 5.0f * PI * 2.0f + t_ * 1.5f;
+                    float sr = 0.08f + spurtStr * 0.2f;
+                    float sy = 0.15f + spurtStr * 0.4f - (float)sp * 0.04f;
+                    float sx = cx + cosf(sa) * sr;
+                    float sz = cz + sinf(sa) * sr;
+                    float sGH = WorldGetHeight(sx, sz) + 0.08f;
+                    float drawY = pos.y + sy;
+                    if (drawY < sGH) drawY = sGH;
+                    DrawSphereEx((Vector3){sx, drawY, sz}, 0.035f * spurtStr, 3, 3,
+                        (Color){50, 5, 2, (unsigned char)(220 * spurtStr)});
+                }
+            }
         }
 
         if (elapsed < 5.0f) {

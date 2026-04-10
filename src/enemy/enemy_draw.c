@@ -223,14 +223,20 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             float t_ = (float)GetTime();
             float ks_ = e->facingAngle * 2.31f;
             float seed1 = e->facingAngle * 17.3f - floorf(e->facingAngle * 17.3f);
+            // Flail: violent jerking for first 1-3 seconds
             float flailFade = (elapsed < 1.0f) ? 1.0f : (elapsed < 3.0f ? (3.0f - elapsed) / 2.0f : 0.0f);
             float flailSwing = sinf(t_ * 4.0f + ks_) * 30.0f * flailFade;
             float flailSpread = cosf(t_ * 3.0f + ks_) * 20.0f * flailFade;
-            float limpSwing = 5.0f + seed1 * 10.0f;
+            // Limp: starts as drift pose, fully collapses after 8-10s
+            float limpBase = 5.0f + seed1 * 10.0f;
             float limpSpread = 25.0f + seed1 * 20.0f;
-            armSwingR = limpSwing + flailSwing;
-            rlRotatef(limpSwing + flailSwing, 1, 0, 0);
-            rlRotatef(limpSpread + flailSpread, 0, 0, 1);
+            // After 8s: arms go fully limp — hang straight down (-90 pitch, wide spread)
+            float limpT = (elapsed > 8.0f) ? fminf((elapsed - 8.0f) / 2.0f, 1.0f) : 0.0f;
+            float finalSwing = limpBase * (1.0f - limpT) + (-80.0f) * limpT;
+            float finalSpread = limpSpread * (1.0f - limpT) + (40.0f + seed1 * 15.0f) * limpT;
+            armSwingR = finalSwing + flailSwing;
+            rlRotatef(finalSwing + flailSwing, 1, 0, 0);
+            rlRotatef(finalSpread + flailSpread, 0, 0, 1);
         } else {
             float kd_ = (e->knockdownAngle > 1.0f) ? e->knockdownAngle / 80.0f : 0.0f;
             float nA = sinf(e->walkCycle) * ap->armSwingDeg;
@@ -317,11 +323,15 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             float flailFade = (elapsed < 1.0f) ? 1.0f : (elapsed < 3.0f ? (3.0f - elapsed) / 2.0f : 0.0f);
             float flailSwing = sinf(t_ * 3.5f + ks_ * 1.3f) * 30.0f * flailFade;
             float flailSpread = cosf(t_ * 2.8f + ks_ * 1.7f) * 20.0f * flailFade;
-            float limpSwing = 8.0f + seed1 * 10.0f;
-            float limpSpread = -(25.0f + seed1 * 20.0f);
-            armSwingL = limpSwing + flailSwing;
-            rlRotatef(limpSwing + flailSwing, 1, 0, 0);
-            rlRotatef(limpSpread + flailSpread, 0, 0, 1);
+            float limpBase = 8.0f + seed1 * 10.0f;
+            float limpSpreadBase = -(25.0f + seed1 * 20.0f);
+            // After 8s: fully limp — hang straight down
+            float limpT = (elapsed > 8.0f) ? fminf((elapsed - 8.0f) / 2.0f, 1.0f) : 0.0f;
+            float finalSwing = limpBase * (1.0f - limpT) + (-80.0f) * limpT;
+            float finalSpread = limpSpreadBase * (1.0f - limpT) + (-(40.0f + seed1 * 15.0f)) * limpT;
+            armSwingL = finalSwing + flailSwing;
+            rlRotatef(finalSwing + flailSwing, 1, 0, 0);
+            rlRotatef(finalSpread + flailSpread, 0, 0, 1);
         } else {
             float kd_ = (e->knockdownAngle > 1.0f) ? e->knockdownAngle / 80.0f : 0.0f;
             float nA = sinf(e->walkCycle) * ap->armSwingDeg;
