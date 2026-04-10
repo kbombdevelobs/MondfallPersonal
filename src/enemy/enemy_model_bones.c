@@ -180,10 +180,15 @@ void AstroModelApplySpringState(
             float motionScale = 1.0f - settle;
             float drift = sinf(deathTime * 0.4f + seed) * 15.0f * motionScale;
             float jerk = sinf(deathTime * 25.0f + seed) * 40.0f * jd * motionScale;
-            // When limp: zero out all active motion, let parent bone orientation + gravity handle it
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift - 60.0f * motionScale)));
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, sinf(deathTime*0.5f+seed*1.3f)*30.0f*motionScale));
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,1,0}, sinf(deathTime*18.0f+seed)*25.0f*jd*motionScale));
+            // Settle toward relaxed spread pose — per-enemy random resting angle
+            float restPitch = -40.0f - seed * 20.0f;   // -40 to -60° (arm out, slightly down)
+            float restSpread = -30.0f - seed * 15.0f;   // splayed outward
+            float pitch = (jerk + drift - 60.0f) * motionScale + restPitch * settle;
+            float spread = sinf(deathTime*0.5f+seed*1.3f)*30.0f*motionScale + restSpread * settle;
+            float twist = sinf(deathTime*18.0f+seed)*25.0f*jd*motionScale;
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -pitch));
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, spread));
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,1,0}, twist));
         } else {
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1, 0, 0},
                   -(ap->armBasePitch + ls->armSwingR.angle * ARM_AMP)));
@@ -204,9 +209,15 @@ void AstroModelApplySpringState(
             float motionScale = 1.0f - settle;
             float drift = sinf(deathTime * 0.5f + seed) * 15.0f * motionScale;
             float jerk = sinf(deathTime * 22.0f + seed) * 35.0f * jd * motionScale;
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift - 55.0f * motionScale)));
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, -sinf(deathTime*0.6f+seed*1.7f)*30.0f*motionScale));
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,1,0}, sinf(deathTime*20.0f+seed)*20.0f*jd*motionScale));
+            // Settle toward relaxed spread pose — per-enemy random resting angle
+            float restPitch = -35.0f - seed * 18.0f;
+            float restSpread = 30.0f + seed * 12.0f;  // opposite direction (mirrored)
+            float pitch = (jerk + drift - 55.0f) * motionScale + restPitch * settle;
+            float spread = -sinf(deathTime*0.6f+seed*1.7f)*30.0f*motionScale + restSpread * settle;
+            float twist = sinf(deathTime*20.0f+seed)*20.0f*jd*motionScale;
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -pitch));
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, spread));
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,1,0}, twist));
         } else {
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1, 0, 0},
                   -(ap->armBasePitch + ls->armSwingL.angle * ARM_AMP)));

@@ -230,10 +230,12 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             // Limp: starts as drift pose, fully collapses after 8-10s
             float limpBase = 5.0f + seed1 * 10.0f;
             float limpSpread = 25.0f + seed1 * 20.0f;
-            // After 8s: all motion fades to zero — arms follow gravity via parent bone
+            // After 8s: settle to relaxed spread (not rigid at-sides)
             float limpT = (elapsed > 8.0f) ? fminf((elapsed - 8.0f) / 2.0f, 1.0f) : 0.0f;
-            float finalSwing = limpBase * (1.0f - limpT);
-            float finalSpread = limpSpread * (1.0f - limpT);
+            float restSwing = -20.0f - seed1 * 15.0f;    // relaxed slightly down
+            float restSpread = 35.0f + seed1 * 15.0f;    // splayed out
+            float finalSwing = limpBase * (1.0f - limpT) + restSwing * limpT;
+            float finalSpread = limpSpread * (1.0f - limpT) + restSpread * limpT;
             armSwingR = finalSwing + flailSwing;
             rlRotatef(finalSwing + flailSwing, 1, 0, 0);
             rlRotatef(finalSpread + flailSpread, 0, 0, 1);
@@ -325,10 +327,12 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             float flailSpread = cosf(t_ * 2.8f + ks_ * 1.7f) * 20.0f * flailFade;
             float limpBase = 8.0f + seed1 * 10.0f;
             float limpSpreadBase = -(25.0f + seed1 * 20.0f);
-            // After 8s: all motion fades to zero — arms follow gravity
+            // After 8s: settle to relaxed spread (mirrored)
             float limpT = (elapsed > 8.0f) ? fminf((elapsed - 8.0f) / 2.0f, 1.0f) : 0.0f;
-            float finalSwing = limpBase * (1.0f - limpT);
-            float finalSpread = limpSpreadBase * (1.0f - limpT);
+            float restSwing = -18.0f - seed1 * 12.0f;
+            float restSpread = -(35.0f + seed1 * 12.0f);  // mirrored outward
+            float finalSwing = limpBase * (1.0f - limpT) + restSwing * limpT;
+            float finalSpread = limpSpreadBase * (1.0f - limpT) + restSpread * limpT;
             armSwingL = finalSwing + flailSwing;
             rlRotatef(finalSwing + flailSwing, 1, 0, 0);
             rlRotatef(finalSpread + flailSpread, 0, 0, 1);

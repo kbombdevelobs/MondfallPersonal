@@ -49,7 +49,7 @@ static void SysRagdollDeath(ecs_iter_t *it) {
                 rd[i].ragdollVelX = 0; rd[i].ragdollVelZ = 0;
             }
 
-            float gH = WorldGetHeight(tr[i].position.x, tr[i].position.z) + 0.6f;
+            float gH = WorldGetHeight(tr[i].position.x, tr[i].position.z) + 1.0f;
             if (tr[i].position.y < gH) {
                 tr[i].position.y = gH;
                 if (fabsf(rd[i].ragdollVelY) < 0.5f) {
@@ -69,8 +69,11 @@ static void SysRagdollDeath(ecs_iter_t *it) {
                 anim[i].deathAngle = 90.0f;
                 rd[i].spinX = 0;
             }
-            float gH = WorldGetHeight(tr[i].position.x, tr[i].position.z) + 0.5f;
-            if (tr[i].position.y > gH + 0.1f) tr[i].position.y -= dt * 2.0f;
+            float gH = WorldGetHeight(tr[i].position.x, tr[i].position.z) + 0.8f;
+            if (tr[i].position.y > gH + 0.1f) {
+                tr[i].position.y -= dt * 2.0f;
+                if (tr[i].position.y < gH) tr[i].position.y = gH;
+            }
             else tr[i].position.y = gH;
         }
 
@@ -215,7 +218,7 @@ static void SysDecapitateDeath(ecs_iter_t *it) {
         dd[i].driftVel.z *= (1.0f - 0.5f * dt);
 
         // Ground clamping with bounce
-        float gH = WorldGetHeight(tr[i].position.x, tr[i].position.z) + 0.6f;
+        float gH = WorldGetHeight(tr[i].position.x, tr[i].position.z) + 1.0f;
         if (tr[i].position.y < gH) {
             tr[i].position.y = gH;
             if (fabsf(dd[i].driftVelY) < 0.5f) {
