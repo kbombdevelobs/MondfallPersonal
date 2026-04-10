@@ -556,19 +556,26 @@ float EcsCombatProcessGroundPound(EcsCombatContext *ctx) {
                 away = (Vector3){0.0f, 0.0f, 0.0f};
             }
 
-            // Apply velocity push -- launch enemies away and upward
+            // Apply velocity push — launch enemies HARD away and upward (spin out)
             EcVelocity *vel = ecs_ensure(world, it.entities[i], EcVelocity);
             if (vel) {
                 vel->velocity = Vector3Add(vel->velocity,
-                    Vector3Scale(away, GROUND_POUND_FORCE * falloff));
-                vel->vertVel += GROUND_POUND_LIFT * falloff;
+                    Vector3Scale(away, GROUND_POUND_FORCE * falloff * 2.0f));  // 2x push
+                vel->vertVel += GROUND_POUND_LIFT * falloff * 1.5f;           // more vertical launch
             }
 
-            // Knockdown: enemy sprawls flat and has to get back up
+            // Knockdown: on their BACK with legs toward player (positive angle = backward)
+            // Face the player so legs point toward impact
             EcAnimation *anim = ecs_ensure(world, it.entities[i], EcAnimation);
             if (anim) {
                 anim->knockdownTimer = GP_KNOCKDOWN_BASE + falloff * GP_KNOCKDOWN_FALLOFF_MULT;
-                anim->knockdownAngle = 75.0f + falloff * 10.0f;
+                anim->knockdownAngle = -(80.0f + falloff * 10.0f);  // negative = backward (on back)
+                anim->staggerTimer = 1.0f;  // longer stagger
+            }
+            // Face toward player so legs point toward impact point
+            EcTransform *et = ecs_ensure(world, it.entities[i], EcTransform);
+            if (et && awayLen > 0.1f) {
+                et->facingAngle = atan2f(-away.x, -away.z);  // face toward impact
             }
 
             // Apply damage (may kill)
