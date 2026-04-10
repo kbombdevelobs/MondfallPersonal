@@ -151,11 +151,14 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
     /* Knockdown sprawl or cowering crouch */
     if (alive && e->knockdownAngle > 1.0f) {
         if (e->isCowering) {
-            rlRotatef(e->knockdownAngle, 1, 0, 0);
+            /* Cowering: pitch FORWARD (negative X rotation = face-down) */
+            rlRotatef(-e->knockdownAngle, 1, 0, 0);
+            /* Visible fear trembling — whole body shakes */
             float ks = e->facingAngle * 3.71f;
             float t  = (float)GetTime();
-            rlRotatef(sinf(t * 3.0f + ks) * 3.0f, 0, 0, 1);
-            rlRotatef(cosf(t * 2.5f + ks * 1.7f) * 2.0f, 0, 1, 0);
+            rlRotatef(sinf(t * 8.0f + ks) * 5.0f, 0, 0, 1);       // lateral shudder
+            rlRotatef(cosf(t * 6.0f + ks * 1.7f) * 4.0f, 0, 1, 0); // yaw tremble
+            rlRotatef(sinf(t * 10.0f + ks * 2.3f) * 3.0f, 1, 0, 0); // pitch quiver
         } else {
             rlRotatef(-e->knockdownAngle, 1, 0, 0);
             float ks = e->facingAngle * 3.71f;

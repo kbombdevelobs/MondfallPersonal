@@ -130,31 +130,60 @@ static void SysAIBehavior(ecs_iter_t *it) {
                     Vector3 bestCoverPos = {0, 0, 0};
                     bool foundCover = false;
 
-                    // Sample terrain heights around the enemy to find elevated terrain
-                    for (int attempt = 0; attempt < 8; attempt++) {
-                        float angle = (float)attempt / 8.0f * 2.0f * PI;
-                        float testDist = 5.0f + GetRandomValue(0, 200) * 0.1f; // 5-25m
-                        Vector3 testPos = {
-                            tr[i].position.x + cosf(angle) * testDist,
-                            0,
-                            tr[i].position.z + sinf(angle) * testDist
-                        };
-                        float testH = WorldGetHeight(testPos.x, testPos.z);
-                        float myH = WorldGetHeight(tr[i].position.x, tr[i].position.z);
-                        // Consider elevated terrain (>0.5m higher) as cover
-                        if (testH > myH + 0.5f) {
-                            Vector3 toRock = Vector3Subtract(testPos, tr[i].position);
-                            toRock.y = 0;
-                            float toRockLen = Vector3Length(toRock);
-                            if (toRockLen < 0.1f) continue;
-                            float dot = Vector3DotProduct(Vector3Normalize(toRock), awayFromPlayer);
-                            float score = dot * 2.0f - testDist * 0.05f + (testH - myH) * 0.3f;
-                            if (score > bestScore) {
-                                bestScore = score;
-                                // Cover position: behind the terrain feature from player
-                                Vector3 coverDir = Vector3Normalize(Vector3Negate(toPlayer));
-                                bestCoverPos = Vector3Add(testPos, Vector3Scale(coverDir, 1.5f));
-                                foundCover = true;
+                    // Search actual rocks from world chunks first (best cover)
+                    World *coverWorld = WorldGetActive();
+                    if (coverWorld) {
+                        for (int ci = 0; ci < coverWorld->chunkCount; ci++) {
+                            Chunk *ch = &coverWorld->chunks[ci];
+                            if (!ch->generated) continue;
+                            for (int ri = 0; ri < ch->rockCount; ri++) {
+                                Rock *rock = &ch->rocks[ri];
+                                float rockDist = Vector3Distance(tr[i].position, rock->position);
+                                if (rockDist < 3.0f || rockDist > 25.0f) continue;
+                                Vector3 toRock = Vector3Subtract(rock->position, tr[i].position);
+                                toRock.y = 0;
+                                float toRockLen = Vector3Length(toRock);
+                                if (toRockLen < 0.1f) continue;
+                                float dot = Vector3DotProduct(Vector3Normalize(toRock), awayFromPlayer);
+                                float rockBonus = rock->size.y * 0.5f; // taller rocks = better cover
+                                float score = dot * 2.0f - rockDist * 0.05f + rockBonus;
+                                if (score > bestScore) {
+                                    bestScore = score;
+                                    // Hide behind the rock (away from player side)
+                                    Vector3 coverDir = (dist > 0.1f)
+                                        ? Vector3Normalize(Vector3Subtract(rock->position, playerPos))
+                                        : awayFromPlayer;
+                                    bestCoverPos = Vector3Add(rock->position,
+                                        Vector3Scale(coverDir, rock->size.x * 0.3f + 1.0f));
+                                    foundCover = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback: sample terrain heights for elevated cover
+                    if (!foundCover) {
+                        for (int attempt = 0; attempt < 8; attempt++) {
+                            float angle = (float)attempt / 8.0f * 2.0f * PI;
+                            float testDist = 5.0f + GetRandomValue(0, 200) * 0.1f;
+                            float testX = tr[i].position.x + cosf(angle) * testDist;
+                            float testZ = tr[i].position.z + sinf(angle) * testDist;
+                            float testH = WorldGetHeight(testX, testZ);
+                            float myH = WorldGetHeight(tr[i].position.x, tr[i].position.z);
+                            if (testH > myH + 0.5f) {
+                                Vector3 testPos = {testX, 0, testZ};
+                                Vector3 toRock = Vector3Subtract(testPos, tr[i].position);
+                                toRock.y = 0;
+                                float toRockLen = Vector3Length(toRock);
+                                if (toRockLen < 0.1f) continue;
+                                float dot = Vector3DotProduct(Vector3Normalize(toRock), awayFromPlayer);
+                                float score = dot * 2.0f - testDist * 0.05f + (testH - myH) * 0.3f;
+                                if (score > bestScore) {
+                                    bestScore = score;
+                                    Vector3 coverDir = Vector3Normalize(Vector3Negate(toPlayer));
+                                    bestCoverPos = Vector3Add(testPos, Vector3Scale(coverDir, 1.5f));
+                                    foundCover = true;
+                                }
                             }
                         }
                     }

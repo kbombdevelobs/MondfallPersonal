@@ -21,18 +21,33 @@ static void SysRagdollDeath(ecs_iter_t *it) {
         anim[i].animState = ANIM_DEATH;
         rd[i].deathTimer -= dt;
 
+        // Time elapsed since death
+        float elapsed = DEATH_BODY_PERSIST_TIME - rd[i].deathTimer;
+
         if (rd[i].deathStyle == 0) {
             // RAGDOLL -- pressurized suit blowout spin
-            anim[i].deathAngle += rd[i].spinX * dt;
-            tr[i].facingAngle += rd[i].spinY * dt * 0.02f;
+            // After 8 seconds: gradually settle to fully limp on ground
+            float settleFactor = (elapsed > 8.0f) ? fminf((elapsed - 8.0f) / 4.0f, 1.0f) : 0.0f;
+            float spinDamp = 1.0f - 0.3f * dt - settleFactor * 2.0f * dt;
+            if (spinDamp < 0) spinDamp = 0;
+
+            anim[i].deathAngle += rd[i].spinX * dt * (1.0f - settleFactor);
+            tr[i].facingAngle += rd[i].spinY * dt * 0.02f * (1.0f - settleFactor);
             tr[i].position.x += rd[i].ragdollVelX * dt;
             tr[i].position.z += rd[i].ragdollVelZ * dt;
             tr[i].position.y += rd[i].ragdollVelY * dt;
             rd[i].ragdollVelY -= MOON_GRAVITY * dt;
-            rd[i].spinX *= (1.0f - 0.3f * dt);
-            rd[i].spinY *= (1.0f - 0.3f * dt);
+            rd[i].spinX *= spinDamp;
+            rd[i].spinY *= spinDamp;
+            rd[i].spinZ *= spinDamp;
             rd[i].ragdollVelX *= (1.0f - 0.5f * dt);
             rd[i].ragdollVelZ *= (1.0f - 0.5f * dt);
+
+            // Fully settled: zero all motion
+            if (settleFactor >= 1.0f) {
+                rd[i].spinX = 0; rd[i].spinY = 0; rd[i].spinZ = 0;
+                rd[i].ragdollVelX = 0; rd[i].ragdollVelZ = 0;
+            }
 
             float gH = WorldGetHeight(tr[i].position.x, tr[i].position.z) + 0.6f;
             if (tr[i].position.y < gH) {
