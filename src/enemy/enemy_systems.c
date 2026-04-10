@@ -104,7 +104,7 @@ void EcsEnemyDamage(ecs_world_t *world, ecs_entity_t entity, float damage) {
                 .spinZ = (float)(rand() % 160) - 80.0f,        // lateral spin
                 .ragdollVelX = cosf(launchAngle) * launchForce,
                 .ragdollVelZ = sinf(launchAngle) * launchForce,
-                .ragdollVelY = 2.0f + ((float)rand() / RAND_MAX) * 4.0f,
+                .ragdollVelY = 3.0f + ((float)rand() / RAND_MAX) * 12.0f,  // 3-15 m/s — some fly into space
                 .deathTimer = DEATH_BODY_PERSIST_TIME,
                 .deathStyle = 0
             });

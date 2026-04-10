@@ -77,6 +77,11 @@ static void SysRagdollDeath(ecs_iter_t *it) {
         if (rd[i].deathTimer <= 0) {
             ecs_delete(it->world, it->entities[i]);
         }
+
+        // Spin-out-to-space: despawn if launched high enough (ragdoll blowout only)
+        if (rd[i].deathStyle == 0 && tr[i].position.y > 50.0f) {
+            ecs_delete(it->world, it->entities[i]);
+        }
     }
 }
 

@@ -8,6 +8,69 @@
 #include <math.h>
 #include <stddef.h>
 
+// ============================================================================
+// Shared: terrain-conforming blood pool with gradient rings + occasional spurts
+// Call from any death renderer when the body is on the ground.
+// ============================================================================
+static void DrawBloodPoolAtPos(Vector3 pos, float elapsed, float facingSeed) {
+    if (elapsed < 2.0f) return; // wait for body to settle a bit
+    float poolTime = elapsed - 2.0f;
+    float poolR = 0.15f + poolTime * 0.06f;
+    if (poolR > 2.5f) poolR = 2.5f;
+
+    int segs = 12;
+    int rings = 4;
+    float pcx = pos.x, pcz = pos.z;
+
+    for (int ring = rings - 1; ring >= 0; ring--) {
+        float outerFrac = (float)(ring + 1) / (float)rings;
+        float innerFrac = (float)ring / (float)rings;
+        float outerR = poolR * outerFrac;
+        float innerR = poolR * innerFrac;
+        float colorT = (float)ring / (float)(rings - 1);
+        unsigned char cr = (unsigned char)(110 + colorT * 50);
+        unsigned char cg = (unsigned char)(6 + colorT * 10);
+        unsigned char cb = (unsigned char)(4 + colorT * 7);
+        unsigned char ca = (unsigned char)(220 - colorT * 80);
+        Color rc = {cr, cg, cb, ca};
+
+        for (int s = 0; s < segs; s++) {
+            float a0 = (float)s / segs * 2.0f * PI;
+            float a1 = (float)(s + 1) / segs * 2.0f * PI;
+            float j0 = 1.0f + sinf(a0 * 3.0f + facingSeed * 7.13f) * 0.15f * outerFrac;
+            float j1 = 1.0f + sinf(a1 * 3.0f + facingSeed * 7.13f) * 0.15f * outerFrac;
+            float ox0 = pcx+cosf(a0)*outerR*j0, oz0 = pcz+sinf(a0)*outerR*j0;
+            float ox1 = pcx+cosf(a1)*outerR*j1, oz1 = pcz+sinf(a1)*outerR*j1;
+            float ix0 = pcx+cosf(a0)*innerR*j0, iz0 = pcz+sinf(a0)*innerR*j0;
+            float ix1 = pcx+cosf(a1)*innerR*j1, iz1 = pcz+sinf(a1)*innerR*j1;
+            float oh0=WorldGetHeight(ox0,oz0)+0.04f, oh1=WorldGetHeight(ox1,oz1)+0.04f;
+            float ih0=WorldGetHeight(ix0,iz0)+0.04f+(float)ring*0.005f;
+            float ih1=WorldGetHeight(ix1,iz1)+0.04f+(float)ring*0.005f;
+            DrawTriangle3D((Vector3){ix0,ih0,iz0},(Vector3){ox1,oh1,oz1},(Vector3){ox0,oh0,oz0},rc);
+            DrawTriangle3D((Vector3){ix0,ih0,iz0},(Vector3){ix1,ih1,iz1},(Vector3){ox1,oh1,oz1},rc);
+        }
+    }
+
+    // Occasional blood spurts
+    float t_ = (float)GetTime();
+    float spurtPhase = sinf(t_ * 0.7f + facingSeed * 11.37f);
+    if (spurtPhase > 0.75f && elapsed < 30.0f) {
+        float spurtStr = (spurtPhase - 0.75f) / 0.25f;
+        for (int sp = 0; sp < 5; sp++) {
+            float sa = (float)sp / 5.0f * PI * 2.0f + t_ * 1.5f;
+            float sr = 0.08f + spurtStr * 0.2f;
+            float sy = 0.1f + spurtStr * 0.4f - (float)sp * 0.04f;
+            float sx = pcx + cosf(sa) * sr;
+            float sz = pcz + sinf(sa) * sr;
+            float sGH = WorldGetHeight(sx, sz) + 0.08f;
+            float drawY = pos.y + sy;
+            if (drawY < sGH) drawY = sGH;
+            DrawSphereEx((Vector3){sx, drawY, sz}, 0.035f * spurtStr, 3, 3,
+                (Color){140, 10, 5, (unsigned char)(200 * spurtStr)});
+        }
+    }
+}
+
 typedef struct {
     Color suitBase, suitDark, visorColor, helmetColor;
     Color bootColor, gloveColor, backpackColor;
@@ -226,6 +289,9 @@ void DrawAstronautEviscerate(Enemy *e, EnemyManager *em) {
             }
         }
     }
+
+    // Blood pool under evisceration site
+    DrawBloodPoolAtPos(pos, e->evisTimer, e->facingAngle);
 }
 
 // === VAPORIZE — 3 phases: jerk, freeze, disintegrate ===
@@ -825,6 +891,9 @@ void DrawAstronautDecapitate(Enemy *e) {
     }
 
     rlPopMatrix(); // root
+
+    // Blood pool for decapitated body on ground
+    DrawBloodPoolAtPos(pos, t, e->facingAngle);
 }
 
 // === SKELETAL HEADSHOT — uses per-rank headshot .glb model with blood spray ===
@@ -974,6 +1043,8 @@ void DrawAstronautDecapitateSkeletal(Enemy *e, EnemyManager *em) {
         }
     }
     #undef HEAD_HEIGHT
+
+    DrawBloodPoolAtPos(pos, t, e->facingAngle);
 }
 
 // === SKELETAL EVISCERATE — Blender dismemberment models fly apart ===
@@ -1073,4 +1144,6 @@ void DrawAstronautEviscerateSkeletal(Enemy *e, EnemyManager *em) {
             DrawSphereEx(bp2, (b % 2 == 0) ? 0.035f : 0.05f, 3, 3, bc);
         }
     }
+
+    DrawBloodPoolAtPos(e->position, e->evisTimer, e->facingAngle);
 }
