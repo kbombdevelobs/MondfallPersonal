@@ -434,10 +434,10 @@ void DrawAstronautRagdoll(Enemy *e) {
                 float outerR = poolR * outerFrac;
                 float innerR = poolR * innerFrac;
                 float colorT = (float)ring / (float)(rings - 1);
-                unsigned char cr = (unsigned char)(25 + colorT * 45);   // very dark
-                unsigned char cg = (unsigned char)(1 + colorT * 4);
-                unsigned char cb = (unsigned char)(1 + colorT * 3);
-                unsigned char ca = (unsigned char)(230 - colorT * 90);  // very opaque
+                unsigned char cr = (unsigned char)(110 + colorT * 50);  // bright red
+                unsigned char cg = (unsigned char)(6 + colorT * 10);
+                unsigned char cb = (unsigned char)(4 + colorT * 7);
+                unsigned char ca = (unsigned char)(220 - colorT * 80);
                 for (int s = 0; s < segs; s++) {
                     float a0 = (float)s / segs * 2.0f * PI;
                     float a1 = (float)(s + 1) / segs * 2.0f * PI;
@@ -496,10 +496,10 @@ void DrawAstronautRagdoll(Enemy *e) {
             // Gradient: center is darkest/most opaque, edges are lighter/transparent
             // Also add slight per-ring irregularity from facing angle seed
             float colorT = (float)ring / (float)(rings - 1);  // 0=center, 1=edge
-            unsigned char cr = (unsigned char)(25 + colorT * 45);    // 25→70 (very dark)
-            unsigned char cg = (unsigned char)(1 + colorT * 4);      // 1→5
-            unsigned char cb = (unsigned char)(1 + colorT * 3);      // 1→4
-            unsigned char ca = (unsigned char)(240 - colorT * 90);   // 240→150 (very opaque)
+            unsigned char cr = (unsigned char)(120 + colorT * 60);   // 120→180 (bright red)
+            unsigned char cg = (unsigned char)(8 + colorT * 12);    // 8→20
+            unsigned char cb = (unsigned char)(5 + colorT * 8);     // 5→13
+            unsigned char ca = (unsigned char)(230 - colorT * 80);  // 230→150
 
             for (int s = 0; s < segs; s++) {
                 float a0 = (float)s / segs * 2.0f * PI;

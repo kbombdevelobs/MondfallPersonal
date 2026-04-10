@@ -175,11 +175,15 @@ void AstroModelApplySpringState(
         if (ragdollArmR) {
             float seed = ls->breathPhase * 3.17f;
             float jd = (deathTime < 2.0f) ? 1.0f : (deathTime < 5.0f) ? (5.0f-deathTime)/3.0f : 0.0f;
-            float drift = sinf(deathTime * 0.4f + seed) * 15.0f;
-            float jerk = sinf(deathTime * 25.0f + seed) * 40.0f * jd;
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift - 60.0f)));
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, sinf(deathTime*0.5f+seed*1.3f)*30.0f));
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,1,0}, sinf(deathTime*18.0f+seed)*25.0f*jd));
+            // Settle: all motion fades to zero after 8 seconds, fully limp by 10
+            float settle = (deathTime > 8.0f) ? fminf((deathTime - 8.0f) / 2.0f, 1.0f) : 0.0f;
+            float motionScale = 1.0f - settle;
+            float drift = sinf(deathTime * 0.4f + seed) * 15.0f * motionScale;
+            float jerk = sinf(deathTime * 25.0f + seed) * 40.0f * jd * motionScale;
+            float limpAngle = -90.0f * settle;  // hang straight down when fully limp
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift - 60.0f * motionScale + limpAngle)));
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, sinf(deathTime*0.5f+seed*1.3f)*30.0f*motionScale));
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,1,0}, sinf(deathTime*18.0f+seed)*25.0f*jd*motionScale));
         } else {
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1, 0, 0},
                   -(ap->armBasePitch + ls->armSwingR.angle * ARM_AMP)));
@@ -196,11 +200,14 @@ void AstroModelApplySpringState(
         if (ragdollArmL) {
             float seed = ls->breathPhase * 2.31f + 1.5f;
             float jd = (deathTime < 2.0f) ? 1.0f : (deathTime < 5.0f) ? (5.0f-deathTime)/3.0f : 0.0f;
-            float drift = sinf(deathTime * 0.5f + seed) * 15.0f;
-            float jerk = sinf(deathTime * 22.0f + seed) * 35.0f * jd;
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift - 55.0f)));
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, -sinf(deathTime*0.6f+seed*1.7f)*30.0f));
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,1,0}, sinf(deathTime*20.0f+seed)*20.0f*jd));
+            float settle = (deathTime > 8.0f) ? fminf((deathTime - 8.0f) / 2.0f, 1.0f) : 0.0f;
+            float motionScale = 1.0f - settle;
+            float drift = sinf(deathTime * 0.5f + seed) * 15.0f * motionScale;
+            float jerk = sinf(deathTime * 22.0f + seed) * 35.0f * jd * motionScale;
+            float limpAngle = -90.0f * settle;
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift - 55.0f * motionScale + limpAngle)));
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, -sinf(deathTime*0.6f+seed*1.7f)*30.0f*motionScale));
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,1,0}, sinf(deathTime*20.0f+seed)*20.0f*jd*motionScale));
         } else {
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1, 0, 0},
                   -(ap->armBasePitch + ls->armSwingL.angle * ARM_AMP)));
@@ -217,10 +224,12 @@ void AstroModelApplySpringState(
         if (ragdollLegR) {
             float seed = ls->breathPhase * 1.73f;
             float jd = (deathTime < 2.0f) ? 1.0f : (deathTime < 5.0f) ? (5.0f-deathTime)/3.0f : 0.0f;
-            float drift = sinf(deathTime * 0.3f + seed) * 8.0f;
-            float jerk = sinf(deathTime * 15.0f + seed) * 25.0f * jd;
+            float settle = (deathTime > 8.0f) ? fminf((deathTime - 8.0f) / 2.0f, 1.0f) : 0.0f;
+            float ms = 1.0f - settle;
+            float drift = sinf(deathTime * 0.3f + seed) * 8.0f * ms;
+            float jerk = sinf(deathTime * 15.0f + seed) * 25.0f * jd * ms;
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift)));
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, sinf(deathTime*0.4f+seed)*10.0f));
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, sinf(deathTime*0.4f+seed)*10.0f*ms));
         } else {
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1, 0, 0}, -ls->legSwingR.angle * LEG_AMP));
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0, 0, 1}, -ls->legSpreadR.angle * LEG_AMP));
@@ -231,7 +240,8 @@ void AstroModelApplySpringState(
     /* === RIGHT SHIN === */
     if (HAS_BONE(BONE_SHIN_R)) {
         int bi = BONE_IDX(BONE_SHIN_R);
-        float knee = ragdollLegR ? sinf(deathTime*0.5f+ls->breathPhase)*20.0f
+        float rSettle = (isDying && deathTime > 8.0f) ? fminf((deathTime - 8.0f) / 2.0f, 1.0f) : 0.0f;
+        float knee = ragdollLegR ? sinf(deathTime*0.5f+ls->breathPhase)*20.0f*(1.0f-rSettle)
                                  : ap->kneeFlexBase + ls->kneeR.angle * LEG_AMP;
         localPose[bi].rotation = QuaternionMultiply(
             localPose[bi].rotation, RotFromAxisDeg((Vector3){1, 0, 0}, -knee));
@@ -244,10 +254,12 @@ void AstroModelApplySpringState(
         if (ragdollLegL) {
             float seed = ls->breathPhase * 2.91f + 0.8f;
             float jd = (deathTime < 2.0f) ? 1.0f : (deathTime < 5.0f) ? (5.0f-deathTime)/3.0f : 0.0f;
-            float drift = sinf(deathTime * 0.35f + seed) * 8.0f;
-            float jerk = sinf(deathTime * 13.0f + seed) * 22.0f * jd;
+            float settle = (deathTime > 8.0f) ? fminf((deathTime - 8.0f) / 2.0f, 1.0f) : 0.0f;
+            float ms = 1.0f - settle;
+            float drift = sinf(deathTime * 0.35f + seed) * 8.0f * ms;
+            float jerk = sinf(deathTime * 13.0f + seed) * 22.0f * jd * ms;
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift)));
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, -sinf(deathTime*0.45f+seed)*10.0f));
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, -sinf(deathTime*0.45f+seed)*10.0f*ms));
         } else {
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1, 0, 0}, -ls->legSwingL.angle * LEG_AMP));
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0, 0, 1}, ls->legSpreadL.angle * LEG_AMP));
@@ -258,7 +270,8 @@ void AstroModelApplySpringState(
     /* === LEFT SHIN === */
     if (HAS_BONE(BONE_SHIN_L)) {
         int bi = BONE_IDX(BONE_SHIN_L);
-        float knee = ragdollLegL ? sinf(deathTime*0.6f+ls->breathPhase+1.0f)*20.0f
+        float lSettle = (isDying && deathTime > 8.0f) ? fminf((deathTime - 8.0f) / 2.0f, 1.0f) : 0.0f;
+        float knee = ragdollLegL ? sinf(deathTime*0.6f+ls->breathPhase+1.0f)*20.0f*(1.0f-lSettle)
                                  : ap->kneeFlexBase + ls->kneeL.angle * LEG_AMP;
         localPose[bi].rotation = QuaternionMultiply(
             localPose[bi].rotation, RotFromAxisDeg((Vector3){1, 0, 0}, -knee));
