@@ -128,10 +128,10 @@ void AstroModelApplySpringState(
                 rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1, 0, 0}, -f * 20.0f));
                 rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0, 0, 1}, sinf(f * 30.0f) * f * 15.0f));
             }
-            if (knockdownTimer > 0)
-                rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1, 0, 0}, knockdownAngle));
+            if (knockdownTimer > 0 && !isCowering)
+                rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1, 0, 0}, -knockdownAngle));
             if (isCowering)
-                rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1, 0, 0}, 45.0f));
+                rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1, 0, 0}, -knockdownAngle));
             localPose[bi].rotation = QuaternionMultiply(localPose[bi].rotation, rot);
             localPose[bi].translation.x += ls->hipSway.angle * 0.01f;
             float breath = sinf(ls->breathPhase) * ap->breathScale;
