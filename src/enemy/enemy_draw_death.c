@@ -13,9 +13,10 @@
 // Call from any death renderer when the body is on the ground.
 // ============================================================================
 static void DrawBloodPoolAtPos(Vector3 pos, float elapsed, float facingSeed) {
-    if (elapsed < 1.0f) return; // brief settle before blood starts
-    float poolTime = elapsed - 1.0f;
-    float poolR = 0.3f + poolTime * 0.4f;   // fast spread
+    // Don't start pool until body has settled on the ground (~4s for ragdoll bounce)
+    if (elapsed < 4.0f) return;
+    float poolTime = elapsed - 4.0f;
+    float poolR = 0.3f + poolTime * 0.35f;   // steady spread after settling
     if (poolR > 3.5f) poolR = 3.5f;
 
     int segs = 12;
