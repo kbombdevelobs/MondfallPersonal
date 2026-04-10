@@ -420,46 +420,72 @@ void DrawAstronautRagdoll(Enemy *e) {
             }
         }
     } else {
-        float elapsed = 12.0f - e->deathTimer;
+        float elapsed = DEATH_BODY_PERSIST_TIME - e->deathTimer;
         float poolTime = elapsed - 0.5f;
         if (poolTime < 0) poolTime = 0;
         float poolR = 0.3f + poolTime * 0.25f;
         if (poolR > 3.5f) poolR = 3.5f;
 
-        int segs = 10;
+        int segs = 14;
+        int rings = 5;  // concentric rings for gradient
         float cx = pos.x, cz = pos.z;
-        float cH = WorldGetHeight(cx, cz) + 0.06f;
 
-        for (int s = 0; s < segs; s++) {
-            float a0 = (float)s / segs * 2.0f * PI;
-            float a1 = (float)(s + 1) / segs * 2.0f * PI;
+        // Draw concentric rings from outside in, each sampling terrain height
+        // Outer: thin, transparent. Inner: thick, dark, opaque.
+        for (int ring = rings - 1; ring >= 0; ring--) {
+            float outerFrac = (float)(ring + 1) / (float)rings;
+            float innerFrac = (float)ring / (float)rings;
+            float outerR = poolR * outerFrac;
+            float innerR = poolR * innerFrac;
 
-            float x0 = cx + cosf(a0) * poolR;
-            float z0 = cz + sinf(a0) * poolR;
-            float h0 = WorldGetHeight(x0, z0) + 0.06f;
+            // Gradient: center is darkest/most opaque, edges are lighter/transparent
+            // Also add slight per-ring irregularity from facing angle seed
+            float colorT = (float)ring / (float)(rings - 1);  // 0=center, 1=edge
+            unsigned char cr = (unsigned char)(60 + colorT * 80);    // 60→140
+            unsigned char cg = (unsigned char)(3 + colorT * 8);      // 3→11
+            unsigned char cb = (unsigned char)(2 + colorT * 6);      // 2→8
+            unsigned char ca = (unsigned char)(220 - colorT * 120);  // 220→100
 
-            float x1 = cx + cosf(a1) * poolR;
-            float z1 = cz + sinf(a1) * poolR;
-            float h1 = WorldGetHeight(x1, z1) + 0.06f;
+            for (int s = 0; s < segs; s++) {
+                float a0 = (float)s / segs * 2.0f * PI;
+                float a1 = (float)(s + 1) / segs * 2.0f * PI;
 
-            DrawTriangle3D(
-                (Vector3){cx, cH, cz},
-                (Vector3){x1, h1, z1},
-                (Vector3){x0, h0, z0},
-                (Color){120, 8, 5, 200});
+                // Per-segment radius jitter for organic edge (stronger at outer rings)
+                float jitter0 = 1.0f + sinf(a0 * 3.0f + e->facingAngle * 7.13f) * 0.15f * outerFrac;
+                float jitter1 = 1.0f + sinf(a1 * 3.0f + e->facingAngle * 7.13f) * 0.15f * outerFrac;
 
-            float ix0 = cx + cosf(a0) * poolR * 0.6f;
-            float iz0 = cz + sinf(a0) * poolR * 0.6f;
-            float ih0 = WorldGetHeight(ix0, iz0) + 0.07f;
-            float ix1 = cx + cosf(a1) * poolR * 0.6f;
-            float iz1 = cz + sinf(a1) * poolR * 0.6f;
-            float ih1 = WorldGetHeight(ix1, iz1) + 0.07f;
+                // Outer edge vertices (sample terrain height at each point)
+                float ox0 = cx + cosf(a0) * outerR * jitter0;
+                float oz0 = cz + sinf(a0) * outerR * jitter0;
+                float oh0 = WorldGetHeight(ox0, oz0) + 0.04f;
 
-            DrawTriangle3D(
-                (Vector3){cx, cH + 0.01f, cz},
-                (Vector3){ix1, ih1, iz1},
-                (Vector3){ix0, ih0, iz0},
-                (Color){160, 15, 10, 220});
+                float ox1 = cx + cosf(a1) * outerR * jitter1;
+                float oz1 = cz + sinf(a1) * outerR * jitter1;
+                float oh1 = WorldGetHeight(ox1, oz1) + 0.04f;
+
+                // Inner edge vertices
+                float ix0 = cx + cosf(a0) * innerR * jitter0;
+                float iz0 = cz + sinf(a0) * innerR * jitter0;
+                float ih0 = WorldGetHeight(ix0, iz0) + 0.04f + (float)ring * 0.005f;
+
+                float ix1 = cx + cosf(a1) * innerR * jitter1;
+                float iz1 = cz + sinf(a1) * innerR * jitter1;
+                float ih1 = WorldGetHeight(ix1, iz1) + 0.04f + (float)ring * 0.005f;
+
+                Color ringCol = {cr, cg, cb, ca};
+
+                // Two triangles per quad (outer-inner ring strip)
+                DrawTriangle3D(
+                    (Vector3){ix0, ih0, iz0},
+                    (Vector3){ox1, oh1, oz1},
+                    (Vector3){ox0, oh0, oz0},
+                    ringCol);
+                DrawTriangle3D(
+                    (Vector3){ix0, ih0, iz0},
+                    (Vector3){ix1, ih1, iz1},
+                    (Vector3){ox1, oh1, oz1},
+                    ringCol);
+            }
         }
 
         if (elapsed < 8.0f) {
@@ -469,7 +495,8 @@ void DrawAstronautRagdoll(Enemy *e) {
                 float dlife = fmodf(dt2, 1.5f) / 1.5f;
                 float dx = cx + sinf(dt2 * 0.7f) * 0.3f;
                 float dz = cz + cosf(dt2 * 0.9f) * 0.3f;
-                float dy = pos.y + 0.3f - dlife * (pos.y - cH + 0.5f);
+                float groundH = WorldGetHeight(cx, cz) + 0.06f;
+                float dy = pos.y + 0.3f - dlife * (pos.y - groundH + 0.5f);
                 float dGH = WorldGetHeight(dx, dz) + 0.08f;
                 if (dy < dGH) dy = dGH;
                 DrawSphereEx((Vector3){dx, dy, dz}, 0.03f * dripFade, 3, 3,
