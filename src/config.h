@@ -360,7 +360,7 @@
 #define MORALE_RALLY_THRESHOLD   0.5f
 #define MORALE_FLEE_DURATION_MIN 4.0f    // longer flee
 #define MORALE_FLEE_DURATION_MAX 8.0f    // longer flee
-#define MORALE_COWER_ANGLE_MAX   80.0f   // deep forward bend — nearly face-down behind cover
+#define MORALE_COWER_ANGLE_MAX   85.0f   // nearly flat against ground behind cover
 #define MORALE_COWER_ANGLE_RATE  120.0f  // degrees/sec to reach cower angle
 #define MORALE_COWER_RECOVERY    0.12f   // morale recovery rate while cowering behind cover
 

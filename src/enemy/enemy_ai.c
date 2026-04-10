@@ -149,12 +149,14 @@ static void SysAIBehavior(ecs_iter_t *it) {
                                 float score = dot * 2.0f - rockDist * 0.05f + rockBonus;
                                 if (score > bestScore) {
                                     bestScore = score;
-                                    // Hide behind the rock (away from player side)
+                                    // Hide on far side of rock from player — push well past rock edge
                                     Vector3 coverDir = (dist > 0.1f)
                                         ? Vector3Normalize(Vector3Subtract(rock->position, playerPos))
                                         : awayFromPlayer;
+                                    float pushDist = fmaxf(rock->size.x, rock->size.z) * 0.5f + 1.5f;
                                     bestCoverPos = Vector3Add(rock->position,
-                                        Vector3Scale(coverDir, rock->size.x * 0.3f + 1.0f));
+                                        Vector3Scale(coverDir, pushDist));
+                                    bestCoverPos.y = WorldGetHeight(bestCoverPos.x, bestCoverPos.z);
                                     foundCover = true;
                                 }
                             }
