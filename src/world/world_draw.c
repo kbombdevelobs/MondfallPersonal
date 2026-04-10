@@ -1,4 +1,5 @@
 #include "world_draw.h"
+#include "world_rocks.h"
 #include "world_noise.h"
 #include <math.h>
 #include <stdlib.h>
@@ -98,51 +99,12 @@ void WorldDrawSky(World *world, Camera3D camera) {
     }
 }
 
-static void DrawChunk(Chunk *chunk, Vector3 playerPos) {
-    float fade = 1.0f;
-
+static void DrawChunk(Chunk *chunk, Vector3 playerPos, World *world) {
     DrawModel(chunk->ground, (Vector3){0, 0, 0}, 1.0f, WHITE);
 
-    // Boulders — organic sphere clusters (low-poly for performance)
+    // Boulders — use .glb models if loaded, otherwise procedural fallback
     for (int i = 0; i < chunk->rockCount; i++) {
-        Rock *r = &chunk->rocks[i];
-
-        float rdist = Vector3Distance(playerPos, r->position);
-        if (rdist > CHUNK_SIZE * 3) continue;
-
-        Color rc = {(unsigned char)(r->color.r * fade), (unsigned char)(r->color.g * fade),
-                    (unsigned char)(r->color.b * fade), 255};
-        Color rcDark = {(unsigned char)(rc.r * 0.7f), (unsigned char)(rc.g * 0.7f),
-                        (unsigned char)(rc.b * 0.7f), 255};
-        Color rcLight = {(unsigned char)fminf(rc.r * 1.15f, 255), (unsigned char)fminf(rc.g * 1.15f, 255),
-                         (unsigned char)fminf(rc.b * 1.1f, 255), 255};
-
-        float avg = (r->size.x + r->size.y + r->size.z) / 3.0f;
-        Vector3 p = r->position;
-        float rot = r->rotation;
-
-        int detail = (rdist < CHUNK_SIZE) ? 6 : 4;
-
-        // Main body
-        DrawSphereEx(p, avg * 0.5f, detail, detail, rc);
-        // Base
-        DrawSphereEx((Vector3){p.x, p.y - avg * 0.15f, p.z}, avg * 0.45f, detail, detail, rcDark);
-        // Top lump
-        DrawSphereEx((Vector3){p.x + cosf(rot) * avg * 0.15f, p.y + avg * 0.25f,
-                     p.z + sinf(rot) * avg * 0.1f}, avg * 0.35f, detail, detail, rcLight);
-
-        // Extra detail when close
-        if (rdist < CHUNK_SIZE * 1.5f) {
-            DrawSphereEx((Vector3){p.x + cosf(rot+1.5f)*avg*0.3f, p.y - avg*0.05f,
-                         p.z + sinf(rot+1.5f)*avg*0.3f}, avg*0.3f, detail, detail, rcDark);
-            DrawSphereEx((Vector3){p.x + cosf(rot+3.5f)*avg*0.25f, p.y + avg*0.1f,
-                         p.z + sinf(rot+3.5f)*avg*0.25f}, avg*0.28f, detail, detail, rc);
-        }
-
-        // Shadow
-        DrawCylinder((Vector3){p.x, p.y - avg * 0.48f, p.z},
-            avg * 0.55f, avg * 0.5f, 0.02f, 6,
-            (Color){(unsigned char)(30 * fade), (unsigned char)(28 * fade), (unsigned char)(25 * fade), 100});
+        WorldRockDraw(world, &chunk->rocks[i], playerPos, CHUNK_SIZE);
     }
 }
 
@@ -179,6 +141,6 @@ void WorldDraw(World *world, Vector3 playerPos, Camera3D camera) {
             if (maxDot < 0.0f) continue;
         }
 
-        DrawChunk(ch, playerPos);
+        DrawChunk(ch, playerPos, world);
     }
 }

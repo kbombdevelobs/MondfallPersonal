@@ -1,6 +1,7 @@
 #include "world.h"
 #include "world/world_noise.h"
 #include "world/world_draw.h"
+#include "world/world_rocks.h"
 #include "rlgl.h"
 #include <stdlib.h>
 #include <math.h>
@@ -317,6 +318,7 @@ void WorldInit(World *world) {
     UnloadImage(rockImg);
 
     world->rockModelCount = 0;
+    WorldRocksInit(world);
     world->texturesLoaded = true;
 
     world->starCount = MAX_STARS;
@@ -336,6 +338,7 @@ void WorldUnload(World *world) {
     for (int i = 0; i < world->chunkCount; i++) {
         if (world->chunks[i].generated) UnloadModel(world->chunks[i].ground);
     }
+    WorldRocksUnload(world);
     if (world->texturesLoaded) {
         UnloadTexture(world->moonTex);
         UnloadTexture(world->rockTex);
