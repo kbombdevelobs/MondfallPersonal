@@ -7,7 +7,7 @@
 #include "enemy_components.h"
 
 // Legacy EnemyState — used by Enemy struct for draw code compatibility
-typedef enum { ENEMY_ALIVE, ENEMY_DYING, ENEMY_VAPORIZING, ENEMY_EVISCERATING, ENEMY_DEAD } EnemyState;
+typedef enum { ENEMY_ALIVE, ENEMY_DYING, ENEMY_VAPORIZING, ENEMY_EVISCERATING, ENEMY_DECAPITATING, ENEMY_DEAD } EnemyState;
 
 // Legacy Enemy struct — kept for DrawAstronautModel compatibility
 // The ECS components are the canonical data source; this struct is used
@@ -41,10 +41,22 @@ typedef struct {
     float evisBloodTimer[6];
     int deathStyle;
     EnemyRank rank;
+    float decapTimer;
+    float decapBloodTimer;
+    Vector3 decapDriftVel;
+    float decapDriftVelY;
+    Vector3 decapHitDir;
+    float knockdownAngle;  // >0: sprawled from ground pound
+    bool isCowering;       // forward crouch behind cover
+    EcLimbState limbState; // spring-damper limb state (copied from ECS)
+    bool hasLimbState;
 } Enemy;
 
+// Forward declaration for skeletal model set
+typedef struct AstroModelSet AstroModelSet;
+
 // Legacy EnemyManager struct — kept for DrawAstronautModel compatibility
-// Only the model fields are used (mdlVisor, mdlArm, mdlBoot).
+// Only the model fields are used (mdlVisor, mdlArm, mdlBoot, astroModels).
 typedef struct {
     Enemy *enemies;
     int capacity;
@@ -53,6 +65,7 @@ typedef struct {
     int aiFrameCounter;
     float spawnTimer, spawnRate;
     Model mdlVisor, mdlArm, mdlBoot;
+    AstroModelSet *astroModels;  // skeletal .glb models (NULL if not loaded)
     Sound sndSovietFire, sndAmericanFire;
     Sound sndSovietDeath[2];
     int sovietDeathCount;

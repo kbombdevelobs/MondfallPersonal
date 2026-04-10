@@ -1,4 +1,5 @@
 #include "pickup.h"
+#include "weapon/weapon_model.h"
 #include "world.h"
 #include "sound_gen.h"
 #include "rlgl.h"
@@ -351,6 +352,22 @@ void PickupDrawFirstPerson(PickupManager *pm, Camera3D camera, float weaponBobTi
     rlRotatef(yaw * RAD2DEG, 0, 1, 0);
     rlRotatef(pitch * RAD2DEG, 1, 0, 0);
 
+    /* If a .glb model is loaded for this pickup weapon, use it */
+    WeaponModelSet *wms = WeaponModelsGet();
+    if (wms && wms->available && wms->pickupLoaded[pm->pickupType]) {
+        rlPushMatrix();
+        rlRotatef(180.0f, 0.0f, 1.0f, 0.0f);
+        DrawModel(wms->pickupWeapons[pm->pickupType], (Vector3){0, 0, 0}, 1.6f, WHITE);
+        rlPopMatrix();
+        /* Muzzle flash */
+        if (pm->pickupMuzzleFlash > 0) {
+            DrawSphere((Vector3){0, 0, 0.7f}, pm->pickupMuzzleFlash * 0.1f,
+                (Color){255, 200, 50, (unsigned char)(pm->pickupMuzzleFlash * 220)});
+        }
+        rlPopMatrix();
+        return;
+    }
+
     switch (pm->pickupType) {
     case PICKUP_KOSMOS7: {
         Color GM = {45,48,55,255};
@@ -525,6 +542,18 @@ void PickupManagerDraw(PickupManager *pm) {
         rlPushMatrix();
         rlTranslatef(p.x, p.y, p.z);
         rlRotatef(spin, 0, 1, 0);
+
+        /* If a .glb model is loaded for this pickup weapon, use it */
+        WeaponModelSet *wms2 = WeaponModelsGet();
+        if (wms2 && wms2->available && wms2->pickupLoaded[g->weaponType]) {
+            rlPushMatrix();
+            rlRotatef(180.0f, 0.0f, 1.0f, 0.0f);
+            DrawModel(wms2->pickupWeapons[g->weaponType], (Vector3){0, 0, 0}, 1.4f, WHITE);
+            rlPopMatrix();
+            rlPopMatrix();
+            DrawSphereEx(p, 0.6f + bob * 0.3f, 4, 4, (Color){255, 255, 200, 30});
+            continue;
+        }
 
         switch (g->weaponType) {
         case PICKUP_KOSMOS7: {

@@ -18,9 +18,28 @@ static void SysPhysics(ecs_iter_t *it) {
     float dt = it->delta_time;
 
     for (int i = 0; i < it->count; i++) {
+        // Decay stagger timer
+        if (anim[i].staggerTimer > 0) anim[i].staggerTimer -= dt;
+
+        // Decay knockdown timer and animate getting back up
+        if (anim[i].knockdownTimer > 0) {
+            anim[i].knockdownTimer -= dt;
+            if (anim[i].knockdownTimer <= 0) {
+                anim[i].knockdownTimer = 0;
+                anim[i].knockdownAngle = 0;
+            } else if (anim[i].knockdownTimer < 1.8f) {
+                // Slowly ease back to standing during final 1.8s
+                float recoveryT = 1.0f - (anim[i].knockdownTimer / 1.8f);
+                float ease = recoveryT * recoveryT * (3.0f - 2.0f * recoveryT); // smoothstep
+                float targetAngle = anim[i].knockdownAngle * (1.0f - ease);
+                anim[i].knockdownAngle += (targetAngle - anim[i].knockdownAngle) * 2.0f * dt;
+            }
+        }
+
         // Momentum: lerp velocity toward desired velocity from steering
+        // Skip during stagger or knockdown — let impulse play out
         const EcSteering *steer = ecs_get(it->world, it->entities[i], EcSteering);
-        if (steer) {
+        if (steer && anim[i].staggerTimer <= 0 && anim[i].knockdownTimer <= 0) {
             float a = steer->acceleration * dt;
             if (a > 1.0f) a = 1.0f;
             vel[i].velocity.x += (steer->desiredVelocity.x - vel[i].velocity.x) * a;
@@ -139,8 +158,10 @@ static void SysAttack(ecs_iter_t *it) {
             if (anim[i].shootAnim < 0) anim[i].shootAnim = 0;
         }
 
-        // Fleeing units don't fire
+        // Fleeing, knocked-down, or staggered units don't fire
         if (ai[i].behavior == AI_FLEE) continue;
+        if (anim[i].knockdownTimer > 0) continue;
+        if (anim[i].staggerTimer > 0) continue;
         if (dist >= cs[i].attackRange || ai[i].burstCooldown > 0) continue;
 
         if (ai[i].attackTimer >= cs[i].attackRate) {
@@ -153,7 +174,18 @@ static void SysAttack(ecs_iter_t *it) {
                 else PlaySound(res->sndAmericanFire);
             }
 
-            float hitChance = 0.5f - (dist / cs[i].attackRange) * 0.3f;
+            // Rank-based accuracy: troopers spray, NCOs steady, officers deadly
+            float accBase, accRange;
+            const EcRank *rkAcc = ecs_get(it->world, it->entities[i], EcRank);
+            EnemyRank rkAccVal = rkAcc ? rkAcc->rank : RANK_TROOPER;
+            if (rkAccVal == RANK_OFFICER) {
+                accBase = OFFICER_ACCURACY_BASE; accRange = OFFICER_ACCURACY_RANGE;
+            } else if (rkAccVal == RANK_NCO) {
+                accBase = NCO_ACCURACY_BASE; accRange = NCO_ACCURACY_RANGE;
+            } else {
+                accBase = TROOPER_ACCURACY_BASE; accRange = TROOPER_ACCURACY_RANGE;
+            }
+            float hitChance = accBase - (dist / cs[i].attackRange) * accRange;
             if (ai[i].behavior == AI_STRAFE) hitChance -= 0.1f;
             // Morale accuracy bonus when near leader
             const EcMorale *mor = ecs_get(it->world, it->entities[i], EcMorale);
@@ -162,6 +194,26 @@ static void SysAttack(ecs_iter_t *it) {
             }
             if ((float)rand() / RAND_MAX < hitChance) {
                 if (ctxMut) ctxMut->playerDamageAccum += cs[i].damage;
+            }
+
+            // Occasional visible bolt projectile
+            if (ctxMut && ctxMut->boltCount < MAX_ENEMY_BOLTS && (rand() % 100) < ENEMY_BOLT_CHANCE) {
+                Vector3 up = {0, 1, 0};
+                float fa = tr[i].facingAngle;
+                Vector3 fwd = {sinf(fa), 0, cosf(fa)};
+                Vector3 right = Vector3CrossProduct(fwd, up);
+                Vector3 muzzle = Vector3Add(tr[i].position,
+                    Vector3Add(Vector3Scale(up, 0.65f),
+                    Vector3Add(Vector3Scale(right, 0.2f),
+                               Vector3Scale(fwd, 0.88f))));
+                int bi = ctxMut->boltCount;
+                ctxMut->boltStart[bi] = muzzle;
+                ctxMut->boltEnd[bi] = playerPos;
+                ctxMut->boltColor[bi] = (fac[i].type == ENEMY_SOVIET) ?
+                    (Color){255, 150, 50, 230} : (Color){80, 180, 255, 230};
+                ctxMut->boltProgress[bi] = 0;
+                ctxMut->boltLife[bi] = ENEMY_BOLT_LIFETIME;
+                ctxMut->boltCount++;
             }
 
             int burst = (fac[i].type == ENEMY_SOVIET) ? 5 : 2;

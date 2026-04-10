@@ -388,6 +388,88 @@ static void DrawInteriorAmbientLight(float y) {
     DrawCube((Vector3){0, y + 2.5f, -halfD + 0.12f}, 6.0f, 3.0f, 0.01f, (Color){255, 230, 170, 25});
 }
 
+static void DrawHe3FishbowlTank(float y, bool expended) {
+    float halfD = MOONBASE_INTERIOR_D * 0.5f;
+    float tankX = MOONBASE_INTERIOR_W * 0.3f;
+    float tankZ = -(halfD - 2.5f);
+    float tankY = y + 2.0f;
+    float bowlR = 1.0f;
+    Color leg = (Color){60, 62, 68, 255};
+    float legTop = tankY - bowlR - 0.05f;
+    float legSpread = 0.7f;
+    for (int li = 0; li < 3; li++) {
+        float la = (float)li * (2.0f * PI / 3.0f) + 0.5f;
+        float lx = tankX + cosf(la) * legSpread;
+        float lz = tankZ + sinf(la) * legSpread;
+        DrawLine3D((Vector3){lx, y + 0.02f, lz}, (Vector3){tankX, legTop, tankZ}, leg);
+        DrawCube((Vector3){lx, y + 0.02f, lz}, 0.12f, 0.03f, 0.12f, leg);
+    }
+    DrawCube((Vector3){tankX, legTop, tankZ}, 0.5f, 0.04f, 0.5f, (Color){50, 52, 56, 255});
+    Color cylCol = (Color){55, 65, 75, 255};
+    Color hoseCol = (Color){45, 55, 60, 255};
+    float wallZ = -(halfD - 0.4f);
+    DrawCube((Vector3){tankX - 0.5f, y + 0.6f, wallZ}, 0.3f, 1.2f, 0.25f, cylCol);
+    DrawCube((Vector3){tankX - 0.5f, y + 1.25f, wallZ}, 0.22f, 0.08f, 0.18f, (Color){70, 72, 78, 255});
+    DrawCube((Vector3){tankX + 0.5f, y + 0.5f, wallZ}, 0.25f, 1.0f, 0.22f, cylCol);
+    DrawCube((Vector3){tankX + 0.5f, y + 1.05f, wallZ}, 0.18f, 0.08f, 0.16f, (Color){70, 72, 78, 255});
+    for (int hi = 0; hi < 8; hi++) {
+        float ht = (float)hi / 7.0f;
+        float hx = tankX - 0.5f + ht * 0.5f;
+        float hz = wallZ + ht * (tankZ - wallZ);
+        float sag = sinf(ht * PI) * 0.3f;
+        float hy = y + 1.1f - sag;
+        float ht2 = (float)(hi + 1) / 7.0f;
+        float hx2 = tankX - 0.5f + ht2 * 0.5f;
+        float hz2 = wallZ + ht2 * (tankZ - wallZ);
+        float sag2 = sinf(ht2 * PI) * 0.3f;
+        float hy2 = y + 1.1f - sag2;
+        DrawLine3D((Vector3){hx, hy, hz}, (Vector3){hx2, hy2, hz2}, hoseCol);
+    }
+    if (!expended) {
+        float t = (float)GetTime();
+        float pulse = 0.75f + 0.25f * sinf(t * 1.5f);
+        DrawSphere((Vector3){tankX, tankY, tankZ}, bowlR * 0.88f,
+            (Color){(unsigned char)(50 * pulse), (unsigned char)(200 * pulse), (unsigned char)(235 * pulse), 160});
+        for (int w = 0; w < 8; w++) {
+            float wSpeed = 0.6f + (float)(w % 3) * 0.2f;
+            float wAngle = t * wSpeed + (float)w * 0.785f;
+            float wr = bowlR * (0.35f + (float)(w % 4) * 0.1f);
+            float wx = tankX + cosf(wAngle) * wr;
+            float wy = tankY + sinf(wAngle * 0.7f + (float)w * 0.9f) * bowlR * 0.4f;
+            float wz = tankZ + sinf(wAngle + (float)w * 0.5f) * wr;
+            float wSize = 0.18f + sinf(t * 1.8f + (float)w * 1.3f) * 0.1f;
+            unsigned char wa = (unsigned char)(140 + sinf(t * 2.5f + (float)w * 1.1f) * 60);
+            DrawSphere((Vector3){wx, wy, wz}, wSize, (Color){70, 220, 250, wa});
+        }
+        float cx = tankX + sinf(t * 0.3f) * bowlR * 0.15f;
+        float cz = tankZ + cosf(t * 0.4f) * bowlR * 0.15f;
+        DrawSphere((Vector3){cx, tankY + sinf(t * 0.5f) * 0.12f, cz}, bowlR * 0.28f, (Color){130, 245, 255, 120});
+        DrawSphere((Vector3){cx, tankY, cz}, bowlR * 0.12f, (Color){200, 255, 255, (unsigned char)(80 + sinf(t * 5.0f) * 40)});
+    } else {
+        DrawSphere((Vector3){tankX, tankY, tankZ}, bowlR * 0.85f, (Color){15, 20, 25, 100});
+    }
+    DrawSphere((Vector3){tankX - bowlR * 0.35f, tankY + bowlR * 0.35f, tankZ + bowlR * 0.45f}, bowlR * 0.18f, (Color){255, 255, 255, 70});
+    DrawSphere((Vector3){tankX + bowlR * 0.2f, tankY + bowlR * 0.4f, tankZ + bowlR * 0.3f}, bowlR * 0.08f, (Color){255, 255, 255, 40});
+    for (int ri = 0; ri < 24; ri++) {
+        float a1 = (float)ri / 24.0f * 2.0f * PI;
+        float a2 = (float)(ri + 1) / 24.0f * 2.0f * PI;
+        DrawLine3D(
+            (Vector3){tankX + cosf(a1) * bowlR, tankY, tankZ + sinf(a1) * bowlR},
+            (Vector3){tankX + cosf(a2) * bowlR, tankY, tankZ + sinf(a2) * bowlR},
+            (Color){180, 210, 230, 80});
+    }
+    DrawCube((Vector3){tankX, tankY + bowlR - 0.05f, tankZ}, 0.35f, 0.14f, 0.35f, INT_BAR_BRASS);
+    DrawCube((Vector3){tankX, tankY + bowlR + 0.08f, tankZ}, 0.14f, 0.14f, 0.14f, (Color){60, 65, 70, 255});
+    DrawCube((Vector3){tankX + 0.15f, tankY + bowlR + 0.15f, tankZ}, 0.22f, 0.04f, 0.04f, (Color){120, 40, 30, 255});
+    DrawCube((Vector3){tankX, tankY, tankZ - bowlR - 0.4f}, 0.06f, 0.06f, 0.8f, (Color){55, 60, 65, 255});
+    float blink = (sinf((float)GetTime() * 3.0f) > 0) ? 1.0f : 0.4f;
+    Color statusCol = expended ?
+        (Color){(unsigned char)(200 * blink), (unsigned char)(30 * blink), 20, 230} :
+        (Color){(unsigned char)(40 * blink), (unsigned char)(220 * blink), (unsigned char)(240 * blink), 230};
+    DrawCube((Vector3){tankX + bowlR + 0.2f, tankY, tankZ}, 0.1f, 0.1f, 0.1f, statusCol);
+    DrawCube((Vector3){tankX, tankY - bowlR - 0.22f, tankZ + 0.01f}, 0.8f, 0.25f, 0.03f, (Color){25, 22, 18, 255});
+}
+
 void StructureManagerDrawInterior(StructureManager *sm) {
     if (sm->insideIndex < 0) return;
     Structure *s = &sm->structures[sm->insideIndex];
@@ -400,5 +482,6 @@ void StructureManagerDrawInterior(StructureManager *sm) {
     DrawInteriorDoors(y);
     DrawPortraits(y);
     DrawResupplyCloset(y, sm->resupplyFlashTimer, s->resuppliesLeft <= 0);
+    DrawHe3FishbowlTank(y, s->he3RefillsLeft <= 0);
     DrawFurnitureAndDecor(y);
 }

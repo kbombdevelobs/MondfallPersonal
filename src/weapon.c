@@ -1,6 +1,7 @@
 #include "weapon.h"
 #include "weapon/weapon_sound.h"
 #include "weapon/weapon_draw.h"
+#include "weapon/weapon_model.h"
 #include "sound_gen.h"
 #include "rlgl.h"
 #include <math.h>
@@ -50,9 +51,14 @@ void WeaponInit(Weapon *w) {
         w->matDefault = LoadMaterialDefault();
         w->meshesLoaded = true;
     }
+
+    /* Load .glb weapon models (graceful fallback if missing) */
+    WeaponModelsLoad(WeaponModelsGet());
 }
 
 void WeaponUnload(Weapon *w) {
+    WeaponModelsUnload(WeaponModelsGet());
+
     if (w->soundLoaded) {
         UnloadSound(w->sndMp40Fire); UnloadSound(w->sndRaketenFire);
         UnloadSound(w->sndJackhammerHit); UnloadSound(w->sndReload); UnloadSound(w->sndEmpty);

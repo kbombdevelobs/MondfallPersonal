@@ -144,6 +144,9 @@ static ecs_entity_t SpawnEnemyInternal(ecs_world_t *world, EnemyType type, Enemy
         .acceleration = accel
     });
 
+    // Limb physics state — zero-initialize all springs
+    ecs_set(world, e, EcLimbState, {0});
+
     // Squad assignment
     ecs_set(world, e, EcSquad, {
         .squadId = squadId,

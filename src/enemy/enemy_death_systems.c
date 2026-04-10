@@ -156,6 +156,65 @@ static void SysEviscerateDeath(ecs_iter_t *it) {
 }
 
 // ============================================================================
+// SysDecapitateDeath -- headshot: blood fountain, ragdoll drift
+// ============================================================================
+static void SysDecapitateDeath(ecs_iter_t *it) {
+    EcTransform *tr = ecs_field(it, EcTransform, 0);
+    EcAnimation *anim = ecs_field(it, EcAnimation, 1);
+    EcDecapitateDeath *dd = ecs_field(it, EcDecapitateDeath, 2);
+
+    float dt = it->delta_time;
+
+    for (int i = it->count - 1; i >= 0; i--) {
+        anim[i].animState = ANIM_DEATH;
+        dd[i].deathTimer -= dt;
+        dd[i].timer += dt;
+
+        anim[i].muzzleFlash = 0;
+        dd[i].bloodTimer += dt;
+
+        // Ragdoll spin from frame 1 — immediate blowout
+        anim[i].deathAngle += dd[i].spinX * dt;
+        tr[i].facingAngle += dd[i].spinY * dt * 0.02f;
+
+        // Decay spin
+        dd[i].spinX *= (1.0f - 0.3f * dt);
+        dd[i].spinY *= (1.0f - 0.3f * dt);
+
+        // Apply drift velocity
+        tr[i].position.x += dd[i].driftVel.x * dt;
+        tr[i].position.z += dd[i].driftVel.z * dt;
+        tr[i].position.y += dd[i].driftVelY * dt;
+
+        // Moon gravity
+        dd[i].driftVelY -= MOON_GRAVITY * dt;
+
+        // Ragdoll friction
+        dd[i].driftVel.x *= (1.0f - 0.5f * dt);
+        dd[i].driftVel.z *= (1.0f - 0.5f * dt);
+
+        // Ground clamping with bounce
+        float gH = WorldGetHeight(tr[i].position.x, tr[i].position.z) + 0.6f;
+        if (tr[i].position.y < gH) {
+            tr[i].position.y = gH;
+            if (fabsf(dd[i].driftVelY) < 0.5f) {
+                dd[i].driftVelY = 0;
+                dd[i].driftVel.x *= 0.7f;
+                dd[i].driftVel.z *= 0.7f;
+                dd[i].spinX *= 0.85f;
+            } else {
+                dd[i].driftVelY = fabsf(dd[i].driftVelY) * 0.3f;
+                dd[i].spinX *= 0.6f;
+            }
+        }
+
+        if (dd[i].deathTimer <= 0) {
+            ecs_delete(it->world, it->entities[i]);
+        }
+    }
+}
+
+// ============================================================================
 // Registration
 // ============================================================================
 
@@ -217,6 +276,21 @@ void EcsEnemyDeathSystemsRegister(ecs_world_t *world) {
             { .id = ecs_id(EcEviscerating) }
         },
         .callback = SysEviscerateDeath
+    });
+
+    // SysDecapitateDeath -- EcsOnUpdate
+    ecs_system_init(world, &(ecs_system_desc_t){
+        .entity = ecs_entity(world, {
+            .name = "SysDecapitateDeath",
+            .add = ecs_ids(ecs_dependson(EcsOnUpdate))
+        }),
+        .query.terms = {
+            { .id = ecs_id(EcTransform) },
+            { .id = ecs_id(EcAnimation) },
+            { .id = ecs_id(EcDecapitateDeath) },
+            { .id = ecs_id(EcDecapitating) }
+        },
+        .callback = SysDecapitateDeath
     });
 
     // SysRadioTimer -- EcsOnUpdate (singleton)

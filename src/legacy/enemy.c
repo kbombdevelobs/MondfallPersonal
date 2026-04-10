@@ -585,7 +585,7 @@ void EnemyManagerDrawWithLOD(EnemyManager *em, Camera3D camera) {
         if (dist < LOD1_DISTANCE) {
             DrawAstronautModel(em, e);
         } else if (dist < LOD2_DISTANCE) {
-            DrawAstronautLOD1(e);
+            DrawAstronautLOD1(em, e);
         } else {
             DrawAstronautLOD2(e);
         }

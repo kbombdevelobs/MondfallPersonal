@@ -67,7 +67,35 @@ typedef struct {
     float hitFlash;
     float muzzleFlash;
     float deathAngle;
+    float staggerTimer;      // >0: steering disabled from hit impulse
+    float knockdownTimer;    // >0: sprawled on ground from ground pound, getting up
+    float knockdownAngle;    // current tilt angle (0=standing, ~80=flat)
+    bool isCowering;         // true when cowering behind cover (forward lean, not backward sprawl)
+    Vector3 lastHitDir;      // direction of last damage hit (for per-limb reactions)
 } EcAnimation;
+
+// Spring-damper state for a single limb axis
+typedef struct {
+    float angle;             // current angle (degrees or units)
+    float vel;               // angular velocity (degrees/s or units/s)
+} LimbSpring;
+
+// Per-enemy limb physics state — drives secondary motion via spring-dampers
+typedef struct {
+    LimbSpring armSwingR, armSwingL;
+    LimbSpring armSpreadR, armSpreadL;
+    LimbSpring legSwingR, legSwingL;
+    LimbSpring legSpreadR, legSpreadL;
+    LimbSpring kneeR, kneeL;
+    LimbSpring hipSway;
+    LimbSpring torsoLean;
+    LimbSpring torsoTwist;
+    LimbSpring headPitch;
+    LimbSpring headYaw;
+    float breathPhase;       // slow idle breathing cycle
+    float prevSpeed;         // previous frame speed for lean
+    float prevFacing;        // previous facing for head yaw lag
+} EcLimbState;
 
 // Rank component — determines enhanced stats and visual distinction
 typedef struct {
@@ -81,6 +109,9 @@ typedef struct {
     float leaderDist;        // distance to leader
     float fleeTimer;         // time spent fleeing (for recovery)
     AIBehavior prevBehavior; // behavior before fleeing (to restore on rally)
+    Vector3 fleeCoverPos;    // position behind cover rock (if found)
+    bool fleeCoverFound;     // true if we found a rock to hide behind
+    bool fleeCowering;       // true if we've reached cover and are hiding
 } EcMorale;
 
 // Steering component — momentum-based movement
@@ -108,6 +139,9 @@ typedef struct { char dummy; } EcVaporizing;
 // Tag: entity is being eviscerated
 typedef struct { char dummy; } EcEviscerating;
 
+// Tag: entity is in headshot/decapitate death state
+typedef struct { char dummy; } EcDecapitating;
+
 typedef struct {
     float spinX, spinY, spinZ;
     float ragdollVelX, ragdollVelZ;
@@ -132,6 +166,16 @@ typedef struct {
     float deathTimer;
 } EcEviscerateDeath;
 
+typedef struct {
+    float timer;           // total elapsed time
+    float bloodTimer;      // blood fountain phase timer
+    Vector3 driftVel;      // listless drift velocity (tangent plane)
+    float driftVelY;       // radial drift velocity
+    float spinX, spinY;    // roll and yaw spin rates (deg/s)
+    float deathTimer;      // countdown to entity deletion
+    Vector3 hitDir;        // direction the killing shot came from
+} EcDecapitateDeath;
+
 // ============================================================================
 // Singleton Components — one instance in the world
 // ============================================================================
@@ -147,6 +191,8 @@ typedef struct {
     int americanDeathCount;
     int americanDeathPlays;
     float radioTransmissionTimer;
+    Sound sndGroundPoundScream[4];
+    int groundPoundScreamCount;
     bool modelsLoaded;
 } EcEnemyResources;
 
@@ -159,6 +205,13 @@ typedef struct {
     float playerDamageAccum;  // accumulated damage to player this frame
     int killCount;            // kills this frame (added to game.killCount)
     int rankKillType;         // 0=none, 1=NCO killed, 2=officer killed (for HUD flash)
+    // Enemy bolt projectiles (visible tracers when enemies fire)
+    Vector3 boltStart[MAX_ENEMY_BOLTS];
+    Vector3 boltEnd[MAX_ENEMY_BOLTS];
+    Color boltColor[MAX_ENEMY_BOLTS];
+    float boltProgress[MAX_ENEMY_BOLTS];  // 0→1 travel progress
+    float boltLife[MAX_ENEMY_BOLTS];
+    int boltCount;
 } EcGameContext;
 
 // ============================================================================
@@ -176,12 +229,15 @@ extern ecs_entity_t ecs_id(EcAlive);
 extern ecs_entity_t ecs_id(EcCombatStats);
 extern ecs_entity_t ecs_id(EcAIState);
 extern ecs_entity_t ecs_id(EcAnimation);
+extern ecs_entity_t ecs_id(EcLimbState);
 extern ecs_entity_t ecs_id(EcDying);
 extern ecs_entity_t ecs_id(EcVaporizing);
 extern ecs_entity_t ecs_id(EcEviscerating);
+extern ecs_entity_t ecs_id(EcDecapitating);
 extern ecs_entity_t ecs_id(EcRagdollDeath);
 extern ecs_entity_t ecs_id(EcVaporizeDeath);
 extern ecs_entity_t ecs_id(EcEviscerateDeath);
+extern ecs_entity_t ecs_id(EcDecapitateDeath);
 extern ecs_entity_t ecs_id(EcRank);
 extern ecs_entity_t ecs_id(EcMorale);
 extern ecs_entity_t ecs_id(EcSteering);

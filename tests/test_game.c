@@ -133,13 +133,13 @@ TEST(test_player_forward_pitch_up) {
 TEST(test_player_take_damage) {
     Player p = make_player();
     PlayerTakeDamage(&p, 30.0f);
-    ASSERT_FLOAT_EQ(p.health, 70.0f, 0.01f);
+    ASSERT_FLOAT_EQ(p.health, PLAYER_MAX_HEALTH - 30.0f, 0.01f);
     ASSERT(!PlayerIsDead(&p));
 }
 
 TEST(test_player_take_damage_overkill) {
     Player p = make_player();
-    PlayerTakeDamage(&p, 200.0f);
+    PlayerTakeDamage(&p, PLAYER_MAX_HEALTH + 100.0f);
     ASSERT_FLOAT_EQ(p.health, 0.0f, 0.01f);
     ASSERT(PlayerIsDead(&p));
 }
@@ -402,7 +402,7 @@ TEST(test_enemy_ray_hit) {
     place_ecs_enemy(w, (Vector3){0, 0, 10}, 80, ENEMY_SOVIET);
     Ray ray = {{0, 0, 0}, {0, 0, 1}};
     float dist = 0;
-    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 100.0f, &dist);
+    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 100.0f, &dist, NULL);
     ASSERT(hit != 0);
     ASSERT_GT(dist, 0.0f);
     ecs_fini(w);
@@ -413,7 +413,7 @@ TEST(test_enemy_ray_miss) {
     place_ecs_enemy(w, (Vector3){50, 0, 0}, 80, ENEMY_SOVIET);
     Ray ray = {{0, 0, 0}, {0, 0, 1}};
     float dist = 0;
-    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 100.0f, &dist);
+    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 100.0f, &dist, NULL);
     ASSERT(hit == 0);
     ecs_fini(w);
 }
@@ -488,16 +488,16 @@ TEST(test_difficulty_scaler_reduces_damage) {
     Player p = make_player();
     float baseDmg = 20.0f;
     PlayerTakeDamage(&p, baseDmg * DIFFICULTY_EASY_SCALE);
-    // Easy: 20 * 0.5 = 10 damage, health = 90
-    ASSERT_FLOAT_EQ(p.health, 90.0f, 0.01f);
+    // Easy: 20 * 0.5 = 10 damage
+    ASSERT_FLOAT_EQ(p.health, PLAYER_MAX_HEALTH - 10.0f, 0.01f);
 }
 
 TEST(test_difficulty_scaler_increases_damage) {
     Player p = make_player();
     float baseDmg = 20.0f;
     PlayerTakeDamage(&p, baseDmg * DIFFICULTY_HARD_SCALE);
-    // Hard: 20 * 1.5 = 30 damage, health = 70
-    ASSERT_FLOAT_EQ(p.health, 70.0f, 0.01f);
+    // Hard: 20 * 1.5 = 30 damage
+    ASSERT_FLOAT_EQ(p.health, PLAYER_MAX_HEALTH - 30.0f, 0.01f);
 }
 
 TEST(test_game_reset) {
@@ -1137,7 +1137,7 @@ TEST(test_ecs_ray_hit_forward) {
     place_ecs_enemy(w, (Vector3){0, 0, 10}, 80, ENEMY_SOVIET);
     Ray ray = { .position = {0, 0, 0}, .direction = {0, 0, 1} };
     float hitDist = 0;
-    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 50.0f, &hitDist);
+    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 50.0f, &hitDist, NULL);
     ASSERT(hit != 0);
     ASSERT_GT(hitDist, 0.0f);
     ASSERT_LT(hitDist, 12.0f);
@@ -1150,7 +1150,7 @@ TEST(test_ecs_ray_miss_perpendicular) {
     // Shoot along Z axis — enemy is on X axis, should miss
     Ray ray = { .position = {0, 0, 0}, .direction = {0, 0, 1} };
     float hitDist = 0;
-    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 50.0f, &hitDist);
+    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 50.0f, &hitDist, NULL);
     ASSERT(hit == 0);
     ecs_fini(w);
 }
@@ -1161,7 +1161,7 @@ TEST(test_ecs_ray_respects_max_dist) {
     Ray ray = { .position = {0, 0, 0}, .direction = {0, 0, 1} };
     float hitDist = 0;
     // Max dist 10 — enemy at 50 should be out of range
-    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 10.0f, &hitDist);
+    ecs_entity_t hit = EcsEnemyCheckHit(w, ray, 10.0f, &hitDist, NULL);
     ASSERT(hit == 0);
     ecs_fini(w);
 }

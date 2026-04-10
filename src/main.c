@@ -10,6 +10,7 @@
 #include "enemy/enemy_systems.h"
 #include "enemy/enemy_spawn.h"
 #include "enemy/enemy_draw_ecs.h"
+#include "enemy/enemy_limb_physics.h"
 #include "ecs_world.h"
 #include "combat_ecs.h"
 #include "hud.h"
@@ -17,6 +18,7 @@
 #include "lander.h"
 #include "pickup.h"
 #include "structure/structure.h"
+#include "player_effects.h"
 #include "structure/structure_draw.h"
 #include <stdlib.h>
 #include <string.h>
@@ -65,6 +67,8 @@ int main(void) {
     memset(&structures, 0, sizeof(structures));
     float rankKillTimer = 0;
     int rankKillType = 0;
+    HudState hudState;
+    HudInit(&hudState);
 
     GameInit(&game);
     PlayerInit(&player);
@@ -103,6 +107,7 @@ int main(void) {
             ecsWorld = GameEcsGetWorld();
             EcsEnemyComponentsRegister(ecsWorld);
             EcsEnemySystemsRegister(ecsWorld);
+            EcsEnemyLimbPhysicsRegister(ecsWorld);
             EcsEnemyResourcesInit(ecsWorld);
             ecsCombat.ecsWorld = ecsWorld;
 
@@ -199,36 +204,12 @@ int main(void) {
                                 if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
                             }
                             break;
-                        case 1: // Test Mode
-                            game.testMode = true;
-                            game.state = STATE_PLAYING;
-                            GameReset(&game);
-                            PlayerInit(&player);
-                            player.mouseSensitivity = game.mouseSensitivity;
-                            WeaponInit(&weapon);
-                            // Reset ECS world for test mode
-                            GameEcsInit();
-                            ecsWorld = GameEcsGetWorld();
-                            EcsEnemyComponentsRegister(ecsWorld);
-                            EcsEnemySystemsRegister(ecsWorld);
-                            EcsEnemyResourcesInit(ecsWorld);
-                            ecsCombat.ecsWorld = ecsWorld;
-                            LanderManagerInit(&landers);
-                            PickupManagerInit(&pickups);
-                            // Spawn 200 enemies in concentric rings
-                            for (int ei = 0; ei < TEST_MAX_ENEMIES; ei++) {
-                                EnemyType etype = (ei % 2 == 0) ? ENEMY_SOVIET : ENEMY_AMERICAN;
-                                float spawnR = 15.0f + (float)(ei / 10) * 5.0f;
-                                EcsEnemySpawnAroundPlayer(ecsWorld, etype, player.position, spawnR);
-                            }
-                            if (!cursorLocked) { DisableCursor(); cursorLocked = true; }
-                            break;
-                        case 2: // Settings
+                        case 1: // Settings
                             game.settingsReturnState = STATE_MENU;
                             game.settingsSelection = 0;
                             game.state = STATE_SETTINGS;
                             break;
-                        case 3: // Quit
+                        case 2: // Quit
                             game.quitRequested = true;
                             break;
                     }
@@ -280,6 +261,9 @@ int main(void) {
                     break;
                 }
 
+                // Skip to next march
+                if (IsKeyPressed(KEY_M)) GameAudioSkip(&audio);
+
                 bool insideStructure = StructureIsPlayerInside(&structures);
 
                 // Update game context singleton for ECS systems
@@ -321,6 +305,9 @@ int main(void) {
 
                     // ECS progress — runs all AI, physics, attack, death systems
                     ecs_progress(ecsWorld, dt);
+
+                    // Update enemy bolt projectiles
+                    EcsEnemyUpdateBolts(ecsWorld, dt);
 
                     LanderManagerUpdate(&landers, ecsWorld, dt);
                     PickupManagerUpdate(&pickups, player.position, dt);
@@ -364,6 +351,14 @@ int main(void) {
                     EcsCombatProcessWeaponFire(&ecsCombat);
                     EcsCombatProcessProjectiles(&ecsCombat);
                     EcsCombatProcessBeam(&ecsCombat, dt);
+                    float gpShake = EcsCombatProcessGroundPound(&ecsCombat);
+                    if (gpShake > SHAKE_THRESHOLD) {
+                        player.camera.position.x += ((float)rand()/RAND_MAX - 0.5f) * gpShake * SHAKE_AMPLITUDE;
+                        player.camera.position.y += ((float)rand()/RAND_MAX - 0.5f) * gpShake * SHAKE_AMPLITUDE;
+                        // Ground pound kill flash
+                        rankKillType = 4;
+                        rankKillTimer = 1.5f;
+                    }
 
                     // Collect player damage from ECS attack system
                     if (!game.testMode) {
@@ -479,6 +474,11 @@ int main(void) {
             }
         }
 
+        // ---- Update HUD state (timers, animations, wave splash, kill feed) ----
+        if (game.state == STATE_PLAYING) {
+            HudUpdate(&hudState, &player, &weapon, &game, dt);
+        }
+
         // ---- RENDER TO LOW-RES TARGET (gameplay only) ----
         bool renderGameplay = (game.state == STATE_PLAYING || game.state == STATE_PAUSED ||
                                game.state == STATE_GAME_OVER ||
@@ -499,9 +499,13 @@ int main(void) {
                     StructureManagerDraw(&structures, player.position);
                     // ECS enemy rendering
                     EcsEnemyManagerDraw(ecsWorld, player.camera, game.testMode);
+                    EcsEnemyDrawBolts(ecsWorld);
                     LanderManagerDraw(&landers, player.position);
                     PickupManagerDraw(&pickups);
                     WeaponDrawWorld(&weapon);
+                    // Player visual effects (ground pound dust, He-3 trail)
+                    DrawGroundPoundDust(&player);
+                    DrawHe3Trail(&player);
                 }
                 if (game.state == STATE_PLAYING || game.state == STATE_PAUSED ||
                     (game.state == STATE_SETTINGS && game.settingsReturnState == STATE_PAUSED)) {
@@ -528,6 +532,7 @@ int main(void) {
                         WorldDraw(&world, player.position, zoomCam);
                         StructureManagerDraw(&structures, player.position);
                         EcsEnemyManagerDraw(ecsWorld, zoomCam, game.testMode);
+                        EcsEnemyDrawBolts(ecsWorld);
                         LanderManagerDraw(&landers, player.position);
                         PickupManagerDraw(&pickups);
                         WeaponDrawWorld(&weapon);
@@ -581,16 +586,70 @@ int main(void) {
                         player.fuehreraugeAnim,
                         hudTarget.texture.width, hudTarget.texture.height);
                 }
-                HudDraw(&player, &weapon, &game, hudTarget.texture.width, hudTarget.texture.height);
+                HudDraw(&hudState, &player, &weapon, &game, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawPickup(&pickups, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawLanderArrows(&landers, player.camera, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawRadioTransmission(radioTimer, hudTarget.texture.width, hudTarget.texture.height);
                 HudDrawRankKill(rankKillTimer, rankKillType, hudTarget.texture.width, hudTarget.texture.height);
+
+                // Radar — collect enemy blips from ECS
                 {
+                    HudRadarBlip radarBlips[HUD_MAX_RADAR_BLIPS];
+                    int radarBlipCount = 0;
+                    ecs_query_t *q = ecs_query(ecsWorld, {
+                        .terms = {
+                            { .id = ecs_id(EcTransform) },
+                            { .id = ecs_id(EcFaction) },
+                            { .id = ecs_id(EcAlive) },
+                        }
+                    });
+                    if (q) {
+                        ecs_iter_t it = ecs_query_iter(ecsWorld, q);
+                        while (ecs_query_next(&it) && radarBlipCount < HUD_MAX_RADAR_BLIPS) {
+                            EcTransform *tr = ecs_field(&it, EcTransform, 0);
+                            EcFaction *fac = ecs_field(&it, EcFaction, 1);
+                            for (int i = 0; i < it.count && radarBlipCount < HUD_MAX_RADAR_BLIPS; i++) {
+                                radarBlips[radarBlipCount].position = tr[i].position;
+                                radarBlips[radarBlipCount].faction = (int)fac[i].type;
+                                radarBlips[radarBlipCount].isLander = false;
+                                radarBlipCount++;
+                            }
+                        }
+                        ecs_query_fini(q);
+                    }
+                    // Add active landers as blips
+                    for (int li = 0; li < MAX_LANDERS && radarBlipCount < HUD_MAX_RADAR_BLIPS; li++) {
+                        if (landers.landers[li].state == LANDER_DESCENDING ||
+                            landers.landers[li].state == LANDER_LANDED) {
+                            radarBlips[radarBlipCount].position = landers.landers[li].position;
+                            radarBlips[radarBlipCount].faction = (int)landers.landers[li].factionType;
+                            radarBlips[radarBlipCount].isLander = true;
+                            radarBlipCount++;
+                        }
+                    }
+                    HudDrawRadar(&hudState, &player, radarBlips, radarBlipCount,
+                        hudTarget.texture.width, hudTarget.texture.height);
+                }
+                HudDrawMarchRadio(GameAudioGetCurrentName(&audio),
+                    hudTarget.texture.width, hudTarget.texture.height);
+
+                // Wave splash, kill feed, interference overlays
+                // Wave counter shown inline in top bar — no separate splash animation
+                HudDrawKillFeed(&hudState, hudTarget.texture.width, hudTarget.texture.height);
+                HudDrawInterference(&hudState, hudTarget.texture.width, hudTarget.texture.height);
+
+                {
+                    StructurePrompt sp = StructureGetPrompt(&structures);
                     int resLeft = 0;
-                    if (structures.insideIndex >= 0)
-                        resLeft = structures.structures[structures.insideIndex].resuppliesLeft;
-                    HudDrawStructurePrompt(StructureGetPrompt(&structures), resLeft,
+                    if (structures.insideIndex >= 0) {
+                        Structure *curBase = &structures.structures[structures.insideIndex];
+                        if (sp == PROMPT_REFUEL || sp == PROMPT_REFUEL_EMPTY) {
+                            resLeft = curBase->he3RefillsLeft;
+                        } else {
+                            resLeft = curBase->resuppliesLeft;
+                        }
+                    }
+                    HudDrawStructurePrompt(sp, resLeft,
                         StructureGetEmptyMessageTimer(&structures),
                         hudTarget.texture.width, hudTarget.texture.height);
                 }

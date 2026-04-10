@@ -3,13 +3,14 @@
 
 #include "enemy.h"
 
-// Draw a single astronaut (all states: alive, dying, vaporizing, eviscerating)
+/// Draw a single astronaut in any state (alive, dying, vaporizing, eviscerating, decapitating) using data-driven body defs.
 void DrawAstronautModel(EnemyManager *em, Enemy *e);
 
-// LOD 1: Simplified astronaut (~8 draw calls)
-void DrawAstronautLOD1(Enemy *e);
+/// Draw a simplified astronaut at medium distance (~15 draw calls, wireframe parts skipped).
+/// Pass em for skeletal model support (NULL falls back to procedural).
+void DrawAstronautLOD1(EnemyManager *em, Enemy *e);
 
-// LOD 2: Single colored cube (1 draw call)
+/// Draw a minimal astronaut at far distance as a single faction-colored cube (1 draw call).
 void DrawAstronautLOD2(Enemy *e);
 
 #endif

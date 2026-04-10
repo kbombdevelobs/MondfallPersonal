@@ -1,5 +1,6 @@
 #include "weapon.h"
 #include "weapon_draw.h"
+#include "weapon_model.h"
 #include "rlgl.h"
 #include <math.h>
 #include <stdlib.h>
@@ -36,6 +37,44 @@ void WeaponDrawFirst(Weapon *w, Camera3D camera) {
     rlRotatef(yaw * RAD2DEG, 0, 1, 0);
     rlRotatef(pitch * RAD2DEG, 1, 0, 0);
     if (reloadTilt != 0) rlRotatef(reloadTilt, 1, 0, 0);
+
+    /* If a .glb model is loaded for this weapon, draw it instead of procedural */
+    WeaponModelSet *wms = WeaponModelsGet();
+    if (wms->available && wms->playerLoaded[w->current]) {
+        /* Models built in Blender with barrel along +Y. glTF Y-up export maps
+         * Blender Y → loaded -Z. 180° around Y flips barrel forward. */
+        float modelScale = 1.8f;
+        if (w->current == WEAPON_JACKHAMMER) modelScale = 1.6f;
+
+        rlPushMatrix();
+        rlRotatef(180.0f, 0.0f, 1.0f, 0.0f);
+        DrawModel(wms->playerWeapons[w->current], (Vector3){0, 0, 0}, modelScale, WHITE);
+        rlPopMatrix();
+
+        /* Muzzle flash effects on top of the model */
+        if (w->muzzleFlash > 0) {
+            Vector3 flashPos;
+            float flashSize;
+            Color flashColor;
+            if (w->current == WEAPON_RAKETENFAUST) {
+                flashPos = (Vector3){0, 0, 0.7f};
+                flashSize = w->muzzleFlash * 0.15f;
+                flashColor = (Color){255,180,50,(unsigned char)(w->muzzleFlash*200)};
+            } else if (w->current == WEAPON_JACKHAMMER) {
+                /* No muzzle flash for melee */
+                flashSize = 0;
+                flashPos = (Vector3){0,0,0};
+                flashColor = (Color){0,0,0,0};
+            } else {
+                flashPos = (Vector3){0, 0, 0.8f};
+                flashSize = w->muzzleFlash * 0.1f;
+                flashColor = (Color){0,230,255,(unsigned char)(w->muzzleFlash*220)};
+            }
+            if (flashSize > 0.001f) DrawSphere(flashPos, flashSize, flashColor);
+        }
+        rlPopMatrix();
+        return;
+    }
 
     switch (w->current) {
         case WEAPON_MOND_MP40: {

@@ -6,6 +6,9 @@
 // All tunable constants in one place. Tweak gameplay here, not in .c files.
 // ============================================================================
 
+// --- Model Paths ---
+#define MODEL_PATH_PREFIX       "resources/models/"
+
 // --- Rendering ---
 #define RENDER_W 640
 #define RENDER_H 360
@@ -19,10 +22,23 @@
 #define PLAYER_JUMP_FORCE    6.0f
 #define MOUSE_SENSITIVITY    0.003f
 #define PLAYER_HEIGHT        1.8f
-#define PLAYER_MAX_HEALTH    100.0f
+#define PLAYER_MAX_HEALTH    300.0f
 #define SPRINT_MULTIPLIER    1.5f
 #define GROUND_POUND_VELOCITY (-25.0f)
+#define GROUND_POUND_ACCEL   (-80.0f)  // extra downward accel while pounding (m/s^2)
 #define GROUND_POUND_HOP     3.0f
+#define GROUND_POUND_RADIUS  12.0f     // impact knockback radius
+#define GROUND_POUND_DAMAGE  40.0f     // damage to enemies in radius (falls off)
+#define GROUND_POUND_FORCE   18.0f     // tangent push force on enemies
+#define GROUND_POUND_LIFT    8.0f      // vertical launch force on enemies
+#define GROUND_POUND_MIN_HEIGHT 3.0f   // minimum height above ground to initiate pound
+#define GROUND_POUND_SHAKE   3.5f      // heavy screen shake on impact
+#define GROUND_POUND_DUST_LIFE  2.5f   // dust particle lifetime (seconds)
+#define GROUND_POUND_DUST_SPEED 6.0f   // outward ring expansion (m/s)
+#define GROUND_POUND_DUST_COUNT 40     // dust puff particle count
+#define GP_STAGGER_TIME           0.5f    // ground pound stagger duration (seconds)
+#define GP_KNOCKDOWN_BASE         2.5f    // base knockdown duration (seconds)
+#define GP_KNOCKDOWN_FALLOFF_MULT 1.5f    // knockdown duration falloff multiplier
 #define PITCH_LIMIT          1.4f
 #define HEAD_BOB_FREQ        10.0f
 #define HEAD_BOB_AMP         0.08f
@@ -257,9 +273,24 @@
 #define COLOR_GAUGE_MARK     {180, 160, 120, 180}
 #define COLOR_HUD_TEXT       {200, 180, 130, 255}
 
+// --- He-3 Jump System (VonBraun-Mondschwerkraftsprungstiefel) ---
+#define HE3_MAX_FUEL          100.0f    // full tank capacity
+#define HE3_CHARGE_MAX_TIME   1.5f      // max hold time (seconds) for charged jump
+#define HE3_TAP_THRESHOLD     0.12f     // hold shorter than this = normal free jump
+#define HE3_CHARGED_FORCE_MIN 3.0f      // min boost (just above normal jump)
+#define HE3_CHARGED_FORCE_MAX 10.0f     // max boost (good height, not orbital)
+#define HE3_CHARGE_COST       20.0f     // fuel cost for full charge (scales linearly)
+#define HE3_DOUBLE_JUMP_COST  15.0f     // fuel cost for one air jump
+#define HE3_DOUBLE_JUMP_FORCE 14.0f     // total upward accel applied over thrust duration
+#define HE3_DOUBLE_JUMP_DURATION 0.35f  // seconds of gradual thrust for double jump
+#define HE3_REFILL_USES       3         // refill uses per exterior tank
+#define HE3_LOW_THRESHOLD     0.2f      // below 20% = flashing warning
+#define HE3_JET_TRAIL_LIFE    3.0f      // seconds each trail puff lasts
+#define HE3_JET_TRAIL_MAX     96        // max stored trail positions
+
 // --- Fuehrerauge (Leader Eye Targeting Computer) ---
 #define FUEHRERAUGE_FOV          15.0f
-#define FUEHRERAUGE_ANIM_SPEED   3.0f
+#define FUEHRERAUGE_ANIM_SPEED   1.4f
 #define FUEHRERAUGE_WIDTH_FRAC   0.35f
 #define FUEHRERAUGE_HEIGHT_FRAC  0.40f
 #define FUEHRERAUGE_RENDER_W     320
@@ -306,17 +337,41 @@
 // --- Leadership / Morale ---
 #define LEADERSHIP_RADIUS        15.0f
 #define MORALE_LEADER_BONUS      0.3f
-#define MORALE_NCO_RALLY_RATE    0.15f
+#define MORALE_NCO_RALLY_RATE    0.10f   // slower leader rally
 #define MORALE_DECAY_RATE        0.05f
-#define MORALE_OFFICER_DEATH_HIT 0.6f
-#define MORALE_NCO_DEATH_HIT     0.3f
-#define MORALE_FLEE_THRESHOLD    0.25f
-#define MORALE_FLEE_CHANCE       40
+#define MORALE_OFFICER_DEATH_HIT 0.75f   // devastating officer loss
+#define MORALE_NCO_DEATH_HIT     0.45f   // NCO death hurts too
+#define MORALE_FLEE_THRESHOLD    0.45f   // flee at 45% morale (was 0.25)
+#define MORALE_FLEE_CHANCE       6       // ~17% per frame below threshold (was 1-in-40)
+// --- Rank-Based Accuracy ---
+#define TROOPER_ACCURACY_BASE    0.30f   // 30% at point-blank
+#define TROOPER_ACCURACY_RANGE   0.20f   // drops to 10% at max range
+#define NCO_ACCURACY_BASE        0.40f   // NCOs are steadier
+#define NCO_ACCURACY_RANGE       0.25f
+#define OFFICER_ACCURACY_BASE    0.55f   // Officers are deadly
+#define OFFICER_ACCURACY_RANGE   0.35f
 #define MORALE_ACCURACY_BONUS    0.15f
-#define MORALE_SPEED_PENALTY     0.7f
-#define MORALE_NATURAL_RECOVERY  0.08f
+#define MORALE_SPEED_PENALTY     1.4f    // panicked sprint (faster than normal)
+#define MORALE_NATURAL_RECOVERY  0.03f   // much slower recovery
 #define MORALE_RALLY_THRESHOLD   0.5f
-#define MORALE_FLEE_DURATION_MIN 3.0f
-#define MORALE_FLEE_DURATION_MAX 6.0f
+#define MORALE_FLEE_DURATION_MIN 4.0f    // longer flee
+#define MORALE_FLEE_DURATION_MAX 8.0f    // longer flee
+#define MORALE_COWER_ANGLE_MAX   45.0f   // max forward lean when cowering behind cover
+#define MORALE_COWER_ANGLE_RATE  120.0f  // degrees/sec to reach cower angle
+#define MORALE_COWER_RECOVERY    0.12f   // morale recovery rate while cowering behind cover
+
+// --- Enemy Bolt Projectiles ---
+#define ENEMY_BOLT_CHANCE     35      // percent chance to spawn visible bolt per shot
+#define ENEMY_BOLT_SPEED      200.0f  // bolt travel speed (units/s)
+#define ENEMY_BOLT_SIZE       0.05f   // bolt sphere radius
+#define ENEMY_BOLT_TRAIL      0.08f   // trail line thickness
+#define ENEMY_BOLT_LIFETIME   2.0f    // max bolt life before expiry
+#define MAX_ENEMY_BOLTS       12      // max concurrent enemy bolts
+
+// --- Headshot / Decapitation ---
+#define HEADSHOT_HEAD_HALF_W     0.35f   // head hitbox half-width (X and Z)
+#define HEADSHOT_HEAD_HALF_H     0.4f    // head hitbox half-height (Y)
+#define HEADSHOT_HEAD_CENTER_Y   1.1f    // head center in local enemy space
+#define HEADSHOT_BLOOD_DURATION  6.0f    // blood fountain visual duration (seconds)
 
 #endif

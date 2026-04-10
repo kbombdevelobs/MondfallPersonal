@@ -1,6 +1,7 @@
 #include "enemy_draw_ecs.h"
 #include "enemy.h"
 #include "enemy_draw.h"
+#include "enemy_model_loader.h"
 #include "enemy_components.h"
 #include "ecs_world.h"
 #include "world.h"
@@ -8,6 +9,10 @@
 #include "config.h"
 #include <string.h>
 #include <stdlib.h>
+
+/* Persistent skeletal model set — loaded once, shared across frames */
+static AstroModelSet g_astroModels;
+static bool g_astroModelsLoaded = false;
 
 void EcsEnemyResourcesInit(ecs_world_t *world) {
     EcEnemyResources res;
@@ -77,6 +82,32 @@ void EcsEnemyResourcesInit(ecs_world_t *world) {
         res.americanDeathCount++;
     }
 
+    // Load ground pound scream transmissions
+    res.groundPoundScreamCount = 0;
+    const char *screamFiles[] = {
+        "sounds/ground_pound_screams/scream_01.mp3",
+        "sounds/ground_pound_screams/scream_02.mp3",
+        "sounds/ground_pound_screams/scream_03.mp3",
+        "sounds/ground_pound_screams/scream_04.mp3",
+    };
+    for (int sf = 0; sf < 4; sf++) {
+        if (!FileExists(screamFiles[sf])) continue;
+        Wave sw = LoadWave(screamFiles[sf]);
+        if (sw.frameCount <= 0) { UnloadWave(sw); continue; }
+        WaveFormat(&sw, AUDIO_RADIO_SAMPLE_RATE, 16, 1);
+        SoundGenDegradeRadio(&sw);
+        res.sndGroundPoundScream[res.groundPoundScreamCount] = LoadSoundFromWave(sw);
+        SetSoundVolume(res.sndGroundPoundScream[res.groundPoundScreamCount], AUDIO_DEATH_VOLUME);
+        UnloadWave(sw);
+        res.groundPoundScreamCount++;
+    }
+
+    /* Load skeletal .glb character models */
+    if (!g_astroModelsLoaded) {
+        AstroModelsLoad(&g_astroModels);
+        g_astroModelsLoaded = true;
+    }
+
     res.modelsLoaded = true;
     ecs_singleton_set_ptr(world, EcEnemyResources, &res);
 }
@@ -94,6 +125,13 @@ void EcsEnemyResourcesUnload(ecs_world_t *world) {
     UnloadSound(res.sndAmericanFire);
     for (int i = 0; i < res.sovietDeathCount; i++) UnloadSound(res.sndSovietDeath[i]);
     for (int i = 0; i < res.americanDeathCount; i++) UnloadSound(res.sndAmericanDeath[i]);
+    for (int i = 0; i < res.groundPoundScreamCount; i++) UnloadSound(res.sndGroundPoundScream[i]);
+
+    /* Unload skeletal models */
+    if (g_astroModelsLoaded) {
+        AstroModelsUnload(&g_astroModels);
+        g_astroModelsLoaded = false;
+    }
 }
 
 // Fill a temporary Enemy struct from ECS components for draw functions
@@ -138,6 +176,19 @@ static void FillTempEnemy(ecs_world_t *world, ecs_entity_t entity,
             out->deathTimer = vd->deathTimer;
             out->deathStyle = vd->deathStyle;
         }
+    } else if (ecs_has(world, entity, EcDecapitating)) {
+        out->state = ENEMY_DECAPITATING;
+        const EcDecapitateDeath *dd = ecs_get(world, entity, EcDecapitateDeath);
+        if (dd) {
+            out->decapTimer = dd->timer;
+            out->decapBloodTimer = dd->bloodTimer;
+            out->decapDriftVel = dd->driftVel;
+            out->decapDriftVelY = dd->driftVelY;
+            out->decapHitDir = dd->hitDir;
+            out->deathTimer = dd->deathTimer;
+            out->spinX = dd->spinX;
+            out->spinY = dd->spinY;
+        }
     } else if (ecs_has(world, entity, EcDying)) {
         out->state = ENEMY_DYING;
         const EcRagdollDeath *rd = ecs_get(world, entity, EcRagdollDeath);
@@ -168,6 +219,73 @@ static void FillTempEnemy(ecs_world_t *world, ecs_entity_t entity,
         out->attackRate = cs->attackRate;
         out->preferredDist = cs->preferredDist;
     }
+
+    // Copy limb state for spring-driven procedural animation
+    const EcLimbState *ls = ecs_get(world, entity, EcLimbState);
+    if (ls) {
+        out->limbState = *ls;
+        out->hasLimbState = true;
+    }
+
+    // Copy knockdown/cowering animation state
+    out->knockdownAngle = anim->knockdownAngle;
+    out->isCowering = anim->isCowering;
+}
+
+// ============================================================================
+// Enemy Bolt Projectile Update + Rendering
+// ============================================================================
+
+void EcsEnemyUpdateBolts(ecs_world_t *world, float dt) {
+    EcGameContext *ctx = ecs_singleton_ensure(world, EcGameContext);
+    if (!ctx) return;
+    if (ctx->boltCount < 0 || ctx->boltCount > MAX_ENEMY_BOLTS) ctx->boltCount = 0;
+    for (int bi = 0; bi < ctx->boltCount; bi++) {
+        float boltDist = Vector3Distance(ctx->boltStart[bi], ctx->boltEnd[bi]);
+        if (boltDist > 0.1f)
+            ctx->boltProgress[bi] += (ENEMY_BOLT_SPEED * dt) / boltDist;
+        else
+            ctx->boltProgress[bi] = 1.0f;
+        ctx->boltLife[bi] -= dt;
+        if (ctx->boltProgress[bi] >= 1.0f || ctx->boltLife[bi] <= 0) {
+            ctx->boltCount--;
+            if (bi < ctx->boltCount) {
+                ctx->boltStart[bi] = ctx->boltStart[ctx->boltCount];
+                ctx->boltEnd[bi] = ctx->boltEnd[ctx->boltCount];
+                ctx->boltColor[bi] = ctx->boltColor[ctx->boltCount];
+                ctx->boltProgress[bi] = ctx->boltProgress[ctx->boltCount];
+                ctx->boltLife[bi] = ctx->boltLife[ctx->boltCount];
+            }
+            bi--;
+        }
+    }
+}
+
+void EcsEnemyDrawBolts(ecs_world_t *world) {
+    const EcGameContext *bctx = ecs_singleton_get(world, EcGameContext);
+    if (!bctx) return;
+    for (int bi = 0; bi < bctx->boltCount; bi++) {
+        float p = bctx->boltProgress[bi];
+        if (p < 0) p = 0; if (p > 1) p = 1;
+        Color bc = bctx->boltColor[bi];
+        Vector3 boltPos = Vector3Lerp(bctx->boltStart[bi], bctx->boltEnd[bi], p);
+        DrawSphere(boltPos, ENEMY_BOLT_SIZE, (Color){255, 255, 255, 240});
+        DrawSphere(boltPos, ENEMY_BOLT_SIZE * 1.5f, (Color){bc.r, bc.g, bc.b, 160});
+        float trailP = p - 0.08f;
+        if (trailP < 0) trailP = 0;
+        Vector3 trailPos = Vector3Lerp(bctx->boltStart[bi], bctx->boltEnd[bi], trailP);
+        for (int tl = 0; tl < 3; tl++) {
+            float tp = p - (float)(tl + 1) * 0.03f;
+            if (tp < 0) tp = 0;
+            Vector3 tp1 = Vector3Lerp(bctx->boltStart[bi], bctx->boltEnd[bi], tp);
+            float tp2v = p - (float)(tl + 2) * 0.03f;
+            if (tp2v < 0) tp2v = 0;
+            Vector3 tp2 = Vector3Lerp(bctx->boltStart[bi], bctx->boltEnd[bi], tp2v);
+            unsigned char ta = (unsigned char)(180 - tl * 50);
+            DrawLine3D(tp1, tp2, (Color){bc.r, bc.g, bc.b, ta});
+        }
+        DrawLine3D(boltPos, trailPos, (Color){bc.r, bc.g, bc.b, 180});
+    }
 }
 
 void EcsEnemyManagerDraw(ecs_world_t *world, Camera3D camera, bool testMode) {
@@ -181,6 +299,7 @@ void EcsEnemyManagerDraw(ecs_world_t *world, Camera3D camera, bool testMode) {
     tempMgr.mdlVisor = rp->mdlVisor;
     tempMgr.mdlArm = rp->mdlArm;
     tempMgr.mdlBoot = rp->mdlBoot;
+    tempMgr.astroModels = g_astroModelsLoaded && g_astroModels.available ? &g_astroModels : NULL;
     tempMgr.modelsLoaded = true;
 
     // View-projection matrix for frustum culling (used in testMode)
@@ -236,7 +355,7 @@ void EcsEnemyManagerDraw(ecs_world_t *world, Camera3D camera, bool testMode) {
                 if (dist < LOD1_DISTANCE) {
                     DrawAstronautModel(&tempMgr, &tempEnemy);
                 } else if (dist < LOD2_DISTANCE) {
-                    DrawAstronautLOD1(&tempEnemy);
+                    DrawAstronautLOD1(&tempMgr, &tempEnemy);
                 } else {
                     DrawAstronautLOD2(&tempEnemy);
                 }
