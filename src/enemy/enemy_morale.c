@@ -154,6 +154,14 @@ static void SysMoraleCheck(ecs_iter_t *it) {
                     mor[i].fleeCoverFound = false;
                     mor[i].fleeCowering = false;
                     mor[i].fleeCoverPos = (Vector3){0, 0, 0};
+                    // Clear knockdown so they don't flee while sprawled
+                    EcAnimation *fleeAnim = ecs_ensure(it->world, it->entities[i], EcAnimation);
+                    if (fleeAnim) {
+                        fleeAnim->knockdownTimer = 0;
+                        fleeAnim->knockdownAngle = 0;
+                        fleeAnim->isCowering = false;
+                        fleeAnim->staggerTimer = 0;
+                    }
                 }
             }
         }

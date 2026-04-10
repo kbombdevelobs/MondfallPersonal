@@ -96,8 +96,8 @@
 #define BEAM_TRAIL_LIFE      0.1f
 
 // --- Death / Body Persistence ---
-#define DEATH_BODY_PERSIST_TIME  20.0f  // bodies stay 20 seconds (was 10-12)
-#define MAX_DEAD_BODIES          30     // max concurrent dead bodies before cleanup
+#define DEATH_BODY_PERSIST_TIME  60.0f  // bodies persist ~2 full waves
+#define MAX_DEAD_BODIES          50     // max concurrent dead bodies before oldest cleanup
 
 // --- Enemy: Limits ---
 #define MAX_ENEMIES 50
