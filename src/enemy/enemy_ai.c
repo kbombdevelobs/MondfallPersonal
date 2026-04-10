@@ -191,15 +191,22 @@ static void SysAIBehavior(ecs_iter_t *it) {
                 }
             }
 
-            // Already cowering behind cover — stay put, lean forward
+            // Already cowering behind cover — pin to cover spot, bend forward
             if (mor && mor->fleeCowering) {
                 steerArr[i].desiredVelocity = (Vector3){0, 0, 0};
-                // Cower pose: moderate forward bend
+                moving = false;
+                // Kill all velocity so physics can't drift them
+                EcVelocity *flVel = ecs_ensure(it->world, entity, EcVelocity);
+                if (flVel) {
+                    flVel->velocity = (Vector3){0, 0, 0};
+                    flVel->vertVel = 0;
+                }
+                // Cower pose: moderate forward bend (NOT knockdown sprawl)
                 EcAnimation *flAnim = ecs_ensure(it->world, entity, EcAnimation);
                 if (flAnim) {
                     if (flAnim->knockdownAngle < MORALE_COWER_ANGLE_MAX)
                         flAnim->knockdownAngle += MORALE_COWER_ANGLE_RATE * dt;
-                    flAnim->knockdownTimer = 0.5f;
+                    flAnim->knockdownTimer = 0.5f;  // small: keeps steering disabled
                     flAnim->isCowering = true;
                 }
                 // Face away from player
@@ -214,8 +221,18 @@ static void SysAIBehavior(ecs_iter_t *it) {
                 continue;
             }
 
-            // Move toward cover or run straight away
-            float fleeSpd = cs[i].speed * MORALE_SPEED_PENALTY;
+            // Fleeing (not cowering): ensure upright — clear any knockdown/cowering state
+            {
+                EcAnimation *runAnim = ecs_ensure(it->world, entity, EcAnimation);
+                if (runAnim) {
+                    runAnim->knockdownAngle = 0;
+                    runAnim->knockdownTimer = 0;
+                    runAnim->isCowering = false;
+                }
+            }
+
+            // Move toward cover or run straight away from player
+            Vector3 moveTarget;
             if (mor && mor->fleeCoverFound) {
                 // Navigate toward cover spot
                 Vector3 toCover = Vector3Subtract(mor->fleeCoverPos, tr[i].position);
@@ -227,22 +244,28 @@ static void SysAIBehavior(ecs_iter_t *it) {
                     steerArr[i].desiredVelocity = (Vector3){0, 0, 0};
                     continue;
                 }
-                Vector3 moveTarget = Vector3Normalize(toCover);
-                steerArr[i].desiredVelocity = Vector3Scale(moveTarget, fleeSpd);
+                moveTarget = Vector3Normalize(toCover);
             } else {
-                // No cover found — run straight away from player
-                steerArr[i].desiredVelocity = (Vector3){ -fwd.x * fleeSpd, 0, -fwd.z * fleeSpd };
+                // No cover found — run straight away from player with gentle weave
+                moveTarget = (dist > 0.1f) ? Vector3Normalize(Vector3Negate(toPlayer))
+                                            : Vector3Negate(fwd);
+                float seed = tr[i].facingAngle * 3.17f;
+                float weave = sinf((float)GetTime() * 1.2f + seed) * 0.2f;
+                Vector3 lateral = {-moveTarget.z, 0, moveTarget.x};
+                moveTarget = Vector3Add(moveTarget, Vector3Scale(lateral, weave));
+                if (Vector3Length(moveTarget) > 0.01f) moveTarget = Vector3Normalize(moveTarget);
             }
 
-            // Face the direction of movement when fleeing (not toward player)
-            if (Vector3Length(steerArr[i].desiredVelocity) > 0.5f) {
-                float fleeYaw = atan2f(steerArr[i].desiredVelocity.x,
-                                       steerArr[i].desiredVelocity.z);
-                float yawDiff = fleeYaw - tr[i].facingAngle;
-                while (yawDiff > PI) yawDiff -= 2.0f * PI;
-                while (yawDiff < -PI) yawDiff += 2.0f * PI;
-                tr[i].facingAngle += yawDiff * fminf(AI_TURN_SPEED * dt, 1.0f);
-            }
+            moving = true;
+            float fleeSpd = cs[i].speed * MORALE_SPEED_PENALTY;
+            steerArr[i].desiredVelocity = Vector3Scale(moveTarget, fleeSpd);
+
+            // Snap facing toward movement direction — panicked fast turn
+            float targetYaw = atan2f(moveTarget.x, moveTarget.z);
+            float yawDiff = targetYaw - tr[i].facingAngle;
+            while (yawDiff > PI) yawDiff -= 2.0f * PI;
+            while (yawDiff < -PI) yawDiff += 2.0f * PI;
+            tr[i].facingAngle += yawDiff * fminf(AI_TURN_SPEED * 3.0f * dt, 1.0f);  // 3x turn speed panic
             continue;
         }
 
