@@ -230,10 +230,10 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             // Limp: starts as drift pose, fully collapses after 8-10s
             float limpBase = 5.0f + seed1 * 10.0f;
             float limpSpread = 25.0f + seed1 * 20.0f;
-            // After 8s: arms go fully limp — hang straight down (-90 pitch, wide spread)
+            // After 8s: all motion fades to zero — arms follow gravity via parent bone
             float limpT = (elapsed > 8.0f) ? fminf((elapsed - 8.0f) / 2.0f, 1.0f) : 0.0f;
-            float finalSwing = limpBase * (1.0f - limpT) + (-80.0f) * limpT;
-            float finalSpread = limpSpread * (1.0f - limpT) + (40.0f + seed1 * 15.0f) * limpT;
+            float finalSwing = limpBase * (1.0f - limpT);
+            float finalSpread = limpSpread * (1.0f - limpT);
             armSwingR = finalSwing + flailSwing;
             rlRotatef(finalSwing + flailSwing, 1, 0, 0);
             rlRotatef(finalSpread + flailSpread, 0, 0, 1);
@@ -325,10 +325,10 @@ void DrawAstronautModel(EnemyManager *em, Enemy *e) {
             float flailSpread = cosf(t_ * 2.8f + ks_ * 1.7f) * 20.0f * flailFade;
             float limpBase = 8.0f + seed1 * 10.0f;
             float limpSpreadBase = -(25.0f + seed1 * 20.0f);
-            // After 8s: fully limp — hang straight down
+            // After 8s: all motion fades to zero — arms follow gravity
             float limpT = (elapsed > 8.0f) ? fminf((elapsed - 8.0f) / 2.0f, 1.0f) : 0.0f;
-            float finalSwing = limpBase * (1.0f - limpT) + (-80.0f) * limpT;
-            float finalSpread = limpSpreadBase * (1.0f - limpT) + (-(40.0f + seed1 * 15.0f)) * limpT;
+            float finalSwing = limpBase * (1.0f - limpT);
+            float finalSpread = limpSpreadBase * (1.0f - limpT);
             armSwingL = finalSwing + flailSwing;
             rlRotatef(finalSwing + flailSwing, 1, 0, 0);
             rlRotatef(finalSpread + flailSpread, 0, 0, 1);

@@ -180,8 +180,8 @@ void AstroModelApplySpringState(
             float motionScale = 1.0f - settle;
             float drift = sinf(deathTime * 0.4f + seed) * 15.0f * motionScale;
             float jerk = sinf(deathTime * 25.0f + seed) * 40.0f * jd * motionScale;
-            float limpAngle = -90.0f * settle;  // hang straight down when fully limp
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift - 60.0f * motionScale + limpAngle)));
+            // When limp: zero out all active motion, let parent bone orientation + gravity handle it
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift - 60.0f * motionScale)));
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, sinf(deathTime*0.5f+seed*1.3f)*30.0f*motionScale));
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,1,0}, sinf(deathTime*18.0f+seed)*25.0f*jd*motionScale));
         } else {
@@ -204,8 +204,7 @@ void AstroModelApplySpringState(
             float motionScale = 1.0f - settle;
             float drift = sinf(deathTime * 0.5f + seed) * 15.0f * motionScale;
             float jerk = sinf(deathTime * 22.0f + seed) * 35.0f * jd * motionScale;
-            float limpAngle = -90.0f * settle;
-            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift - 55.0f * motionScale + limpAngle)));
+            rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){1,0,0}, -(jerk + drift - 55.0f * motionScale)));
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,0,1}, -sinf(deathTime*0.6f+seed*1.7f)*30.0f*motionScale));
             rot = QuaternionMultiply(rot, RotFromAxisDeg((Vector3){0,1,0}, sinf(deathTime*20.0f+seed)*20.0f*jd*motionScale));
         } else {
