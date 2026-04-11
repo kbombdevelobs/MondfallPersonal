@@ -118,13 +118,185 @@ static void SysAIBehavior(ecs_iter_t *it) {
             if (dist > LOD1_DISTANCE) doFullAI = false;
         }
 
-        // AI_FLEE: run directly away from player
+        // AI_FLEE: seek cover behind terrain features or structures, or sprint away
         if (ai[i].behavior == AI_FLEE) {
-            moveDir = Vector3Scale(fwd, -1.0f); // away from player
+            EcMorale *mor = ecs_ensure(it->world, entity, EcMorale);
+
+            // First frame of flee: search for cover position
+            if (mor && !mor->fleeCoverFound && !mor->fleeCowering && mor->fleeTimer < dt * 2.0f) {
+                if (dist > 0.1f) {
+                    Vector3 awayFromPlayer = Vector3Normalize(Vector3Negate(toPlayer));
+                    float bestScore = -999.0f;
+                    Vector3 bestCoverPos = {0, 0, 0};
+                    bool foundCover = false;
+
+                    // Search actual rocks from world chunks first (best cover)
+                    World *coverWorld = WorldGetActive();
+                    if (coverWorld) {
+                        for (int ci = 0; ci < coverWorld->chunkCount; ci++) {
+                            Chunk *ch = &coverWorld->chunks[ci];
+                            if (!ch->generated) continue;
+                            for (int ri = 0; ri < ch->rockCount; ri++) {
+                                Rock *rock = &ch->rocks[ri];
+                                float rockDist = Vector3Distance(tr[i].position, rock->position);
+                                if (rockDist < 3.0f || rockDist > 25.0f) continue;
+                                Vector3 toRock = Vector3Subtract(rock->position, tr[i].position);
+                                toRock.y = 0;
+                                float toRockLen = Vector3Length(toRock);
+                                if (toRockLen < 0.1f) continue;
+                                float dot = Vector3DotProduct(Vector3Normalize(toRock), awayFromPlayer);
+                                float rockBonus = rock->size.y * 0.5f; // taller rocks = better cover
+                                float score = dot * 2.0f - rockDist * 0.05f + rockBonus;
+                                if (score > bestScore) {
+                                    bestScore = score;
+                                    // Hide on far side of rock from player — push well past rock edge
+                                    Vector3 coverDir = (dist > 0.1f)
+                                        ? Vector3Normalize(Vector3Subtract(rock->position, playerPos))
+                                        : awayFromPlayer;
+                                    float pushDist = fmaxf(rock->size.x, rock->size.z) * 0.5f + 1.5f;
+                                    bestCoverPos = Vector3Add(rock->position,
+                                        Vector3Scale(coverDir, pushDist));
+                                    bestCoverPos.y = WorldGetHeight(bestCoverPos.x, bestCoverPos.z);
+                                    foundCover = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback: sample terrain heights for elevated cover
+                    if (!foundCover) {
+                        for (int attempt = 0; attempt < 8; attempt++) {
+                            float angle = (float)attempt / 8.0f * 2.0f * PI;
+                            float testDist = 5.0f + GetRandomValue(0, 200) * 0.1f;
+                            float testX = tr[i].position.x + cosf(angle) * testDist;
+                            float testZ = tr[i].position.z + sinf(angle) * testDist;
+                            float testH = WorldGetHeight(testX, testZ);
+                            float myH = WorldGetHeight(tr[i].position.x, tr[i].position.z);
+                            if (testH > myH + 0.5f) {
+                                Vector3 testPos = {testX, 0, testZ};
+                                Vector3 toRock = Vector3Subtract(testPos, tr[i].position);
+                                toRock.y = 0;
+                                float toRockLen = Vector3Length(toRock);
+                                if (toRockLen < 0.1f) continue;
+                                float dot = Vector3DotProduct(Vector3Normalize(toRock), awayFromPlayer);
+                                float score = dot * 2.0f - testDist * 0.05f + (testH - myH) * 0.3f;
+                                if (score > bestScore) {
+                                    bestScore = score;
+                                    Vector3 coverDir = Vector3Normalize(Vector3Negate(toPlayer));
+                                    bestCoverPos = Vector3Add(testPos, Vector3Scale(coverDir, 1.5f));
+                                    foundCover = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // Also check nearby structures as cover
+                    StructureManager *structs = StructureGetActive();
+                    if (structs) {
+                        for (int si = 0; si < structs->count; si++) {
+                            Structure *st = &structs->structures[si];
+                            if (!st->active) continue;
+                            float sDist = Vector3Distance(tr[i].position, st->worldPos);
+                            if (sDist < 3.0f || sDist > 25.0f) continue;
+                            Vector3 toStruct = Vector3Subtract(st->worldPos, tr[i].position);
+                            toStruct.y = 0;
+                            float tsLen = Vector3Length(toStruct);
+                            if (tsLen < 0.1f) continue;
+                            float dot = Vector3DotProduct(Vector3Normalize(toStruct), awayFromPlayer);
+                            float score = dot * 2.0f - sDist * 0.05f + 1.0f; // structures are great cover
+                            if (score > bestScore) {
+                                bestScore = score;
+                                Vector3 coverDir = Vector3Normalize(Vector3Negate(toPlayer));
+                                bestCoverPos = Vector3Add(st->worldPos,
+                                    Vector3Scale(coverDir, MOONBASE_EXTERIOR_RADIUS + 2.0f));
+                                foundCover = true;
+                            }
+                        }
+                    }
+
+                    if (foundCover && bestScore > -0.5f) {
+                        mor->fleeCoverPos = bestCoverPos;
+                        mor->fleeCoverFound = true;
+                        mor->fleeCowering = false;
+                    }
+                }
+            }
+
+            // Already cowering behind cover — pin to cover spot, bend forward
+            if (mor && mor->fleeCowering) {
+                steerArr[i].desiredVelocity = (Vector3){0, 0, 0};
+                moving = false;
+                // Kill all velocity so physics can't drift them
+                EcVelocity *flVel = ecs_ensure(it->world, entity, EcVelocity);
+                if (flVel) {
+                    flVel->velocity = (Vector3){0, 0, 0};
+                    flVel->vertVel = 0;
+                }
+                // Cower pose: moderate forward bend (NOT knockdown sprawl)
+                EcAnimation *flAnim = ecs_ensure(it->world, entity, EcAnimation);
+                if (flAnim) {
+                    if (flAnim->knockdownAngle < MORALE_COWER_ANGLE_MAX)
+                        flAnim->knockdownAngle += MORALE_COWER_ANGLE_RATE * dt;
+                    flAnim->knockdownTimer = 0.5f;  // small: keeps steering disabled
+                    flAnim->isCowering = true;
+                }
+                // Face away from player
+                if (dist > 0.1f) {
+                    Vector3 awayFace = Vector3Normalize(Vector3Negate(toPlayer));
+                    float targetYaw = atan2f(awayFace.x, awayFace.z);
+                    float yawDiff = targetYaw - tr[i].facingAngle;
+                    while (yawDiff > PI) yawDiff -= 2.0f * PI;
+                    while (yawDiff < -PI) yawDiff += 2.0f * PI;
+                    tr[i].facingAngle += yawDiff * fminf(AI_TURN_SPEED * dt, 1.0f);
+                }
+                continue;
+            }
+
+            // Fleeing (not cowering): ensure upright — clear any knockdown/cowering state
+            {
+                EcAnimation *runAnim = ecs_ensure(it->world, entity, EcAnimation);
+                if (runAnim) {
+                    runAnim->knockdownAngle = 0;
+                    runAnim->knockdownTimer = 0;
+                    runAnim->isCowering = false;
+                }
+            }
+
+            // Move toward cover or run straight away from player
+            Vector3 moveTarget;
+            if (mor && mor->fleeCoverFound) {
+                // Navigate toward cover spot
+                Vector3 toCover = Vector3Subtract(mor->fleeCoverPos, tr[i].position);
+                toCover.y = 0;
+                float coverDist = Vector3Length(toCover);
+                if (coverDist < 2.0f) {
+                    // Arrived at cover — start cowering
+                    mor->fleeCowering = true;
+                    steerArr[i].desiredVelocity = (Vector3){0, 0, 0};
+                    continue;
+                }
+                moveTarget = Vector3Normalize(toCover);
+            } else {
+                // No cover found — run straight away from player with gentle weave
+                moveTarget = (dist > 0.1f) ? Vector3Normalize(Vector3Negate(toPlayer))
+                                            : Vector3Negate(fwd);
+                float seed = tr[i].facingAngle * 3.17f;
+                float weave = sinf((float)GetTime() * 1.2f + seed) * 0.2f;
+                Vector3 lateral = {-moveTarget.z, 0, moveTarget.x};
+                moveTarget = Vector3Add(moveTarget, Vector3Scale(lateral, weave));
+                if (Vector3Length(moveTarget) > 0.01f) moveTarget = Vector3Normalize(moveTarget);
+            }
+
             moving = true;
-            // Write to steering and skip normal behavior logic
             float fleeSpd = cs[i].speed * MORALE_SPEED_PENALTY;
-            steerArr[i].desiredVelocity = (Vector3){ -fwd.x * fleeSpd, 0, -fwd.z * fleeSpd };
+            steerArr[i].desiredVelocity = Vector3Scale(moveTarget, fleeSpd);
+
+            // Snap facing toward movement direction — panicked fast turn
+            float targetYaw = atan2f(moveTarget.x, moveTarget.z);
+            float yawDiff = targetYaw - tr[i].facingAngle;
+            while (yawDiff > PI) yawDiff -= 2.0f * PI;
+            while (yawDiff < -PI) yawDiff += 2.0f * PI;
+            tr[i].facingAngle += yawDiff * fminf(AI_TURN_SPEED * 3.0f * dt, 1.0f);  // 3x turn speed panic
             continue;
         }
 
@@ -138,34 +310,103 @@ static void SysAIBehavior(ecs_iter_t *it) {
             ai[i].behavior = AI_ADVANCE;
         } else if (fac[i].type == ENEMY_SOVIET) {
             // SOVIET: Charge as a spread -- run at player with wide strafe
-            // Check if a structure blocks the direct charge path
+            // Check if a structure blocks the direct charge path and determine
+            // which side to flank based on enemy position relative to structure
             bool sovStructBlock = false;
+            int sovFlankSign = ai[i].strafeDir > 0 ? 1 : -1;
+            float sovStructProximity = 999.0f; // distance to nearest blocking struct
+            Vector3 sovStructAwayDir = {0, 0, 0}; // push-away direction
             StructureManager *sovStructs = StructureGetActive();
-            if (sovStructs && dist > 6.0f) {
+            if (sovStructs) {
                 float collR = MOONBASE_EXTERIOR_RADIUS + 1.0f;
                 for (int si = 0; si < sovStructs->count; si++) {
                     Structure *st = &sovStructs->structures[si];
                     if (!st->active) continue;
                     Vector3 toS = {st->worldPos.x - tr[i].position.x, 0, st->worldPos.z - tr[i].position.z};
                     Vector3 toP = {playerPos.x - tr[i].position.x, 0, playerPos.z - tr[i].position.z};
-                    float tsLen = sqrtf(toS.x * toS.x + toS.z * toS.z);
-                    float tpLen = sqrtf(toP.x * toP.x + toP.z * toP.z);
+                    float tsLen = Vector3Length(toS);
+                    float tpLen = Vector3Length(toP);
+
+                    // Push away from nearby structures to prevent edge bunching
+                    if (tsLen < collR * 2.5f && tsLen > 0.1f) {
+                        sovStructProximity = tsLen;
+                        sovStructAwayDir = Vector3Normalize(Vector3Negate(toS));
+                    }
+
                     if (tsLen < tpLen && tsLen < collR * 3.0f) {
-                        float dotVal = (toS.x * toP.x + toS.z * toP.z) / (tsLen * tpLen + 0.001f);
-                        if (dotVal > 0.5f) { sovStructBlock = true; break; }
+                        float dotVal = Vector3DotProduct(toS, toP) / (tsLen * tpLen + 0.001f);
+                        if (dotVal > 0.5f) {
+                            sovStructBlock = true;
+                            // Determine flank side from enemy position relative to structure
+                            // Use cross product to see which side of the struct-to-player line we're on
+                            Vector3 structToPlayer = Vector3Normalize(toP);
+                            float cross = structToPlayer.x * toS.z - structToPlayer.z * toS.x;
+                            sovFlankSign = (cross > 0) ? 1 : -1;
+                            break;
+                        }
                     }
                 }
             }
 
             if (sovStructBlock) {
-                // Rush wide around -- heavy strafe to split around the base
-                moveDir = Vector3Add(fwd, Vector3Scale(strafe, ai[i].strafeDir * 2.0f));
+                // Rush wide around -- flank direction based on position, not random strafe
+                moveDir = Vector3Add(fwd, Vector3Scale(strafe, (float)sovFlankSign * 2.5f));
+                // Add push away from structure to prevent edge piling
+                if (sovStructProximity < MOONBASE_EXTERIOR_RADIUS * 2.5f) {
+                    float pushStrength = 1.0f - sovStructProximity / (MOONBASE_EXTERIOR_RADIUS * 2.5f);
+                    moveDir = Vector3Add(moveDir, Vector3Scale(sovStructAwayDir, pushStrength * 3.0f));
+                }
                 moving = true; ai[i].behavior = AI_ADVANCE;
-            } else if (dist > 4.0f) {
+            } else if (sovStructProximity < MOONBASE_EXTERIOR_RADIUS * 2.0f) {
+                // Not blocked but very close to a structure -- push away while advancing
+                float pushStrength = 1.0f - sovStructProximity / (MOONBASE_EXTERIOR_RADIUS * 2.0f);
+                moveDir = Vector3Add(fwd, Vector3Scale(sovStructAwayDir, pushStrength * 2.0f));
+                moveDir = Vector3Add(moveDir, Vector3Scale(strafe, ai[i].strafeDir * 0.4f));
+                moving = true; ai[i].behavior = AI_ADVANCE;
+            } else if (dist > cs[i].preferredDist) {
+                // Far: advance with wide strafe bias
                 moveDir = Vector3Add(fwd, Vector3Scale(strafe, ai[i].strafeDir * 0.6f));
                 moving = true; ai[i].behavior = AI_ADVANCE;
+            } else if (dist > cs[i].preferredDist * 0.5f) {
+                // At preferred distance: seek cover behind elevated terrain or hold and strafe
+                bool sovCover = false;
+                if (rank == RANK_TROOPER) {
+                    // Troopers look for nearby elevated terrain to crouch behind
+                    for (int attempt = 0; attempt < 8 && !sovCover; attempt++) {
+                        float angle = (float)attempt / 8.0f * 2.0f * PI;
+                        float searchDist = 3.0f + (float)(rand() % 100) * 0.1f;
+                        float testX = tr[i].position.x + cosf(angle) * searchDist;
+                        float testZ = tr[i].position.z + sinf(angle) * searchDist;
+                        float testH = WorldGetHeight(testX, testZ);
+                        float myH = WorldGetHeight(tr[i].position.x, tr[i].position.z);
+                        if (testH > myH + 0.5f) {
+                            // Elevated terrain -- check if it's between us and player (cover)
+                            Vector3 toTerrain = {testX - tr[i].position.x, 0, testZ - tr[i].position.z};
+                            float dot = Vector3DotProduct(toTerrain, fwd);
+                            if (dot > 0) { // terrain is toward the fight
+                                Vector3 coverDir = Vector3Normalize(
+                                    Vector3Subtract((Vector3){testX, 0, testZ}, playerPos));
+                                Vector3 coverPos = {testX + coverDir.x * 2.0f, 0, testZ + coverDir.z * 2.0f};
+                                Vector3 toCover = Vector3Subtract(coverPos, tr[i].position);
+                                toCover.y = 0;
+                                if (Vector3Length(toCover) > 1.0f) {
+                                    moveDir = Vector3Normalize(toCover);
+                                    moving = true; ai[i].behavior = AI_RETREAT;
+                                    sovCover = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!sovCover) {
+                    // No cover found: strafe at firefight line
+                    moveDir = Vector3Add(Vector3Scale(strafe, ai[i].strafeDir * 1.2f),
+                                         Vector3Scale(fwd, 0.1f));
+                    moving = true; ai[i].behavior = AI_STRAFE;
+                }
             } else {
-                moveDir = Vector3Add(Vector3Scale(strafe, ai[i].strafeDir * 1.5f), Vector3Scale(fwd, 0.2f));
+                // Too close: back up while strafing
+                moveDir = Vector3Add(Vector3Scale(strafe, ai[i].strafeDir * 1.5f), Vector3Scale(fwd, -0.4f));
                 moving = true; ai[i].behavior = AI_STRAFE;
             }
             // Occasional dodge when close
@@ -184,7 +425,7 @@ static void SysAIBehavior(ecs_iter_t *it) {
                 moving = true; ai[i].behavior = AI_STRAFE;
             }
         } else {
-            // AMERICAN: Tactical -- cover behind rocks, flank around structures
+            // AMERICAN: Tactical -- cover behind rocks/terrain, flank around structures
             World *w = WorldGetActive();
             StructureManager *amStructs = StructureGetActive();
             bool foundCover = false;
@@ -211,11 +452,85 @@ static void SysAIBehavior(ecs_iter_t *it) {
                 }
             }
 
+            // Cover seeking when under fire -- urgently find terrain features
+            EcAnimation *amAnim = ecs_get_mut(it->world, entity, EcAnimation);
+            if (amAnim && amAnim->staggerTimer > 0.0f && !structBlocking) {
+                // Under fire — urgently seek nearby elevated terrain or rocks
+                if (w) {
+                    for (int ci = 0; ci < w->chunkCount && !foundCover; ci++) {
+                        if (!w->chunks[ci].generated) continue;
+                        for (int ri = 0; ri < w->chunks[ci].rockCount && !foundCover; ri++) {
+                            Rock *rock = &w->chunks[ci].rocks[ri];
+                            float rockDist = Vector3Distance(tr[i].position, rock->position);
+                            if (rockDist > 2.0f && rockDist < 12.0f) {
+                                Vector3 toCover = Vector3Subtract(rock->position, tr[i].position);
+                                toCover.y = 0;
+                                if (Vector3Length(toCover) > 0.5f) {
+                                    moveDir = Vector3Normalize(toCover);
+                                    moving = true; ai[i].behavior = AI_RETREAT;
+                                    foundCover = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Also try elevated terrain if no rocks found
+                if (!foundCover) {
+                    for (int attempt = 0; attempt < 8 && !foundCover; attempt++) {
+                        float angle = (float)attempt / 8.0f * 2.0f * PI;
+                        float searchDist = 3.0f + (float)(rand() % 100) * 0.1f;
+                        float testX = tr[i].position.x + cosf(angle) * searchDist;
+                        float testZ = tr[i].position.z + sinf(angle) * searchDist;
+                        float testH = WorldGetHeight(testX, testZ);
+                        float myH = WorldGetHeight(tr[i].position.x, tr[i].position.z);
+                        if (testH > myH + 0.5f) {
+                            Vector3 toCover = {testX - tr[i].position.x, 0, testZ - tr[i].position.z};
+                            if (Vector3Length(toCover) > 0.5f) {
+                                moveDir = Vector3Normalize(toCover);
+                                moving = true; ai[i].behavior = AI_RETREAT;
+                                foundCover = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Tactical retreat to cover when health drops below 50%
+            if (!foundCover && !structBlocking && cs[i].health < cs[i].maxHealth * 0.5f) {
+                if (w) {
+                    for (int ci = 0; ci < w->chunkCount && !foundCover; ci++) {
+                        if (!w->chunks[ci].generated) continue;
+                        for (int ri = 0; ri < w->chunks[ci].rockCount && !foundCover; ri++) {
+                            Rock *rock = &w->chunks[ci].rocks[ri];
+                            float rockDist = Vector3Distance(tr[i].position, rock->position);
+                            if (rockDist > 3.0f && rockDist < 15.0f) {
+                                // Prefer rocks that are away from the player
+                                Vector3 toRock = Vector3Subtract(rock->position, tr[i].position);
+                                toRock.y = 0;
+                                Vector3 awayDir = Vector3Normalize(Vector3Negate(toPlayer));
+                                float dot = Vector3DotProduct(Vector3Normalize(toRock), awayDir);
+                                if (dot > -0.3f) { // not directly toward player
+                                    Vector3 coverDir = Vector3Normalize(Vector3Subtract(rock->position, playerPos));
+                                    Vector3 coverPos = Vector3Add(rock->position, Vector3Scale(coverDir, 2.5f));
+                                    Vector3 toCover = Vector3Subtract(coverPos, tr[i].position);
+                                    toCover.y = 0;
+                                    if (Vector3Length(toCover) > 1.5f) {
+                                        moveDir = Vector3Normalize(toCover);
+                                        moving = true; ai[i].behavior = AI_RETREAT;
+                                        foundCover = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if (structBlocking) {
                 // Flank around the structure -- rush wide to the side then re-engage
                 moveDir = Vector3Add(fwd, Vector3Scale(strafe, (float)flankSign * 1.8f));
                 moving = true; ai[i].behavior = AI_ADVANCE;
-            } else if (w && dist < cs[i].attackRange * 1.2f && dist > 5.0f) {
+            } else if (!foundCover && w && dist < cs[i].attackRange * 1.2f && dist > 5.0f) {
                 // Search nearby chunks for a rock to hide behind
                 for (int ci = 0; ci < w->chunkCount && !foundCover; ci++) {
                     if (!w->chunks[ci].generated) continue;
@@ -242,6 +557,35 @@ static void SysAIBehavior(ecs_iter_t *it) {
                         }
                     }
                 }
+                // Also try elevated terrain as cover
+                if (!foundCover) {
+                    for (int attempt = 0; attempt < 8 && !foundCover; attempt++) {
+                        float angle = (float)attempt / 8.0f * 2.0f * PI;
+                        float searchDist = 3.0f + (float)(rand() % 100) * 0.1f;
+                        float testX = tr[i].position.x + cosf(angle) * searchDist;
+                        float testZ = tr[i].position.z + sinf(angle) * searchDist;
+                        float testH = WorldGetHeight(testX, testZ);
+                        float myH = WorldGetHeight(tr[i].position.x, tr[i].position.z);
+                        if (testH > myH + 0.5f) {
+                            Vector3 toTerrain = {testX - tr[i].position.x, 0, testZ - tr[i].position.z};
+                            Vector3 toP = Vector3Subtract(playerPos, tr[i].position);
+                            toP.y = 0;
+                            float dot = Vector3DotProduct(toTerrain, toP);
+                            if (dot > 0) {
+                                Vector3 coverDir = Vector3Normalize(
+                                    Vector3Subtract((Vector3){testX, 0, testZ}, playerPos));
+                                Vector3 coverPos = {testX + coverDir.x * 2.5f, 0, testZ + coverDir.z * 2.5f};
+                                Vector3 toCover = Vector3Subtract(coverPos, tr[i].position);
+                                toCover.y = 0;
+                                if (Vector3Length(toCover) > 1.5f) {
+                                    moveDir = Vector3Normalize(toCover);
+                                    moving = true; ai[i].behavior = AI_RETREAT;
+                                    foundCover = true;
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             if (!foundCover && !structBlocking) {
@@ -249,8 +593,17 @@ static void SysAIBehavior(ecs_iter_t *it) {
                     moveDir = Vector3Add(Vector3Scale(fwd, -1), Vector3Scale(strafe, ai[i].strafeDir * 0.7f));
                     moving = true; ai[i].behavior = AI_RETREAT;
                 } else if (dist > cs[i].preferredDist * 1.4f) {
-                    moveDir = Vector3Add(fwd, Vector3Scale(strafe, ai[i].strafeDir * 0.4f));
-                    moving = true; ai[i].behavior = AI_ADVANCE;
+                    // Fire-team staggered advance: alternate between advancing and pausing
+                    int entityIdx = (int)(entity & 0xFFFF);
+                    bool advancePhase = ((entityIdx + (int)(ai[i].behaviorTimer * 0.5f)) % 2) == 0;
+                    if (advancePhase) {
+                        moveDir = Vector3Add(fwd, Vector3Scale(strafe, ai[i].strafeDir * 0.4f));
+                        moving = true; ai[i].behavior = AI_ADVANCE;
+                    } else {
+                        // Buddy pauses, provides cover with slight strafe
+                        moveDir = Vector3Scale(strafe, ai[i].strafeDir * 0.3f);
+                        moving = true; ai[i].behavior = AI_STRAFE;
+                    }
                 } else {
                     moveDir = Vector3Scale(strafe, ai[i].strafeDir);
                     moving = true; ai[i].behavior = AI_STRAFE;

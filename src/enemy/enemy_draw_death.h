@@ -14,4 +14,13 @@ void DrawAstronautVaporize(Enemy *e, EnemyManager *em);
 // Ragdoll/crumple death particles: suit breach jets, blood, blood pools
 void DrawAstronautRagdoll(Enemy *e);
 
+// Decapitate death: damaged helmet, blood pouring from head wound, ragdoll body
+void DrawAstronautDecapitate(Enemy *e);
+
+// Skeletal decapitate: uses headshot .glb model with blood spray
+void DrawAstronautDecapitateSkeletal(Enemy *e, EnemyManager *em);
+
+// Skeletal eviscerate: uses dismemberment .glb models (head, torso, arms, legs)
+void DrawAstronautEviscerateSkeletal(Enemy *e, EnemyManager *em);
+
 #endif

@@ -17,7 +17,9 @@ typedef enum {
     PROMPT_ENTER,
     PROMPT_EXIT,
     PROMPT_RESUPPLY,
-    PROMPT_EMPTY
+    PROMPT_EMPTY,
+    PROMPT_REFUEL,
+    PROMPT_REFUEL_EMPTY
 } StructurePrompt;
 
 typedef struct {
@@ -28,6 +30,7 @@ typedef struct {
     Vector3 doorWorldPos[MAX_STRUCTURE_DOORS];   // exterior door positions
     float doorAngles[MAX_STRUCTURE_DOORS];        // door facing angles (radians)
     int resuppliesLeft;     // number of resupply uses remaining
+    int he3RefillsLeft;     // number of He-3 refill uses remaining (interior tank)
     bool active;
 } Structure;
 

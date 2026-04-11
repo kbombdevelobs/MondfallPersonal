@@ -75,18 +75,27 @@ static void SysMoraleUpdate(ecs_iter_t *it) {
         mor[i].leader = bestLeader;
         mor[i].leaderDist = bestDist;
 
-        // Morale recovery/decay
-        if (bestDist <= LEADERSHIP_RADIUS) {
-            // Near leader: faster recovery
-            mor[i].morale += MORALE_NCO_RALLY_RATE * dt;
-        } else {
-            // No leader nearby: slow natural recovery
-            mor[i].morale += MORALE_NATURAL_RECOVERY * dt;
-            // Gentle decay if above 0.5 (leadership drift)
-            if (mor[i].morale > 0.5f) {
-                mor[i].morale -= MORALE_DECAY_RATE * dt;
-                if (mor[i].morale < 0.5f) mor[i].morale = 0.5f;
+        // Morale recovery/decay — no recovery while fleeing (unless cowering)
+        const EcAIState *aiSt = ecs_get(world, it->entities[i], EcAIState);
+        bool isFleeing = aiSt && aiSt->behavior == AI_FLEE;
+
+        if (!isFleeing || mor[i].fleeCowering) {
+            // Cowering enemies recover at a moderate rate
+            float recoveryRate = mor[i].fleeCowering ? MORALE_COWER_RECOVERY : 0.0f;
+
+            if (bestDist <= LEADERSHIP_RADIUS) {
+                // Near leader: faster recovery
+                recoveryRate += MORALE_NCO_RALLY_RATE;
+            } else if (!mor[i].fleeCowering) {
+                // No leader nearby: slow natural recovery (not fleeing)
+                recoveryRate += MORALE_NATURAL_RECOVERY;
+                // Gentle decay if above 0.5 (leadership drift)
+                if (mor[i].morale > 0.5f) {
+                    mor[i].morale -= MORALE_DECAY_RATE * dt;
+                    if (mor[i].morale < 0.5f) mor[i].morale = 0.5f;
+                }
             }
+            mor[i].morale += recoveryRate * dt;
         }
         if (mor[i].morale > 1.0f) mor[i].morale = 1.0f;
         if (mor[i].morale < 0.0f) mor[i].morale = 0.0f;
@@ -128,6 +137,10 @@ static void SysMoraleCheck(ecs_iter_t *it) {
                 if (rally) {
                     ai[i].behavior = mor[i].prevBehavior;
                     mor[i].fleeTimer = 0;
+                    // Clear cover state on rally
+                    mor[i].fleeCoverFound = false;
+                    mor[i].fleeCowering = false;
+                    mor[i].fleeCoverPos = (Vector3){0, 0, 0};
                 }
             }
         } else {
@@ -137,6 +150,18 @@ static void SysMoraleCheck(ecs_iter_t *it) {
                     mor[i].prevBehavior = ai[i].behavior;
                     ai[i].behavior = AI_FLEE;
                     mor[i].fleeTimer = 0;
+                    // Reset cover search for new flee
+                    mor[i].fleeCoverFound = false;
+                    mor[i].fleeCowering = false;
+                    mor[i].fleeCoverPos = (Vector3){0, 0, 0};
+                    // Clear knockdown so they don't flee while sprawled
+                    EcAnimation *fleeAnim = ecs_ensure(it->world, it->entities[i], EcAnimation);
+                    if (fleeAnim) {
+                        fleeAnim->knockdownTimer = 0;
+                        fleeAnim->knockdownAngle = 0;
+                        fleeAnim->isCowering = false;
+                        fleeAnim->staggerTimer = 0;
+                    }
                 }
             }
         }

@@ -10,6 +10,7 @@ void EcsEnemySystemsCleanup(void);
 void EcsEnemyDamage(ecs_world_t *world, ecs_entity_t entity, float damage);
 void EcsEnemyVaporize(ecs_world_t *world, ecs_entity_t entity);
 void EcsEnemyEviscerate(ecs_world_t *world, ecs_entity_t entity, Vector3 hitDir);
+void EcsEnemyDecapitate(ecs_world_t *world, ecs_entity_t entity, Vector3 hitDir);
 int EcsEnemyCountAlive(ecs_world_t *world);
 
 #endif

@@ -1,4 +1,5 @@
 #include "structure.h"
+#include "structure_model.h"
 #include "world.h"
 #include <math.h>
 #include <string.h>
@@ -51,6 +52,7 @@ static void InitStructureAtPos(Structure *base, float wx, float wz, float interi
 
     base->interiorY = interiorY;
     base->resuppliesLeft = MOONBASE_RESUPPLIES;
+    base->he3RefillsLeft = HE3_REFILL_USES;
     base->active = true;
 
     // 3 doors at 120-degree intervals
@@ -83,6 +85,9 @@ void StructureManagerInit(StructureManager *sm) {
     g_activeStructures = sm;
     sm->insideIndex = -1;
     sm->enteredDoor = 0;
+
+    // Load .glb structure models (graceful fallback if files missing)
+    StructureModelsLoad(StructureModelsGet());
 
     // Guaranteed base near spawn
     InitStructureAtPos(&sm->structures[0], 30.0f, 30.0f, STRUCTURE_INTERIOR_Y);
@@ -134,6 +139,7 @@ void StructureManagerCheckSpawns(StructureManager *sm, Vector3 playerPos) {
 
 void StructureManagerUnload(StructureManager *sm) {
     (void)sm;
+    StructureModelsUnload(StructureModelsGet());
 }
 
 bool StructureIsPlayerInside(StructureManager *sm) {
@@ -321,6 +327,31 @@ void StructureManagerUpdate(StructureManager *sm, Player *player, Weapon *weapon
                     }
                 } else {
                     sm->currentPrompt = PROMPT_EMPTY;
+                    if (IsKeyPressed(KEY_E)) {
+                        sm->emptyMessageTimer = 3.0f;
+                    }
+                }
+            }
+        }
+
+        // He-3 refuel tank — south wall (opposite of resupply closet)
+        if (sm->currentPrompt == PROMPT_NONE) {
+            float he3X = MOONBASE_INTERIOR_W * 0.3f;  // offset right of center
+            float he3Z = -(MOONBASE_INTERIOR_D * 0.5f - 1.5f); // south wall
+            float hdx = player->position.x - he3X;
+            float hdz = player->position.z - he3Z;
+            float hDist = sqrtf(hdx * hdx + hdz * hdz);
+            if (hDist < CLOSET_INTERACT_RANGE) {
+                Structure *cs = &sm->structures[sm->insideIndex];
+                if (cs->he3RefillsLeft > 0 && player->he3Fuel < HE3_MAX_FUEL) {
+                    sm->currentPrompt = PROMPT_REFUEL;
+                    if (IsKeyPressed(KEY_E)) {
+                        player->he3Fuel = HE3_MAX_FUEL;
+                        cs->he3RefillsLeft--;
+                        sm->resupplyFlashTimer = 0.5f;
+                    }
+                } else if (cs->he3RefillsLeft <= 0) {
+                    sm->currentPrompt = PROMPT_REFUEL_EMPTY;
                     if (IsKeyPressed(KEY_E)) {
                         sm->emptyMessageTimer = 3.0f;
                     }

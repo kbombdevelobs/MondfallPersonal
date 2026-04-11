@@ -50,9 +50,37 @@ static ecs_entity_t LibertyCheckHitEcs(ecs_world_t *world, Ray ray, float maxDis
     return closest;
 }
 
-ecs_entity_t EcsEnemyCheckHit(ecs_world_t *world, Ray ray, float maxDist, float *hitDist) {
+// Head-only ray test: offset bounding box centered at head position
+static bool RayHitEnemyHead(Ray ray, Vector3 enemyPos, float enemyYaw) {
+    // Transform ray into enemy local space (flat world: Y-axis rotation only)
+    Vector3 localOrigin = Vector3Subtract(ray.position, enemyPos);
+    float cosY = cosf(-enemyYaw);
+    float sinY = sinf(-enemyYaw);
+    Vector3 lo = { localOrigin.x * cosY - localOrigin.z * sinY,
+                   localOrigin.y,
+                   localOrigin.x * sinY + localOrigin.z * cosY };
+    Vector3 ld = { ray.direction.x * cosY - ray.direction.z * sinY,
+                   ray.direction.y,
+                   ray.direction.x * sinY + ray.direction.z * cosY };
+    float hw = HEADSHOT_HEAD_HALF_W;
+    float hh = HEADSHOT_HEAD_HALF_H;
+    float cy = HEADSHOT_HEAD_CENTER_Y;
+    BoundingBox headBox = {
+        { -hw, cy - hh, -hw },
+        {  hw, cy + hh,  hw }
+    };
+    Ray localRay = { lo, ld };
+    RayCollision rc = GetRayCollisionBox(localRay, headBox);
+    return rc.hit;
+}
+
+ecs_entity_t EcsEnemyCheckHit(ecs_world_t *world, Ray ray, float maxDist, float *hitDist, bool *outHeadshot) {
     ecs_entity_t closest = 0;
     float cd = maxDist;
+    float closestYaw = 0;
+    Vector3 closestPos = {0};
+
+    if (outHeadshot) *outHeadshot = false;
 
     ecs_query_t *q = ecs_query(world, {
         .terms = {
@@ -73,10 +101,16 @@ ecs_entity_t EcsEnemyCheckHit(ecs_world_t *world, Ray ray, float maxDist, float 
             if (col.hit && col.distance < cd) {
                 cd = col.distance;
                 closest = it.entities[i];
+                closestYaw = t[i].facingAngle;
+                closestPos = pos;
             }
         }
     }
     ecs_query_fini(q);
+
+    if (closest != 0 && outHeadshot) {
+        *outHeadshot = RayHitEnemyHead(ray, closestPos, closestYaw);
+    }
 
     if (hitDist) *hitDist = cd;
     return closest;
@@ -129,16 +163,23 @@ void EcsCombatProcessPickupFire(EcsCombatContext *ctx) {
             if (PickupFireZaryaRelease(pickups)) {
                 Ray pickRay = {shootOrigin, shootDir};
                 float hd = 0;
-                ecs_entity_t hit = EcsEnemyCheckHit(world, pickRay, PICKUP_ZARYA_RANGE, &hd);
+                bool isHeadshot = false;
+                ecs_entity_t hit = EcsEnemyCheckHit(world, pickRay, PICKUP_ZARYA_RANGE, &hd, &isHeadshot);
                 Vector3 beamEnd = (hit != 0) ?
                     Vector3Add(shootOrigin, Vector3Scale(shootDir, hd)) :
                     Vector3Add(shootOrigin, Vector3Scale(shootDir, PICKUP_ZARYA_RANGE));
                 if (hit != 0) {
                     const EcTransform *tr = ecs_get(world, hit, EcTransform);
-                    EcsEnemyDamage(world, hit, pickups->pickupDamage);
-                    if (!ecs_has(world, hit, EcAlive)) {
+                    if (isHeadshot) {
                         game->killCount++;
                         if (tr) PickupDrop(pickups, tr->position, GetEntityPickupType(world, hit));
+                        EcsEnemyDecapitate(world, hit, shootDir);
+                    } else {
+                        EcsEnemyDamage(world, hit, pickups->pickupDamage);
+                        if (!ecs_has(world, hit, EcAlive)) {
+                            game->killCount++;
+                            if (tr) PickupDrop(pickups, tr->position, GetEntityPickupType(world, hit));
+                        }
                     }
                 }
                 if (weapon->beamCount < MAX_BEAM_TRAILS) {
@@ -167,7 +208,7 @@ void EcsCombatProcessPickupFire(EcsCombatContext *ctx) {
             while (pierced < PICKUP_LONGBOW_PIERCE && totalDist < PICKUP_LONGBOW_RANGE) {
                 float hd = 0;
                 pickRay.position = rayOrigin;
-                ecs_entity_t hit = EcsEnemyCheckHit(world, pickRay, PICKUP_LONGBOW_RANGE - totalDist, &hd);
+                ecs_entity_t hit = EcsEnemyCheckHit(world, pickRay, PICKUP_LONGBOW_RANGE - totalDist, &hd, NULL);
                 if (hit == 0) break;
 
                 const EcTransform *tr = ecs_get(world, hit, EcTransform);
@@ -205,13 +246,21 @@ void EcsCombatProcessPickupFire(EcsCombatContext *ctx) {
                 Vector3 pelletDir = Vector3Normalize((Vector3){shootDir.x + sx, shootDir.y + sy, shootDir.z});
                 Ray pelletRay = {shootOrigin, pelletDir};
                 float hd = 0;
-                ecs_entity_t hit = EcsEnemyCheckHit(world, pelletRay, PICKUP_MOLOT_RANGE, &hd);
+                bool pelletHeadshot = false;
+                ecs_entity_t hit = EcsEnemyCheckHit(world, pelletRay, PICKUP_MOLOT_RANGE, &hd, &pelletHeadshot);
                 if (hit != 0) {
                     const EcTransform *tr = ecs_get(world, hit, EcTransform);
-                    EcsEnemyDamage(world, hit, PICKUP_MOLOT_DAMAGE);
-                    if (!ecs_has(world, hit, EcAlive)) {
+                    PickupWeaponType pelletDropType = GetEntityPickupType(world, hit);
+                    if (pelletHeadshot && ecs_has(world, hit, EcAlive)) {
                         game->killCount++;
-                        if (tr) PickupDrop(pickups, tr->position, GetEntityPickupType(world, hit));
+                        if (tr) PickupDrop(pickups, tr->position, pelletDropType);
+                        EcsEnemyDecapitate(world, hit, pelletDir);
+                    } else {
+                        EcsEnemyDamage(world, hit, PICKUP_MOLOT_DAMAGE);
+                        if (!ecs_has(world, hit, EcAlive)) {
+                            game->killCount++;
+                            if (tr) PickupDrop(pickups, tr->position, pelletDropType);
+                        }
                     }
                 }
                 // Pellet tracer
@@ -242,26 +291,33 @@ void EcsCombatProcessPickupFire(EcsCombatContext *ctx) {
         }
         Ray pickRay = {shootOrigin, shootDir};
         float hd = 0;
+        bool isHeadshot = false;
         ecs_entity_t hit;
         if (pickups->pickupType == PICKUP_LIBERTY)
             hit = LibertyCheckHitEcs(world, pickRay, range, &hd);
         else
-            hit = EcsEnemyCheckHit(world, pickRay, range, &hd);
+            hit = EcsEnemyCheckHit(world, pickRay, range, &hd, &isHeadshot);
 
         Vector3 beamEnd = (hit != 0) ?
             Vector3Add(shootOrigin, Vector3Scale(shootDir, hd)) :
             Vector3Add(shootOrigin, Vector3Scale(shootDir, range));
 
         if (hit != 0) {
+            PickupWeaponType stdDropType = GetEntityPickupType(world, hit);
             if (pickups->pickupType == PICKUP_LIBERTY) {
                 game->killCount++;
                 EcsEnemyVaporize(world, hit);
+            } else if (isHeadshot && ecs_has(world, hit, EcAlive)) {
+                const EcTransform *tr = ecs_get(world, hit, EcTransform);
+                game->killCount++;
+                if (tr) PickupDrop(pickups, tr->position, stdDropType);
+                EcsEnemyDecapitate(world, hit, shootDir);
             } else {
                 const EcTransform *tr = ecs_get(world, hit, EcTransform);
                 EcsEnemyDamage(world, hit, pickups->pickupDamage);
                 if (!ecs_has(world, hit, EcAlive)) {
                     game->killCount++;
-                    if (tr) PickupDrop(pickups, tr->position, GetEntityPickupType(world, hit));
+                    if (tr) PickupDrop(pickups, tr->position, stdDropType);
                 }
             }
         }
@@ -333,13 +389,21 @@ void EcsCombatProcessWeaponFire(EcsCombatContext *ctx) {
         if (weapon->current == WEAPON_MOND_MP40) {
             Ray shootRay = {shootOrigin, shootDir};
             float hitDist = 0;
-            ecs_entity_t hit = EcsEnemyCheckHit(world, shootRay, MP40_RANGE, &hitDist);
+            bool isHeadshot = false;
+            ecs_entity_t hit = EcsEnemyCheckHit(world, shootRay, MP40_RANGE, &hitDist, &isHeadshot);
             if (hit != 0) {
                 const EcTransform *tr = ecs_get(world, hit, EcTransform);
-                EcsEnemyDamage(world, hit, weapon->mp40Damage);
-                if (!ecs_has(world, hit, EcAlive)) {
+                PickupWeaponType wpnDropType = GetEntityPickupType(world, hit);
+                if (isHeadshot && ecs_has(world, hit, EcAlive)) {
                     game->killCount++;
-                    if (tr) PickupDrop(pickups, tr->position, GetEntityPickupType(world, hit));
+                    if (tr) PickupDrop(pickups, tr->position, wpnDropType);
+                    EcsEnemyDecapitate(world, hit, shootDir);
+                } else {
+                    EcsEnemyDamage(world, hit, weapon->mp40Damage);
+                    if (!ecs_has(world, hit, EcAlive)) {
+                        game->killCount++;
+                        if (tr) PickupDrop(pickups, tr->position, wpnDropType);
+                    }
                 }
             }
         } else if (weapon->current == WEAPON_JACKHAMMER) {
@@ -450,4 +514,98 @@ void EcsCombatProcessBeam(EcsCombatContext *ctx, float dt) {
         }
     }
     ecs_query_fini(q);
+}
+
+float EcsCombatProcessGroundPound(EcsCombatContext *ctx) {
+    if (!ctx || !ctx->player || !ctx->ecsWorld) return 0.0f;
+    Player *player = ctx->player;
+
+    // Only trigger on the frame the impact starts
+    if (player->groundPoundImpactTimer < GROUND_POUND_DUST_LIFE - 0.01f) return 0.0f;
+
+    ecs_world_t *world = ctx->ecsWorld;
+    Game *game = ctx->game;
+    PickupManager *pickups = ctx->pickups;
+    Vector3 impactPos = player->groundPoundImpactPos;
+
+    int enemiesHit = 0;
+    ecs_query_t *q = ecs_query(world, {
+        .terms = {
+            { .id = ecs_id(EcTransform) },
+            { .id = ecs_id(EcFaction) },
+            { .id = ecs_id(EcAlive) }
+        }
+    });
+    ecs_iter_t it = ecs_query_iter(world, q);
+    while (ecs_query_next(&it)) {
+        EcTransform *t = ecs_field(&it, EcTransform, 0);
+        for (int i = 0; i < it.count; i++) {
+            float dist = Vector3Distance(impactPos, t[i].position);
+            if (dist > GROUND_POUND_RADIUS || dist < 0.1f) continue;
+
+            float falloff = 1.0f - (dist / GROUND_POUND_RADIUS);
+            float dmg = GROUND_POUND_DAMAGE * falloff;
+
+            // Push direction: away from impact in XZ plane
+            Vector3 away = Vector3Subtract(t[i].position, impactPos);
+            away.y = 0.0f; // flat world: tangent is XZ plane
+            float awayLen = Vector3Length(away);
+            if (awayLen > 0.01f) {
+                away = Vector3Scale(away, 1.0f / awayLen);
+            } else {
+                away = (Vector3){0.0f, 0.0f, 0.0f};
+            }
+
+            // Apply velocity push — launch enemies HARD away and upward (spin out)
+            EcVelocity *vel = ecs_ensure(world, it.entities[i], EcVelocity);
+            if (vel) {
+                vel->velocity = Vector3Add(vel->velocity,
+                    Vector3Scale(away, GROUND_POUND_FORCE * falloff * 2.0f));  // 2x push
+                vel->vertVel += GROUND_POUND_LIFT * falloff * 1.5f;           // more vertical launch
+            }
+
+            // Knockdown: on their BACK with legs toward player (positive angle = backward)
+            // Face the player so legs point toward impact
+            EcAnimation *anim = ecs_ensure(world, it.entities[i], EcAnimation);
+            if (anim) {
+                anim->knockdownTimer = GP_KNOCKDOWN_BASE + falloff * GP_KNOCKDOWN_FALLOFF_MULT;
+                anim->knockdownAngle = -(80.0f + falloff * 10.0f);  // negative = backward (on back)
+                anim->staggerTimer = 1.0f;  // longer stagger
+            }
+            // Face toward player so legs point toward impact point
+            EcTransform *et = ecs_ensure(world, it.entities[i], EcTransform);
+            if (et && awayLen > 0.1f) {
+                et->facingAngle = atan2f(-away.x, -away.z);  // face toward impact
+            }
+
+            // Apply damage (may kill)
+            PickupWeaponType gpDropType = GetEntityPickupType(world, it.entities[i]);
+            EcsEnemyDamage(world, it.entities[i], dmg);
+            if (!ecs_has(world, it.entities[i], EcAlive)) {
+                game->killCount++;
+                PickupDrop(pickups, t[i].position, gpDropType);
+            }
+            enemiesHit++;
+        }
+    }
+    ecs_query_fini(q);
+
+    // 40% chance to play a radio scream transmission when enemies are hit
+    if (enemiesHit > 0 && (rand() % 100) < 40) {
+        EcEnemyResources *res = ecs_singleton_ensure(world, EcEnemyResources);
+        if (res && res->groundPoundScreamCount > 0) {
+            // Skip if any scream is already playing
+            bool screamPlaying = false;
+            for (int s = 0; s < res->groundPoundScreamCount; s++) {
+                if (IsSoundPlaying(res->sndGroundPoundScream[s])) { screamPlaying = true; break; }
+            }
+            if (!screamPlaying) {
+                int pick = rand() % res->groundPoundScreamCount;
+                PlaySound(res->sndGroundPoundScream[pick]);
+                res->radioTransmissionTimer = 3.0f;
+            }
+        }
+    }
+
+    return GROUND_POUND_SHAKE;
 }

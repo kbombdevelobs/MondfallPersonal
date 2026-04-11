@@ -1,8 +1,76 @@
 #include "enemy_draw_death.h"
+#include "enemy_model_loader.h"
+#include "enemy_model_bones.h"
+#include "enemy_bodydef.h"
 #include "world.h"
 #include "rlgl.h"
+#include "raymath.h"
 #include <math.h>
 #include <stddef.h>
+
+// ============================================================================
+// Shared: terrain-conforming blood pool with gradient rings + occasional spurts
+// Call from any death renderer when the body is on the ground.
+// ============================================================================
+static void DrawBloodPoolAtPos(Vector3 pos, float elapsed, float facingSeed) {
+    // Don't start pool until body has settled on the ground (~4s for ragdoll bounce)
+    if (elapsed < 4.0f) return;
+    float poolTime = elapsed - 4.0f;
+    float poolR = 0.3f + poolTime * 0.35f;   // steady spread after settling
+    if (poolR > 3.5f) poolR = 3.5f;
+
+    int segs = 12;
+    int rings = 4;
+    float pcx = pos.x, pcz = pos.z;
+
+    for (int ring = rings - 1; ring >= 0; ring--) {
+        float outerFrac = (float)(ring + 1) / (float)rings;
+        float innerFrac = (float)ring / (float)rings;
+        float outerR = poolR * outerFrac;
+        float innerR = poolR * innerFrac;
+        float colorT = (float)ring / (float)(rings - 1);
+        unsigned char cr = (unsigned char)(110 + colorT * 50);
+        unsigned char cg = (unsigned char)(6 + colorT * 10);
+        unsigned char cb = (unsigned char)(4 + colorT * 7);
+        unsigned char ca = (unsigned char)(220 - colorT * 80);
+        Color rc = {cr, cg, cb, ca};
+
+        for (int s = 0; s < segs; s++) {
+            float a0 = (float)s / segs * 2.0f * PI;
+            float a1 = (float)(s + 1) / segs * 2.0f * PI;
+            float j0 = 1.0f + sinf(a0 * 3.0f + facingSeed * 7.13f) * 0.15f * outerFrac;
+            float j1 = 1.0f + sinf(a1 * 3.0f + facingSeed * 7.13f) * 0.15f * outerFrac;
+            float ox0 = pcx+cosf(a0)*outerR*j0, oz0 = pcz+sinf(a0)*outerR*j0;
+            float ox1 = pcx+cosf(a1)*outerR*j1, oz1 = pcz+sinf(a1)*outerR*j1;
+            float ix0 = pcx+cosf(a0)*innerR*j0, iz0 = pcz+sinf(a0)*innerR*j0;
+            float ix1 = pcx+cosf(a1)*innerR*j1, iz1 = pcz+sinf(a1)*innerR*j1;
+            float oh0=WorldGetHeight(ox0,oz0)+0.08f, oh1=WorldGetHeight(ox1,oz1)+0.08f;
+            float ih0=WorldGetHeight(ix0,iz0)+0.10f+(float)ring*0.005f;
+            float ih1=WorldGetHeight(ix1,iz1)+0.10f+(float)ring*0.005f;
+            DrawTriangle3D((Vector3){ix0,ih0,iz0},(Vector3){ox1,oh1,oz1},(Vector3){ox0,oh0,oz0},rc);
+            DrawTriangle3D((Vector3){ix0,ih0,iz0},(Vector3){ix1,ih1,iz1},(Vector3){ox1,oh1,oz1},rc);
+        }
+    }
+
+    // Occasional blood spurts
+    float t_ = (float)GetTime();
+    float spurtPhase = sinf(t_ * 0.7f + facingSeed * 11.37f);
+    if (spurtPhase > 0.75f && elapsed < 30.0f) {
+        float spurtStr = (spurtPhase - 0.75f) / 0.25f;
+        for (int sp = 0; sp < 5; sp++) {
+            float sa = (float)sp / 5.0f * PI * 2.0f + t_ * 1.5f;
+            float sr = 0.08f + spurtStr * 0.2f;
+            float sy = 0.1f + spurtStr * 0.4f - (float)sp * 0.04f;
+            float sx = pcx + cosf(sa) * sr;
+            float sz = pcz + sinf(sa) * sr;
+            float sGH = WorldGetHeight(sx, sz) + 0.08f;
+            float drawY = pos.y + sy;
+            if (drawY < sGH) drawY = sGH;
+            DrawSphereEx((Vector3){sx, drawY, sz}, 0.035f * spurtStr, 3, 3,
+                (Color){140, 10, 5, (unsigned char)(200 * spurtStr)});
+        }
+    }
+}
 
 typedef struct {
     Color suitBase, suitDark, visorColor, helmetColor;
@@ -222,6 +290,9 @@ void DrawAstronautEviscerate(Enemy *e, EnemyManager *em) {
             }
         }
     }
+
+    // Blood pool under evisceration site
+    DrawBloodPoolAtPos(pos, e->evisTimer, e->facingAngle);
 }
 
 // === VAPORIZE — 3 phases: jerk, freeze, disintegrate ===
@@ -351,7 +422,7 @@ void DrawAstronautRagdoll(Enemy *e) {
     Vector3 pos = e->position;
 
     if (e->deathStyle == 0) {
-        float elapsed = 10.0f - e->deathTimer;
+        float elapsed = DEATH_BODY_PERSIST_TIME - e->deathTimer;
         // Suit breach point — deterministic per enemy
         int limbSeed = (int)((size_t)e % 4);
         Vector3 leakOff = {0, 0, 0};
@@ -415,48 +486,15 @@ void DrawAstronautRagdoll(Enemy *e) {
                     (Color){140, 8, 4, (unsigned char)(160 * bloodFade)});
             }
         }
+
+        // Blood pool (shared terrain-conforming system)
+        DrawBloodPoolAtPos(pos, elapsed, e->facingAngle);
     } else {
-        float elapsed = 12.0f - e->deathTimer;
-        float poolTime = elapsed - 0.5f;
-        if (poolTime < 0) poolTime = 0;
-        float poolR = 0.3f + poolTime * 0.25f;
-        if (poolR > 3.5f) poolR = 3.5f;
-
-        int segs = 10;
+        float elapsed = DEATH_BODY_PERSIST_TIME - e->deathTimer;
         float cx = pos.x, cz = pos.z;
-        float cH = WorldGetHeight(cx, cz) + 0.06f;
 
-        for (int s = 0; s < segs; s++) {
-            float a0 = (float)s / segs * 2.0f * PI;
-            float a1 = (float)(s + 1) / segs * 2.0f * PI;
-
-            float x0 = cx + cosf(a0) * poolR;
-            float z0 = cz + sinf(a0) * poolR;
-            float h0 = WorldGetHeight(x0, z0) + 0.06f;
-
-            float x1 = cx + cosf(a1) * poolR;
-            float z1 = cz + sinf(a1) * poolR;
-            float h1 = WorldGetHeight(x1, z1) + 0.06f;
-
-            DrawTriangle3D(
-                (Vector3){cx, cH, cz},
-                (Vector3){x1, h1, z1},
-                (Vector3){x0, h0, z0},
-                (Color){120, 8, 5, 200});
-
-            float ix0 = cx + cosf(a0) * poolR * 0.6f;
-            float iz0 = cz + sinf(a0) * poolR * 0.6f;
-            float ih0 = WorldGetHeight(ix0, iz0) + 0.07f;
-            float ix1 = cx + cosf(a1) * poolR * 0.6f;
-            float iz1 = cz + sinf(a1) * poolR * 0.6f;
-            float ih1 = WorldGetHeight(ix1, iz1) + 0.07f;
-
-            DrawTriangle3D(
-                (Vector3){cx, cH + 0.01f, cz},
-                (Vector3){ix1, ih1, iz1},
-                (Vector3){ix0, ih0, iz0},
-                (Color){160, 15, 10, 220});
-        }
+        // Blood pool (shared terrain-conforming system)
+        DrawBloodPoolAtPos(pos, elapsed, e->facingAngle);
 
         if (elapsed < 8.0f) {
             float dripFade = (elapsed < 6.0f) ? 1.0f : 1.0f - (elapsed - 6.0f) / 2.0f;
@@ -465,22 +503,13 @@ void DrawAstronautRagdoll(Enemy *e) {
                 float dlife = fmodf(dt2, 1.5f) / 1.5f;
                 float dx = cx + sinf(dt2 * 0.7f) * 0.3f;
                 float dz = cz + cosf(dt2 * 0.9f) * 0.3f;
-                float dy = pos.y + 0.3f - dlife * (pos.y - cH + 0.5f);
+                float groundH = WorldGetHeight(cx, cz) + 0.06f;
+                float dy = pos.y + 0.3f - dlife * (pos.y - groundH + 0.5f);
                 float dGH = WorldGetHeight(dx, dz) + 0.08f;
                 if (dy < dGH) dy = dGH;
                 DrawSphereEx((Vector3){dx, dy, dz}, 0.03f * dripFade, 3, 3,
                     (Color){180, 12, 6, (unsigned char)(200 * dripFade)});
             }
-        }
-
-        for (int b = 0; b < 4; b++) {
-            float bt = GetTime() * 3.0f + (float)b * 1.6f;
-            float bx = cx + cosf(bt) * poolR * 0.35f;
-            float bz = cz + sinf(bt) * poolR * 0.35f;
-            float bH = WorldGetHeight(bx, bz) + 0.12f;
-            float bubble = sinf(bt * 2.0f) * 0.03f;
-            DrawSphereEx((Vector3){bx, bH + bubble, bz},
-                0.035f, 3, 3, (Color){160, 15, 10, 160});
         }
 
         if (elapsed < 5.0f) {
@@ -497,4 +526,478 @@ void DrawAstronautRagdoll(Enemy *e) {
             }
         }
     }
+}
+
+// === DECAPITATE — chunk blown off head, blood pouring, ragdoll blowout ===
+void DrawAstronautDecapitate(Enemy *e) {
+    FactionColors fc = GetFactionColors(e->type);
+    Vector3 pos = e->position;
+    float t = e->decapTimer;
+
+    // Fade out in last 3 seconds
+    float fade = (e->deathTimer < 3.0f) ? e->deathTimer / 3.0f : 1.0f;
+    if (fade < 0) fade = 0;
+    unsigned char alpha = (unsigned char)(255 * fade);
+
+    // Flat world: basis is identity with Y up
+    Vector3 localUp    = {0, 1, 0};
+    Vector3 localFwd   = {sinf(e->facingAngle), 0, cosf(e->facingAngle)};
+    Vector3 localRight = {cosf(e->facingAngle), 0, -sinf(e->facingAngle)};
+
+    // Per-enemy deterministic chunk direction (seeded from facingAngle)
+    float chunkAngle = e->facingAngle * 7.13f;
+    float chunkDirR = cosf(chunkAngle);
+    float chunkDirF = sinf(chunkAngle);
+
+    // === INITIAL CHUNK BURST (first 3 seconds) — skull/helmet fragments ===
+    if (t < 3.0f) {
+        float burst = t / 3.0f;
+        for (int f = 0; f < 8; f++) {
+            float fa = (float)f / 8.0f * PI + 0.3f;
+            float fr = t * 4.0f + (float)f * 0.25f;
+            float fy = t * 2.5f - t * t * 0.5f + sinf(fa) * 0.3f;
+            Vector3 fp = Vector3Add(pos,
+                Vector3Add(Vector3Scale(localRight, chunkDirR * (0.3f + cosf(fa) * fr * 0.6f)),
+                Vector3Add(Vector3Scale(localUp, HEADSHOT_HEAD_CENTER_Y + fy),
+                           Vector3Scale(localFwd, chunkDirF * (0.2f + sinf(fa) * fr * 0.4f)))));
+            float fsz = 0.09f * (1.0f - burst * 0.5f) * fade;
+            unsigned char fa2 = (unsigned char)((1.0f - burst) * 230 * fade);
+            if (f < 4) {
+                DrawCubeV(fp, (Vector3){fsz, fsz * 0.5f, fsz * 0.7f},
+                    (Color){fc.helmetColor.r, fc.helmetColor.g, fc.helmetColor.b, fa2});
+            } else {
+                Color chunkCol = (f % 2 == 0) ? (Color){200, 185, 170, fa2} : (Color){190, 15, 8, fa2};
+                DrawCubeV(fp, (Vector3){fsz * 0.5f, fsz * 0.4f, fsz * 0.5f}, chunkCol);
+            }
+        }
+        // Blood burst cloud from chunk direction
+        for (int p = 0; p < 20; p++) {
+            float pa = (float)p / 20.0f * PI * 1.5f - 0.3f;
+            float pr = burst * 3.0f + (float)p * 0.05f;
+            float py = sinf(pa * 1.5f + t * 5.0f) * pr * 0.3f;
+            Vector3 pp = Vector3Add(pos,
+                Vector3Add(Vector3Scale(localRight, chunkDirR * (0.2f + cosf(pa) * pr * 0.5f)),
+                Vector3Add(Vector3Scale(localUp, HEADSHOT_HEAD_CENTER_Y + py),
+                           Vector3Scale(localFwd, chunkDirF * (0.1f + sinf(pa) * pr * 0.4f)))));
+            float sz = (0.12f - burst * 0.04f) * fade;
+            unsigned char ba = (unsigned char)((1.0f - burst * 0.6f) * 200 * fade);
+            Color col = (p % 3 == 0) ? (Color){230, 20, 8, ba} :
+                        (p % 3 == 1) ? (Color){170, 10, 5, ba} :
+                                       (Color){110, 5, 2, ba};
+            DrawSphereEx(pp, sz, 3, 3, col);
+        }
+    }
+
+    // === PRESSURIZED AIR JET from head wound (0-6 seconds) ===
+    if (t < 6.0f) {
+        float pressure = 1.0f - t / 6.0f;
+        for (int g = 0; g < 14; g++) {
+            float gt = (float)g / 14.0f;
+            float glife = fmodf(t * 3.0f + gt * 1.5f, 1.5f);
+            float gspeed = (1.5f + glife * 3.0f) * pressure;
+            float gjitter = sinf(gt * 7.3f + t * 15.0f) * 0.15f * pressure;
+            Vector3 gp = Vector3Add(pos,
+                Vector3Add(Vector3Scale(localRight, chunkDirR * (0.25f + gspeed * 0.3f) + gjitter),
+                Vector3Add(Vector3Scale(localUp, HEADSHOT_HEAD_CENTER_Y + glife * 0.5f),
+                           Vector3Scale(localFwd, chunkDirF * (0.15f + gspeed * 0.2f) + gjitter * 0.7f))));
+            float gsz = (0.04f + glife * 0.12f) * pressure * fade;
+            unsigned char ga = (unsigned char)((1.0f - glife / 1.5f) * 180 * pressure * fade);
+            DrawSphereEx(gp, gsz, 3, 3, (Color){230, 235, 240, ga});
+        }
+    }
+
+    // === BLOOD POURING FROM HEAD WOUND ===
+    if (t < HEADSHOT_BLOOD_DURATION) {
+        float fountainFade = 1.0f - t / HEADSHOT_BLOOD_DURATION;
+        float pulse = sinf(t * 12.0f);
+
+        for (int s = 0; s < 16; s++) {
+            float st = (float)s / 16.0f;
+            float outward = 0.3f + st * 0.4f * (1.0f + pulse * 0.3f);
+            float sa = st * 8.0f + t * 10.0f + (float)s;
+            Vector3 sp = Vector3Add(pos,
+                Vector3Add(Vector3Scale(localUp, HEADSHOT_HEAD_CENTER_Y - 0.1f - st * 0.8f),
+                Vector3Add(Vector3Scale(localRight, chunkDirR * outward + sinf(sa) * 0.1f),
+                           Vector3Scale(localFwd, chunkDirF * outward * 0.5f + cosf(sa) * 0.1f))));
+            float ssz = (0.08f + st * 0.05f) * fountainFade * fade;
+            unsigned char sa2 = (unsigned char)(240 * fountainFade * (1.0f - st * 0.3f) * fade);
+            Color col = (s % 2 == 0) ? (Color){220, 20, 8, sa2} : (Color){170, 10, 5, sa2};
+            DrawSphereEx(sp, ssz, 3, 3, col);
+        }
+
+        for (int d = 0; d < 10; d++) {
+            float dt2 = fmodf(t * 2.5f + (float)d * 0.4f, 2.0f);
+            float dfall = dt2 * dt2 * 1.0f;
+            float dout = 0.25f + dt2 * 0.2f;
+            float da = (float)d / 10.0f * PI;
+            Vector3 dp = Vector3Add(pos,
+                Vector3Add(Vector3Scale(localUp, HEADSHOT_HEAD_CENTER_Y - 0.2f - dfall),
+                Vector3Add(Vector3Scale(localRight, chunkDirR * dout + cosf(da) * 0.1f),
+                           Vector3Scale(localFwd, chunkDirF * dout * 0.5f + sinf(da) * 0.1f))));
+            float dsz = 0.05f * fountainFade * fade;
+            unsigned char da2 = (unsigned char)(200 * fountainFade * fade);
+            DrawSphereEx(dp, dsz, 3, 3, (Color){200, 12, 5, da2});
+        }
+
+        for (int r = 0; r < 6; r++) {
+            float rt = fmodf(t * 1.2f + (float)r * 0.5f, 2.5f);
+            float ry = HEADSHOT_HEAD_CENTER_Y - 0.3f - rt * 0.6f;
+            float rx = chunkDirR * (0.2f + sinf((float)r * 2.1f) * 0.15f);
+            float rz2 = chunkDirF * 0.1f;
+            Vector3 rp = Vector3Add(pos,
+                Vector3Add(Vector3Scale(localUp, ry),
+                Vector3Add(Vector3Scale(localRight, rx),
+                           Vector3Scale(localFwd, rz2))));
+            float rsz = 0.04f * fountainFade * fade;
+            unsigned char ra = (unsigned char)(160 * fountainFade * fade);
+            DrawSphereEx(rp, rsz, 3, 3, (Color){160, 8, 3, ra});
+        }
+    }
+
+    // === BODY WITH DAMAGED HEAD — ragdoll spin ===
+    rlPushMatrix();
+    rlTranslatef(pos.x, pos.y, pos.z);
+    rlRotatef(e->facingAngle * RAD2DEG, 0, 1, 0);
+    rlRotatef(e->deathAngle, 1, 0, 0);
+    rlRotatef(e->spinX * 0.02f + e->spinZ * 0.5f, 0, 0, 1);  // per-enemy random topple
+    rlRotatef(e->spinZ * 0.5f, 0, 1, 0);
+
+    Color suitCol = {fc.suitBase.r, fc.suitBase.g, fc.suitBase.b, alpha};
+    Color darkCol = {fc.suitDark.r, fc.suitDark.g, fc.suitDark.b, alpha};
+    Color bloodCol2 = {180, 10, 5, alpha};
+
+    // Damaged helmet — chunk blown off
+    float cr = chunkDirR;
+    float cf2 = chunkDirF;
+    rlPushMatrix();
+    rlTranslatef(0, 1.1f, 0);
+    DrawSphere((Vector3){-cr * 0.1f, 0, -cf2 * 0.1f}, 0.42f, fc.helmetColor);
+    DrawCube((Vector3){cr * 0.15f, 0.1f, cf2 * 0.1f}, 0.08f, 0.12f, 0.06f, fc.helmetColor);
+    DrawCube((Vector3){cr * 0.12f, -0.05f, cf2 * -0.08f}, 0.06f, 0.1f, 0.05f, fc.helmetColor);
+    DrawCube((Vector3){cr * 0.18f, 0.0f, cf2 * 0.02f}, 0.05f, 0.08f, 0.07f, fc.helmetColor);
+    DrawSphere((Vector3){cr * 0.2f, 0.05f, cf2 * 0.05f}, 0.25f, (Color){100, 5, 2, alpha});
+    DrawSphere((Vector3){cr * 0.15f, 0, cf2 * 0.08f}, 0.18f, (Color){140, 8, 3, alpha});
+    DrawSphere((Vector3){cr * 0.22f, 0.1f, cf2 * 0.08f}, 0.1f, bloodCol2);
+    DrawSphere((Vector3){cr * 0.18f, -0.08f, cf2 * 0.03f}, 0.08f, (Color){200, 15, 5, alpha});
+    DrawCube((Vector3){-cr * 0.1f, 0.02f, 0.34f}, 0.28f, 0.25f, 0.04f,
+        (Color){fc.visorColor.r, fc.visorColor.g, fc.visorColor.b, (unsigned char)(alpha * 0.7f)});
+    rlPopMatrix();
+
+    DrawCube((Vector3){0, 0.8f, 0}, 0.65f, 0.08f, 0.55f, darkCol);
+    DrawCube((Vector3){cr * 0.2f, 0.7f, cf2 * 0.1f}, 0.2f, 0.3f, 0.15f, bloodCol2);
+    DrawCube((Vector3){cr * 0.3f, 0.5f, cf2 * 0.05f}, 0.15f, 0.25f, 0.12f, (Color){160, 8, 3, alpha});
+
+    // Torso
+    DrawCube((Vector3){0, 0, 0}, 0.9f, 1.5f, 0.55f, suitCol);
+    DrawCubeWires((Vector3){0, 0, 0}, 0.91f, 1.51f, 0.56f, darkCol);
+    DrawCube((Vector3){0, 0.2f, 0.02f}, 0.7f, 0.6f, 0.5f, darkCol);
+    DrawCube((Vector3){0.5f, 0.6f, 0}, 0.18f, 0.2f, 0.4f, darkCol);
+    DrawCube((Vector3){-0.5f, 0.6f, 0}, 0.18f, 0.2f, 0.4f, darkCol);
+    Color beltCol2 = (e->type == ENEMY_SOVIET) ? (Color){120, 75, 35, alpha} : (Color){80, 85, 60, alpha};
+    DrawCube((Vector3){0, -0.55f, 0}, 0.92f, 0.1f, 0.57f, beltCol2);
+    Color bpCol = {fc.backpackColor.r, fc.backpackColor.g, fc.backpackColor.b, alpha};
+    DrawCube((Vector3){0, 0.1f, -0.42f}, 0.62f, 0.9f, 0.28f, bpCol);
+
+    // Arms — violent jerking that dies down
+    float jerkDamp = (t < 2.0f) ? 1.0f : (t < 5.0f) ? (5.0f - t) / 3.0f : 0.0f;
+    for (int side = 0; side < 2; side++) {
+        float sx = side == 0 ? 0.52f : -0.52f;
+        float armSign = side == 0 ? 1.0f : -1.0f;
+        rlPushMatrix();
+        rlTranslatef(sx, 0.35f, 0.1f);
+        float jerk2 = sinf(t * 25.0f * armSign + e->deathAngle * 0.1f) * 40.0f * jerkDamp;
+        float drift = sinf(t * 0.4f * armSign + 1.0f) * 15.0f;
+        float armSwing2 = sinf(e->deathAngle * 0.07f * armSign + t * 4.0f * jerkDamp) * 70.0f * jerkDamp
+                        + jerk2 + drift * (1.0f - jerkDamp);
+        float armFlop = cosf(e->deathAngle * 0.05f + armSign * 1.5f) * 40.0f * jerkDamp
+                      + (-30.0f * armSign) * (1.0f - jerkDamp);
+        float armTwist = sinf(t * 18.0f * armSign + 2.0f) * 25.0f * jerkDamp;
+        rlRotatef(armSwing2, 1, 0, 0);
+        rlRotatef(armFlop, 0, 0, 1);
+        rlRotatef(armTwist, 0, 1, 0);
+        DrawCube((Vector3){0, 0, 0}, 0.22f, 0.8f, 0.22f, suitCol);
+        Color gCol = {fc.gloveColor.r, fc.gloveColor.g, fc.gloveColor.b, alpha};
+        DrawCube((Vector3){0, -0.42f, 0}, 0.24f, 0.16f, 0.24f, gCol);
+        rlPopMatrix();
+    }
+
+    // Legs — floppy ragdoll
+    for (int side = 0; side < 2; side++) {
+        float lx = side == 0 ? 0.22f : -0.22f;
+        float legSign = side == 0 ? 1.0f : -1.0f;
+        rlPushMatrix();
+        rlTranslatef(lx, -0.85f, 0);
+        float legDrift = sinf(t * 0.3f * legSign + 0.5f) * 8.0f;
+        float legSwing2 = sinf(e->deathAngle * 0.04f * legSign + t * 2.0f) * 25.0f * jerkDamp
+                        + legDrift * (1.0f - jerkDamp);
+        rlRotatef(legSwing2, 1, 0, 0);
+        DrawCube((Vector3){0, -0.05f, 0}, 0.3f, 0.45f, 0.3f, suitCol);
+        DrawCube((Vector3){0, -0.3f, 0}, 0.22f, 0.08f, 0.22f, darkCol);
+        rlPushMatrix();
+        rlTranslatef(0, -0.3f, 0);
+        float kneeFlop = sinf(e->deathAngle * 0.06f + legSign * 2.0f) * 20.0f * jerkDamp;
+        rlRotatef(kneeFlop, 1, 0, 0);
+        DrawCube((Vector3){0, -0.2f, 0}, 0.28f, 0.4f, 0.28f, suitCol);
+        Color btCol = {fc.bootColor.r, fc.bootColor.g, fc.bootColor.b, alpha};
+        DrawCube((Vector3){0, -0.44f, 0.04f}, 0.28f, 0.3f, 0.35f, btCol);
+        rlPopMatrix();
+        rlPopMatrix();
+    }
+
+    rlPopMatrix(); // root
+
+    // Blood pool for decapitated body on ground
+    DrawBloodPoolAtPos(pos, t, e->facingAngle);
+}
+
+// === SKELETAL HEADSHOT — uses per-rank headshot .glb model with blood spray ===
+void DrawAstronautDecapitateSkeletal(Enemy *e, EnemyManager *em) {
+    if (!em || !em->astroModels) return;
+    AstroModelSet *ms = em->astroModels;
+    int fi = (int)e->type;
+    int ri = (int)e->rank;
+
+    Vector3 pos = e->position;
+    float t = e->decapTimer;
+    float fade = (e->deathTimer < 3.0f) ? e->deathTimer / 3.0f : 1.0f;
+    if (fade < 0) fade = 0;
+    unsigned char alpha = (unsigned char)(255 * fade);
+
+    /* Flat world: up = Y, forward from facingAngle */
+    Vector3 localUp = {0, 1, 0};
+    float cosF = cosf(e->facingAngle);
+    float sinF = sinf(e->facingAngle);
+    Vector3 localFwd = {sinF, 0, cosF};
+    Vector3 localRight = {cosF, 0, -sinF};
+
+    #define HEAD_HEIGHT 1.1f
+    Vector3 headWorldPos = Vector3Add(pos, Vector3Scale(localUp, HEAD_HEIGHT));
+
+    /* Hole direction for blood — right side of helmet */
+    Vector3 holeDir = Vector3Add(
+        Vector3Add(Vector3Scale(localRight, 0.6f),
+                   Vector3Scale(localFwd, 0.2f)),
+        Vector3Scale(localUp, 0.3f));
+    Vector3 holePos = Vector3Add(headWorldPos, Vector3Scale(holeDir, 0.3f));
+
+    /* === BODY: character model with damaged helmet === */
+    if (fi >= 0 && fi < 2 && ri >= 0 && ri < 3) {
+        AstroModel *am = &ms->characters[fi][ri];
+        if (am->loaded && e->hasLimbState) {
+            const AnimProfile *ap = AnimProfileGet(e->type);
+            AstroModelApplySpringState(am, &e->limbState, ap, 0, 0, 0,
+                                       false, true, t);
+
+            /* Zero original head — replaced by damaged helmet model */
+            if (am->bones[BONE_HEAD] >= 0 && am->model.meshes[0].boneMatrices)
+                am->model.meshes[0].boneMatrices[am->bones[BONE_HEAD]] = MatrixScale(0, 0, 0);
+            if (am->bones[BONE_NECK] >= 0 && am->model.meshes[0].boneMatrices)
+                am->model.meshes[0].boneMatrices[am->bones[BONE_NECK]] = MatrixScale(0, 0, 0);
+
+            rlPushMatrix();
+            rlTranslatef(pos.x, pos.y, pos.z);
+            rlRotatef(e->facingAngle * RAD2DEG, 0, 1, 0);
+            /* Per-enemy random topple direction using spinX/spinZ */
+            rlRotatef(e->deathAngle * 0.3f + e->spinX * 0.01f, 1, 0, 0);
+            rlRotatef(e->spinZ * 0.4f, 0, 0, 1);
+            rlRotatef(180.0f, 0, 1, 0);
+
+            DrawModel(am->model, (Vector3){0, 0, 0}, 1.0f, (Color){alpha,alpha,alpha,alpha});
+
+            /* Per-rank damaged helmet at head position */
+            AstroModel *dmgHead = &ms->headshot[fi][ri];
+            if (dmgHead && dmgHead->loaded) {
+                DrawModel(dmgHead->model, (Vector3){0, HEAD_HEIGHT, 0}, 1.0f,
+                    (Color){alpha,alpha,alpha,alpha});
+            }
+
+            rlPopMatrix();
+        }
+    }
+
+    /* === HEAVY BLOOD SPRAY from the helmet hole === */
+    if (t < HEADSHOT_BLOOD_DURATION) {
+        float bf = 1.0f - t / HEADSHOT_BLOOD_DURATION;
+        float pulse = sinf(t * 10.0f);
+
+        /* Thick arterial spray — pressurized, pulsing */
+        for (int s = 0; s < 22; s++) {
+            float st = (float)s / 22.0f;
+            float spurt = (0.2f + st * 0.6f) * (1.0f + pulse * 0.4f);
+            float fall = st * st * 1.2f;
+            float spread = sinf(s * 1.7f + t * 8.0f) * st * 0.15f;
+            Vector3 sp = Vector3Add(holePos,
+                Vector3Add(Vector3Scale(holeDir, spurt),
+                Vector3Add(Vector3Scale(localUp, -fall),
+                           Vector3Scale(localRight, spread))));
+            float ssz = (0.09f + st * 0.04f) * bf * fade;
+            unsigned char sa = (unsigned char)(240 * bf * (1.0f - st * 0.2f) * fade);
+            Color col = (s%3==0) ? (Color){230,15,5,sa} :
+                        (s%3==1) ? (Color){190,8,3,sa} : (Color){150,5,2,sa};
+            DrawSphereEx(sp, ssz, 3, 3, col);
+        }
+
+        /* Thick drips cascading down */
+        for (int d = 0; d < 14; d++) {
+            float dt2 = fmodf(t * 1.8f + d * 0.28f, 2.5f);
+            float dfall = dt2 * dt2 * 0.7f;
+            float dspread = sinf(d * 1.3f + t * 0.5f) * 0.1f;
+            Vector3 dp = Vector3Add(headWorldPos,
+                Vector3Add(Vector3Scale(holeDir, 0.12f + sinf(d*2.1f)*0.06f),
+                Vector3Add(Vector3Scale(localUp, -0.1f - dfall),
+                           Vector3Scale(localRight, dspread))));
+            float dsz = (0.05f + dt2 * 0.015f) * bf * fade;
+            DrawSphereEx(dp, dsz, 3, 3,
+                (Color){210,10,4,(unsigned char)(200*bf*fade)});
+        }
+    }
+
+    /* === Air hissing from helmet hole (0-6s) === */
+    if (t < 6.0f) {
+        float pressure = 1.0f - t / 6.0f;
+        for (int g = 0; g < 16; g++) {
+            float gt = (float)g / 16.0f;
+            float glife = fmodf(t * 3.0f + gt * 1.0f, 1.5f);
+            float gjitter = sinf(gt * 5.0f + t * 12.0f) * 0.08f * pressure;
+            Vector3 gp = Vector3Add(holePos,
+                Vector3Scale(holeDir, glife * 1.5f * pressure));
+            gp = Vector3Add(gp, Vector3Scale(localUp, glife * 0.3f));
+            gp = Vector3Add(gp, Vector3Scale(localRight, gjitter));
+            float gsz = (0.04f + glife * 0.1f) * pressure * fade;
+            unsigned char ga = (unsigned char)((1.0f - glife/1.5f) * 180 * pressure * fade);
+            DrawSphereEx(gp, gsz, 3, 3, (Color){220, 225, 235, ga});
+        }
+    }
+
+    /* === BIG blood cloud at the head (first 2.5s) === */
+    if (t < 2.5f) {
+        float burst = t / 2.5f;
+        for (int p = 0; p < 30; p++) {
+            float pa = (float)p / 30.0f * PI * 2.0f;
+            float pr = burst * 2.0f + (float)(p%5) * 0.06f;
+            float py = sinf(pa * 1.3f + t * 3.0f) * pr * 0.3f;
+            Vector3 pp = Vector3Add(holePos,
+                Vector3Add(Vector3Scale(localRight, cosf(pa) * pr * 0.5f),
+                Vector3Add(Vector3Scale(localUp, py + sinf(pa) * pr * 0.2f),
+                           Vector3Scale(localFwd, sinf(pa) * pr * 0.4f))));
+            float sz = (0.12f + (float)(p%3)*0.03f) * (1.0f - burst * 0.4f) * fade;
+            unsigned char ba = (unsigned char)((1.0f - burst * 0.6f) * 200 * fade);
+            Color col = (p%3==0) ? (Color){230,20,8,ba} :
+                        (p%3==1) ? (Color){180,10,5,ba} : (Color){120,5,2,ba};
+            DrawSphereEx(pp, sz, 3, 3, col);
+        }
+        /* Thick central blood mass */
+        if (t < 0.8f) {
+            float cf2 = 1.0f - t / 0.8f;
+            DrawSphereEx(holePos, 0.6f * cf2 * fade, 5, 5,
+                (Color){210,10,5,(unsigned char)(180*cf2*fade)});
+            DrawSphereEx(Vector3Add(holePos, Vector3Scale(holeDir, 0.3f)),
+                0.35f * cf2 * fade, 4, 4,
+                (Color){180,8,3,(unsigned char)(150*cf2*fade)});
+        }
+    }
+    #undef HEAD_HEIGHT
+
+    DrawBloodPoolAtPos(pos, t, e->facingAngle);
+}
+
+// === SKELETAL EVISCERATE — Blender dismemberment models fly apart ===
+void DrawAstronautEviscerateSkeletal(Enemy *e, EnemyManager *em) {
+    if (!em || !em->astroModels) return;
+    AstroModelSet *ms = em->astroModels;
+    int fi = (int)e->type;
+
+    Vector3 pos = e->position;
+    float t = e->evisTimer;
+    float fade = (t > 7.0f) ? 1.0f - (t - 7.0f) / 3.0f : 1.0f;
+    if (fade < 0) fade = 0;
+    unsigned char alpha = (unsigned char)(255 * fade);
+
+    Color bloodCol = {180, 10, 5, alpha};
+    Color darkBlood = {100, 5, 2, alpha};
+    Color brightBlood = {220, 20, 8, alpha};
+
+    /* Map dismemberment parts to evisLimbPos indices:
+     * 0=head, 1=torso, 2=arm_R, 3=arm_L, 4=leg_R, 5=leg_L */
+    static const DismemberPart LIMB_MAP[6] = {
+        DISMEMBER_HEAD, DISMEMBER_TORSO, DISMEMBER_ARM_R,
+        DISMEMBER_ARM_L, DISMEMBER_LEG_R, DISMEMBER_LEG_L
+    };
+    static const float SPIN_SPEEDS[6] = {400, 120, 250, 330, 180, 240};
+    static const Vector3 SPIN_AXES[6] = {
+        {1, 0.3f, 0}, {0.5f, 1, 0.2f}, {1, 0.5f, 0.3f},
+        {-1, 0.5f, 0.3f}, {0.3f, 1, 0.5f}, {0.3f, -1, 0.5f}
+    };
+
+    /* Draw each dismemberment part spinning through the air */
+    for (int li = 0; li < 6; li++) {
+        AstroModel *dm = &ms->dismember[fi][LIMB_MAP[li]];
+        if (!dm->loaded) continue;
+
+        Vector3 lp = Vector3Add(pos, e->evisLimbPos[li]);
+        float spin = t * SPIN_SPEEDS[li];
+
+        rlPushMatrix();
+        rlTranslatef(lp.x, lp.y, lp.z);
+        rlRotatef(spin, SPIN_AXES[li].x, SPIN_AXES[li].y, SPIN_AXES[li].z);
+        rlScalef(fade, fade, fade);
+        rlRotatef(180.0f, 0, 1, 0); /* Blender face fix */
+        DrawModel(dm->model, (Vector3){0, 0, 0}, 1.0f, WHITE);
+        rlPopMatrix();
+
+        /* Blood spurts from each limb */
+        if (t < 6.0f) {
+            float pulse = sinf(t * 10.0f + li * 2.0f);
+            for (int b = 0; b < 6; b++) {
+                float bt = e->evisBloodTimer[li] * 2.2f + b * 0.18f;
+                float spurt = 0.3f + pulse * 0.15f;
+                Vector3 bp = {lp.x + sinf(bt*7)*spurt, lp.y + 0.2f + cosf(bt*4)*0.2f, lp.z + cosf(bt*5)*spurt};
+                float sz = 0.06f * (1.0f - bt/3.0f);
+                if (sz > 0) DrawSphereEx(bp, sz, 3, 3, (b%2==0) ? bloodCol : brightBlood);
+            }
+        }
+    }
+
+    /* === GORE EXPLOSION (first 0.5s) === */
+    if (t < 0.5f) {
+        float burst = t / 0.5f;
+        for (int p = 0; p < 24; p++) {
+            float pa = (float)p * 0.262f;
+            float pr = burst * 3.5f;
+            float py = sinf(pa * 1.5f + t * 8.0f) * pr * 0.4f;
+            Vector3 pp = {pos.x + cosf(pa)*pr, pos.y + py, pos.z + sinf(pa)*pr};
+            float sz = 0.15f * (1.0f - burst);
+            Color bc = (p % 3 == 0) ? brightBlood : (p % 3 == 1) ? bloodCol : darkBlood;
+            DrawSphereEx(pp, sz, 3, 3, bc);
+        }
+        DrawSphereEx(pos, 2.5f * (1.0f - burst), 5, 5,
+            (Color){255, 20, 5, (unsigned char)((1.0f - burst) * 200)});
+    }
+
+    /* === BLOOD MIST === */
+    if (t < 5.0f) {
+        float mistFade = (t < 1.0f) ? t : (t < 3.5f) ? 1.0f : 1.0f - (t - 3.5f) / 1.5f;
+        for (int m = 0; m < 14; m++) {
+            float ma = (float)m * 0.449f + t * 1.5f;
+            float mr = 0.5f + t * 0.8f + sinf(ma * 3.0f) * 0.3f;
+            float my = sinf(t * 2.0f + ma) * 0.5f + 0.3f;
+            Vector3 mp = {pos.x + cosf(ma)*mr, pos.y + my, pos.z + sinf(ma)*mr};
+            DrawSphereEx(mp, 0.12f + sinf(t*3+m)*0.04f, 3, 3,
+                (Color){150, 10, 5, (unsigned char)(mistFade * 80)});
+        }
+    }
+
+    /* Bone fragments */
+    if (t < 4.0f) {
+        for (int b = 0; b < 12; b++) {
+            float ba = (float)b * 0.55f + t * 4.0f;
+            float br = t * 2.5f + (float)b * 0.25f;
+            float by = t * 2.0f - t * t * 0.4f;
+            Vector3 bp2 = {pos.x + cosf(ba)*br, pos.y + by, pos.z + sinf(ba)*br};
+            Color bc = (b % 2 == 0) ? (Color){200, 190, 175, alpha} : (Color){160, 12, 6, alpha};
+            DrawSphereEx(bp2, (b % 2 == 0) ? 0.035f : 0.05f, 3, 3, bc);
+        }
+    }
+
+    DrawBloodPoolAtPos(e->position, e->evisTimer, e->facingAngle);
 }
