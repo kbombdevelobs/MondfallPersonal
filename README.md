@@ -9,7 +9,7 @@ Built with **C99** and **raylib 5.5**. Everything is procedural — terrain, wea
 ```bash
 brew install raylib   # macOS (Apple Silicon)
 make run              # build + launch
-make test             # 127 unit tests (no GPU needed)
+make test             # 162 unit tests (no GPU needed)
 ```
 
 ## Controls
@@ -35,8 +35,12 @@ make test             # 127 unit tests (no GPU needed)
 - **Mond-MP40** — Hitscan SMG with cyan energy beams
 - **Raketenfaust** — Death beam that vaporizes everything in its path
 - **Jackhammer** — Pneumatic war-pick, one-hit eviscerate kill
-- **KOSMOS-7 SMG** — Picked up from dead Soviets, fastest fire rate in game
-- **LIBERTY BLASTER** — Picked up from dead Americans, one-shot rail gun
+- **KOSMOS-7 SMG** — Picked up from dead Soviet troopers, fastest fire rate in game
+- **LIBERTY BLASTER** — Picked up from dead American troopers, one-shot rail gun
+- **KS-23 Molot** — Picked up from Soviet NCOs, devastating close-range shotgun
+- **M8A1 Starhawk** — Picked up from American NCOs, 3-round burst rifle
+- **Zarya TK-4** — Picked up from Soviet officers, charged pistol with massive damage
+- **ARC-9 Longbow** — Picked up from American officers, piercing beam through multiple enemies
 
 ## Screenshot
 
