@@ -30,6 +30,7 @@ related_docs:
 | [src/enemy/CLAUDE.md](src/enemy/CLAUDE.md) | Enemy AI, factions, death types, ECS components/systems | Modifying enemy behavior, spawning, or rendering |
 | [src/weapon/CLAUDE.md](src/weapon/CLAUDE.md) | Weapon logic, viewmodels, procedural sounds | Modifying weapons, adding new weapons, tuning balance |
 | [src/world/CLAUDE.md](src/world/CLAUDE.md) | Terrain generation, chunks, craters, noise, collision | Modifying terrain, world features, or collision |
+| [src/structure/CLAUDE.md](src/structure/CLAUDE.md) | Moon base structures, interiors, resupply, safe zones | Modifying structures, adding new building types |
 
 ## Feature Documentation
 
@@ -42,6 +43,7 @@ related_docs:
 | [docs/procedural-audio.md](docs/procedural-audio.md) | Sound generation, weapon sounds, Erika march, radio effects | Modifying sounds, adding new audio, tuning music |
 | [docs/testing.md](docs/testing.md) | Test strategy, running tests, adding tests, coverage | Adding tests, debugging test failures |
 | [docs/ai-movement-analysis.md](docs/ai-movement-analysis.md) | AI movement, bunching, pathfinding deep-dive + rank weapons | Improving AI behavior, adding new pickups, fixing bunching |
+| [docs/FLECS.md](docs/FLECS.md) | Flecs ECS architecture guide, components, systems, how-to | Adding ECS components/systems, understanding entity lifecycle |
 
 ## Architecture Decision Records
 

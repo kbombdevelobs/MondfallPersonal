@@ -172,6 +172,19 @@ docs:
     last_updated: 2026-04-04
     last_reviewed: 2026-04-04
 
+  - title: Structure System
+    path: src/structure/CLAUDE.md
+    type: folder_claude
+    domain: structure
+    status: Active
+    owner_area: Structure
+    parent_doc: CLAUDE.md
+    related_docs:
+      - docs/combat-system.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
   # Feature documentation
   - title: Rendering Pipeline
     path: docs/rendering-pipeline.md
@@ -268,6 +281,21 @@ docs:
       - src/enemy/CLAUDE.md
       - docs/combat-system.md
       - docs/wave-system.md
+    created: 2026-04-04
+    last_updated: 2026-04-04
+    last_reviewed: 2026-04-04
+
+  - title: "Flecs ECS — Enemy AI Architecture"
+    path: docs/FLECS.md
+    type: feature_doc
+    domain: enemy
+    status: Active
+    owner_area: Enemy
+    parent_doc: CLAUDE.md
+    related_docs:
+      - docs/ecs-integration.md
+      - src/enemy/CLAUDE.md
+      - docs/combat-system.md
     created: 2026-04-04
     last_updated: 2026-04-04
     last_reviewed: 2026-04-04

@@ -1,3 +1,17 @@
+---
+title: "Flecs ECS — Enemy AI Architecture"
+status: Active
+owner_area: Enemy
+created: 2026-04-04
+last_updated: 2026-04-04
+last_reviewed: 2026-04-04
+parent_doc: CLAUDE.md
+related_docs:
+  - docs/ecs-integration.md
+  - src/enemy/CLAUDE.md
+  - docs/combat-system.md
+---
+
 # Flecs ECS — Enemy AI Architecture
 
 ## Overview

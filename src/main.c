@@ -22,12 +22,29 @@
 #include <string.h>
 #include <time.h>
 #include <math.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#include <libgen.h>
+#include <unistd.h>
+#endif
 
 int main(void) {
     srand((unsigned int)time(NULL));
 
+    // When running from a .app bundle, macOS sets cwd to $HOME.
+    // Change to the executable's directory so relative asset paths work.
+#ifdef __APPLE__
+    {
+        char exePath[1024];
+        uint32_t size = sizeof(exePath);
+        if (_NSGetExecutablePath(exePath, &size) == 0) {
+            chdir(dirname(exePath));
+        }
+    }
+#endif
+
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    InitWindow(WINDOW_W, WINDOW_H, "MONDFALL - DO IT FOR BORMANN");
+    InitWindow(WINDOW_W, WINDOW_H, "MONDFALL: LETZTES GEFECHT");
     SetExitKey(0); // Disable ESC closing the window
     InitAudioDevice();
     SetTargetFPS(60);
